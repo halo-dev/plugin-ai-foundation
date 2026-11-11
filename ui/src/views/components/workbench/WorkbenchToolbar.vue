@@ -32,6 +32,7 @@ const testModeTabs: Tab[] = [
   { label: 'Rerank', value: 'rerank', icon: RiStackLine },
   { label: '图片', value: 'image', icon: RiImageLine },
   { label: 'RAG', value: 'rag', icon: RiStackLine },
+  { label: '决策', value: 'decision', icon: RiStackLine },
 ]
 </script>
 

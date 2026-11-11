@@ -1,8 +1,6 @@
 package run.halo.aifoundation.provider.support;
 
-/**
- * Native structured-output behavior exposed by a provider adapter.
- */
+/** Native structured-output behavior exposed by a provider adapter. */
 public enum StructuredOutputSupport {
     /** Native JSON Schema response formats with an explicit strict flag. */
     JSON_SCHEMA,

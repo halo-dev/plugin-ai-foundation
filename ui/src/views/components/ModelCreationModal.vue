@@ -6,7 +6,7 @@ import { QK_MODELS } from '@/composables/use-models-fetch'
 import type { ModelFormState } from '@/types/form'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useTemplateRef } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import ModelForm from './ModelForm.vue'
 
 const props = defineProps<{
@@ -22,8 +22,8 @@ const queryClient = useQueryClient()
 const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
 const form = useTemplateRef<InstanceType<typeof ModelForm>>('form')
 
-const providerName = props.provider.metadata.name
-const providerType = props.provider.spec.providerType
+const providerName = computed(() => props.provider.metadata.name)
+const providerType = computed(() => props.provider.spec.providerType)
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ModelFormState) => {
@@ -33,7 +33,7 @@ const { mutate, isPending } = useMutation({
         kind: 'AiModel',
         metadata: { name: '' },
         spec: {
-          providerName: providerName,
+          providerName: providerName.value,
           modelId: formState.modelId,
           displayName: formState.displayName,
           enabled: formState.enabled,
@@ -42,6 +42,8 @@ const { mutate, isPending } = useMutation({
           capabilities: formState.capabilities,
           capabilitySources: formState.capabilitySources,
           parameterMappings: formState.parameterMappings,
+          parameterConstraints: formState.parameterConstraints,
+          catalogParameters: formState.catalogParameters,
           nativeOptions: formState.nativeOptions,
           discoverySource: AiModelSpecDiscoverySourceEnum.Manual,
           discoveryConfidence: AiModelSpecDiscoveryConfidenceEnum.High,
@@ -53,7 +55,7 @@ const { mutate, isPending } = useMutation({
   onSuccess: () => {
     Toast.success('模型创建成功')
     modal.value?.close()
-    queryClient.invalidateQueries({ queryKey: [QK_MODELS, providerName] })
+    queryClient.invalidateQueries({ queryKey: [QK_MODELS, providerName.value] })
   },
 })
 
@@ -73,13 +75,20 @@ function onSubmit(data: ModelFormState) {
   >
     <ModelForm
       ref="form"
+      :provider-name="providerName"
       :provider-type="providerType"
       :inherited-mappings="provider.spec.parameterMappings"
       @submit="onSubmit"
     />
     <template #footer>
       <VSpace>
-        <VButton type="secondary" :loading="isPending" @click="form?.submit()"> 保存 </VButton>
+        <VButton
+          type="secondary"
+          :loading="isPending || form?.isSubmitting"
+          @click="form?.submit()"
+        >
+          保存
+        </VButton>
         <VButton @click="modal?.close()">取消</VButton>
       </VSpace>
     </template>

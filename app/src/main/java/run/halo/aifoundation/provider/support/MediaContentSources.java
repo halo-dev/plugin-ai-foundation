@@ -13,13 +13,10 @@ import run.halo.aifoundation.media.DataContent;
 /** Wire representations for provider APIs that accept either media URLs or caller-owned data. */
 public final class MediaContentSources {
 
-    private static final UriReferencePolicy HTTP_REFERENCES =
-        UriReferencePolicy.allowing("http://", "https://");
-    private static final UriReferencePolicy DATA_REFERENCES =
-        UriReferencePolicy.allowing("data:");
+    private static final UriReferencePolicy HTTP_REFERENCES = UriReferencePolicy.allowing("http://", "https://");
+    private static final UriReferencePolicy DATA_REFERENCES = UriReferencePolicy.allowing("data:");
 
-    private MediaContentSources() {
-    }
+    private MediaContentSources() {}
 
     public static String urlOrDataUrl(DataContent content, String label) {
         validate(content, label);
@@ -97,8 +94,7 @@ public final class MediaContentSources {
     private static String dataUrlBase64(String value, String label) {
         var marker = ";base64,";
         if (!DATA_REFERENCES.allows(value)) {
-            throw new IllegalArgumentException(
-                label + " must be binary data, a data URL, or an HTTP(S) URL");
+            throw new IllegalArgumentException(label + " must be binary data, a data URL, or an HTTP(S) URL");
         }
         var markerIndex = value.indexOf(marker);
         if (markerIndex < 0) {

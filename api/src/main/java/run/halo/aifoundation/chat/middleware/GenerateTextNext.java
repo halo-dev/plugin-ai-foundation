@@ -4,9 +4,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerateTextResult;
 
-/**
- * Next non-streaming generation step in a language model middleware chain.
- */
+/** Next non-streaming generation step in a language model middleware chain. */
 @FunctionalInterface
 public interface GenerateTextNext {
 

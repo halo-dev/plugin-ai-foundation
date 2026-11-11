@@ -6,6 +6,16 @@ export {
   lastAssistantMessageIsCompleteWithToolCalls,
 } from './chat'
 export type { ChatInit, ChatStateAdapter, SendMessageInput } from './chat'
+export { createDecisionClient } from './decision'
+export type {
+  DecisionAnswer,
+  DecisionClientOptions,
+  DecisionJsonValue,
+  DecisionQuestion,
+  DecisionRequest,
+  DecisionResponse,
+  DecisionState,
+} from './decision'
 export { AIUIError, AIUIProtocolError, AIUISchemaValidationError, isProtocolError } from './errors'
 export type { AIUISchemaValidationErrorOptions, AIUISchemaValidationTarget } from './errors'
 export { filePartFromFile, filePartsFromFiles } from './files'

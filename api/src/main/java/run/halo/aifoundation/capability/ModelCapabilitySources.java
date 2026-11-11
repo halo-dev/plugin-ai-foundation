@@ -8,9 +8,8 @@ import lombok.NoArgsConstructor;
 /**
  * Source metadata for each capability domain in a {@link ModelCapabilities} snapshot.
  *
- * <p>Sources are tracked per domain, not per individual field. A manual source means an
- * administrator intentionally overrode that domain and discovery sync should preserve it unless
- * the administrator explicitly replaces it.
+ * <p>Sources are tracked per domain, not per individual field. A manual source means an administrator intentionally
+ * overrode that domain and discovery sync should preserve it unless the administrator explicitly replaces it.
  */
 @Data
 @Builder
@@ -18,14 +17,17 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ModelCapabilitySources {
 
-    /**
-     * Source for {@link ModelCapabilities#getLanguage()}.
-     */
+    private CapabilitySource decision;
+
+    /** Retains the constructor published before decision models were introduced. */
+    public ModelCapabilitySources(CapabilitySource language, CapabilitySource imageGeneration) {
+        this(null, language, imageGeneration);
+    }
+
+    /** Source for {@link ModelCapabilities#getLanguage()}. */
     private CapabilitySource language;
 
-    /**
-     * Source for {@link ModelCapabilities#getImageGeneration()}.
-     */
+    /** Source for {@link ModelCapabilities#getImageGeneration()}. */
     private CapabilitySource imageGeneration;
 
     /**
@@ -39,6 +41,7 @@ public class ModelCapabilitySources {
             return null;
         }
         return switch (domain) {
+            case DECISION -> decision;
             case LANGUAGE -> language;
             case IMAGE_GENERATION -> imageGeneration;
         };
@@ -51,8 +54,9 @@ public class ModelCapabilitySources {
      */
     public static ModelCapabilitySources unknown() {
         return ModelCapabilitySources.builder()
-            .language(CapabilitySource.UNKNOWN)
-            .imageGeneration(CapabilitySource.UNKNOWN)
-            .build();
+                .decision(CapabilitySource.UNKNOWN)
+                .language(CapabilitySource.UNKNOWN)
+                .imageGeneration(CapabilitySource.UNKNOWN)
+                .build();
     }
 }

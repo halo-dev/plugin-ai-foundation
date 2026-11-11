@@ -7,5 +7,4 @@ package run.halo.aifoundation.ui;
  * @param approved optional approval decision
  * @param reason optional approval or denial reason
  */
-public record ToolApproval(String id, Boolean approved, String reason) {
-}
+public record ToolApproval(String id, Boolean approved, String reason) {}

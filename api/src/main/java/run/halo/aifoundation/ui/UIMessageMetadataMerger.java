@@ -12,9 +12,7 @@ import java.util.Map;
 @FunctionalInterface
 public interface UIMessageMetadataMerger<M> {
 
-    /**
-     * Default merger used by stream options.
-     */
+    /** Default merger used by stream options. */
     UIMessageMetadataMerger<?> DEFAULT = UIMessageMetadataMerger::defaultMerge;
 
     /**
@@ -29,8 +27,8 @@ public interface UIMessageMetadataMerger<M> {
     /**
      * Returns the default merger.
      *
-     * <p>The default merger overlays maps by string key, replaces non-map metadata
-     * with the update object, and ignores {@code null} updates.
+     * <p>The default merger overlays maps by string key, replaces non-map metadata with the update object, and ignores
+     * {@code null} updates.
      *
      * @param <M> metadata type
      * @return default metadata merger

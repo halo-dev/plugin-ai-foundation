@@ -16,17 +16,14 @@ import run.halo.aifoundation.provider.support.UriReferencePolicy;
 final class DeepSeekImageInputs {
 
     private static final int MAX_EXTERNAL_IMAGE_URL_LENGTH = 8192;
-    private static final Set<String> IMAGE_MIME_TYPES = Set.of(
-        "image/jpeg", "image/png", "image/gif", "image/webp");
+    private static final Set<String> IMAGE_MIME_TYPES = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
     private static final UriReferencePolicy IMAGE_REFERENCES =
-        UriReferencePolicy.allowing("http://", "https://", "data:");
+            UriReferencePolicy.allowing("http://", "https://", "data:");
     private static final UriReferencePolicy EXTERNAL_IMAGE_REFERENCES =
-        UriReferencePolicy.allowing("http://", "https://");
-    private static final UriReferencePolicy FILE_REFERENCES =
-        UriReferencePolicy.allowing("file-api-");
+            UriReferencePolicy.allowing("http://", "https://");
+    private static final UriReferencePolicy FILE_REFERENCES = UriReferencePolicy.allowing("file-api-");
 
-    private DeepSeekImageInputs() {
-    }
+    private DeepSeekImageInputs() {}
 
     static Map<String, Object> chatContentPart(Media media) {
         var fileId = fileId(media);
@@ -49,12 +46,11 @@ final class DeepSeekImageInputs {
         imageMimeType(media);
         var fileId = fileId(media);
         if (fileId.isPresent()) {
-            return Map.of("type", "image", "source",
-                Map.of("type", "file", "file_id", fileId.get()));
+            return Map.of("type", "image", "source", Map.of("type", "file", "file_id", fileId.get()));
         }
         validateUrlReference(media);
-        return Map.of("type", "image", "source",
-            MediaContentSources.urlOrBase64Source(media, "DeepSeek Messages image"));
+        return Map.of(
+                "type", "image", "source", MediaContentSources.urlOrBase64Source(media, "DeepSeek Messages image"));
     }
 
     private static String imageReference(Media media) {
@@ -72,32 +68,30 @@ final class DeepSeekImageInputs {
     }
 
     private static Optional<String> fileId(Media media) {
-        return MediaContentSources.urlReference(media)
-            .filter(FILE_REFERENCES::allows);
+        return MediaContentSources.urlReference(media).filter(FILE_REFERENCES::allows);
     }
 
     private static void validateUrlReference(Media media) {
         MediaContentSources.urlReference(media)
-            .filter(reference -> !FILE_REFERENCES.allows(reference))
-            .ifPresent(DeepSeekImageInputs::validateImageReference);
+                .filter(reference -> !FILE_REFERENCES.allows(reference))
+                .ifPresent(DeepSeekImageInputs::validateImageReference);
     }
 
     private static String imageMimeType(Media media) {
         var mimeType = media.getMimeType();
         var mime = mimeType != null
-            ? mimeType.toString().toLowerCase(Locale.ROOT)
-            : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
+                ? mimeType.toString().toLowerCase(Locale.ROOT)
+                : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
         if (IMAGE_MIME_TYPES.contains(mime)) {
             return mime;
         }
-        throw new IllegalArgumentException(
-            "DeepSeek image input supports JPEG, PNG, GIF, or WebP; received: " + mime);
+        throw new IllegalArgumentException("DeepSeek image input supports JPEG, PNG, GIF, or WebP; received: " + mime);
     }
 
     private static void validateImageReference(String reference) {
         if (!IMAGE_REFERENCES.allows(reference)) {
             throw new IllegalArgumentException(
-                "DeepSeek image input must be binary data, a data URL, or an HTTP(S) URL");
+                    "DeepSeek image input must be binary data, a data URL, or an HTTP(S) URL");
         }
         if (!EXTERNAL_IMAGE_REFERENCES.allows(reference)) {
             return;
@@ -105,8 +99,7 @@ final class DeepSeekImageInputs {
         if (reference.length() <= MAX_EXTERNAL_IMAGE_URL_LENGTH) {
             return;
         }
-        throw new IllegalArgumentException(
-            "DeepSeek external image URL must not exceed 8192 characters");
+        throw new IllegalArgumentException("DeepSeek external image URL must not exceed 8192 characters");
     }
 
     private static byte[] readImage(Resource resource) {

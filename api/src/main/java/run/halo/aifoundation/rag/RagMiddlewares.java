@@ -1,12 +1,9 @@
 package run.halo.aifoundation.rag;
 
-/**
- * Factory methods for RAG middleware.
- */
+/** Factory methods for RAG middleware. */
 public final class RagMiddlewares {
 
-    private RagMiddlewares() {
-    }
+    private RagMiddlewares() {}
 
     public static RagLanguageModelMiddleware rag(RagRetriever retriever) {
         return new RagLanguageModelMiddleware(RagMiddlewareOptions.defaults(retriever));

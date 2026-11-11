@@ -3,8 +3,7 @@ package run.halo.aifoundation.provider.support;
 /** Shared URI normalization used by provider transports. */
 public final class ProviderUris {
 
-    private ProviderUris() {
-    }
+    private ProviderUris() {}
 
     /**
      * Removes every trailing slash without changing the rest of the value.

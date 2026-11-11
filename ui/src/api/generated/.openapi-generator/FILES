@@ -29,6 +29,11 @@ models/ai-provider.ts
 models/caller-plugin-info.ts
 models/copy-operation.ts
 models/data-content.ts
+models/decision-answer.ts
+models/decision-capability.ts
+models/decision-question.ts
+models/decision-response.ts
+models/decision-usage.ts
 models/default-model-slots.ts
 models/default-parameter-mapping-info.ts
 models/discovered-model-item.ts
@@ -49,13 +54,17 @@ models/language-mappings.ts
 models/metadata.ts
 models/model-capabilities.ts
 models/model-capability-sources.ts
+models/model-catalog-match.ts
+models/model-catalog-status.ts
 models/model-message-part.ts
 models/model-message.ts
 models/model-option-provider.ts
 models/model-option-unavailable-detail.ts
 models/model-option.ts
+models/model-parameter-constraints.ts
 models/model-parameter-definition-info.ts
 models/model-parameter-mappings.ts
+models/model-parameter-profile.ts
 models/move-operation.ts
 models/normalized-usage.ts
 models/output-spec.ts
@@ -65,6 +74,7 @@ models/provider-type-info.ts
 models/reasoning-mapping.ts
 models/reasoning-options.ts
 models/reasoning-value-mapping.ts
+models/reasoning.ts
 models/remove-operation.ts
 models/replace-operation.ts
 models/rerank-mappings.ts
@@ -75,6 +85,7 @@ models/rerank-warning.ts
 models/reset-request.ts
 models/selection.ts
 models/test-completion-stream-request.ts
+models/test-decision-request.ts
 models/test-embedding-request.ts
 models/test-embedding-response.ts
 models/test-generated-file.ts

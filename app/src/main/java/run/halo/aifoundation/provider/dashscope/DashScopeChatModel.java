@@ -6,8 +6,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 
 public final class DashScopeChatModel extends ChatCompletionsModel {
 
-    public DashScopeChatModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public DashScopeChatModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new DashScopeChatProfile());
     }
 }

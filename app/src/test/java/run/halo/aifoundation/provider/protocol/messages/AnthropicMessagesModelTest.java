@@ -23,10 +23,9 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 
 @ProviderContractSource(
-    provider = "messages-protocol",
-    officialDocumentation = "https://docs.anthropic.com/en/api/messages",
-    retrievedAt = "2026-08-24"
-)
+        provider = "messages-protocol",
+        officialDocumentation = "https://docs.anthropic.com/en/api/messages",
+        retrievedAt = "2026-08-24")
 class AnthropicMessagesModelTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -59,46 +58,54 @@ class AnthropicMessagesModelTest {
         });
         try {
             var callback = org.mockito.Mockito.mock(ToolCallback.class);
-            org.mockito.Mockito.when(callback.getToolDefinition()).thenReturn(
-                ToolDefinition.builder().name("search").description("Search docs")
-                    .inputSchema("{\"type\":\"object\",\"properties\":{}}")
-                    .build());
+            org.mockito.Mockito.when(callback.getToolDefinition())
+                    .thenReturn(ToolDefinition.builder()
+                            .name("search")
+                            .description("Search docs")
+                            .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                            .build());
             var options = ChatCompletionsOptions.builder()
-                .baseUrl(baseUrl(server)).apiKey("secret").model("model-1")
-                .maxTokens(1024).toolCallbacks(List.of(callback)).toolChoice("required")
-                .build();
-            var model = new AnthropicMessagesModel(options, WebClient.builder(),
-                new TestProfile());
+                    .baseUrl(baseUrl(server))
+                    .apiKey("secret")
+                    .model("model-1")
+                    .maxTokens(1024)
+                    .toolCallbacks(List.of(callback))
+                    .toolChoice("required")
+                    .build();
+            var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
 
-            var response = model.call(new Prompt(List.of(
-                new SystemMessage("Be concise"), new UserMessage("Find Halo")), options));
+            var response = model.call(
+                    new Prompt(List.of(new SystemMessage("Be concise"), new UserMessage("Find Halo")), options));
 
             assertThat(apiKey.get()).isEqualTo("secret");
             assertThat(version.get()).isEqualTo("2023-06-01");
-            assertThat(requestBody.get()).containsEntry("system", "Be concise")
-                .containsEntry("max_tokens", 1024)
-                .containsEntry("tool_choice", Map.of("type", "any"));
+            assertThat(requestBody.get())
+                    .containsEntry("system", "Be concise")
+                    .containsEntry("max_tokens", 1024)
+                    .containsEntry("tool_choice", Map.of("type", "any"));
             var tools = (List<Map<String, Object>>) requestBody.get().get("tools");
-            assertThat(tools).singleElement().satisfies(tool -> assertThat(tool)
-                .containsEntry("name", "search")
-                .containsKey("input_schema"));
+            assertThat(tools)
+                    .singleElement()
+                    .satisfies(tool ->
+                            assertThat(tool).containsEntry("name", "search").containsKey("input_schema"));
             assertThat(response.getResult().getOutput().getText()).isEqualTo("Done");
             assertThat(response.getResult().getOutput().getMetadata())
-                .containsEntry("reasoningContent", "Inspect first")
-                .containsEntry("reasoningSignature", "signed-1")
-                .containsKey("reasoningBlocks");
-            assertThat(response.getResult().getOutput().getToolCalls()).singleElement()
-                .satisfies(call -> {
-                    assertThat(call.id()).isEqualTo("tool-1");
-                    assertThat(call.name()).isEqualTo("search");
-                    assertThat(call.arguments()).isEqualTo("{\"q\":\"Halo\"}");
-                });
+                    .containsEntry("reasoningContent", "Inspect first")
+                    .containsEntry("reasoningSignature", "signed-1")
+                    .containsKey("reasoningBlocks");
+            assertThat(response.getResult().getOutput().getToolCalls())
+                    .singleElement()
+                    .satisfies(call -> {
+                        assertThat(call.id()).isEqualTo("tool-1");
+                        assertThat(call.name()).isEqualTo("search");
+                        assertThat(call.arguments()).isEqualTo("{\"q\":\"Halo\"}");
+                    });
             assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(19);
             assertThat(response.getMetadata().getUsage().getCompletionTokens()).isEqualTo(7);
             assertThat((Object) response.getMetadata().get("container")).isNull();
             assertThat((Map<String, Object>) response.getMetadata().getUsage().getNativeUsage())
-                .containsEntry("cache_creation_input_tokens", 3)
-                .containsEntry("cache_read_input_tokens", 4);
+                    .containsEntry("cache_creation_input_tokens", 3)
+                    .containsEntry("cache_read_input_tokens", 4);
         } finally {
             server.stop(0);
         }
@@ -108,94 +115,110 @@ class AnthropicMessagesModelTest {
     @SuppressWarnings("unchecked")
     void extraBodyCannotReplaceCanonicalInvocationFields() {
         var options = ChatCompletionsOptions.builder()
-            .baseUrl("https://example.com/v1")
-            .apiKey("secret")
-            .model("model-1")
-            .maxTokens(512)
-            .extraBody(Map.of(
-                "model", "injected-model",
-                "messages", List.of(Map.of("role", "user", "content", "injected")),
-                "stream", false))
-            .build();
+                .baseUrl("https://example.com/v1")
+                .apiKey("secret")
+                .model("model-1")
+                .maxTokens(512)
+                .extraBody(Map.of(
+                        "model",
+                        "injected-model",
+                        "messages",
+                        List.of(Map.of("role", "user", "content", "injected")),
+                        "stream",
+                        false))
+                .build();
         var prompt = new Prompt(List.of(new UserMessage("Actual message")), options);
         var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
 
-        var body = (Map<String, Object>) org.springframework.test.util.ReflectionTestUtils
-            .invokeMethod(model, "requestBody", prompt, options, true);
+        var body = (Map<String, Object>) org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                model, "requestBody", prompt, options, true);
 
-        assertThat(body).containsEntry("model", "model-1")
-            .containsEntry("max_tokens", 512)
-            .containsEntry("stream", true);
+        assertThat(body)
+                .containsEntry("model", "model-1")
+                .containsEntry("max_tokens", 512)
+                .containsEntry("stream", true);
         assertThat((List<Map<String, Object>>) body.get("messages"))
-            .singleElement()
-            .satisfies(message -> assertThat(message).containsEntry("content", "Actual message"));
+                .singleElement()
+                .satisfies(message -> assertThat(message).containsEntry("content", "Actual message"));
     }
 
     @Test
     void streamsReasoningSignatureToolInputAndFinalUsageInWireOrder() throws Exception {
         var server = server("/v1/messages", exchange -> {
-            var bytes = String.join("", List.of(
-                event("{\"type\":\"message_start\",\"message\":{\"usage\":{"
-                    + "\"input_tokens\":8,\"cache_read_input_tokens\":2}}}"),
-                event("{\"type\":\"content_block_start\",\"index\":0,"
-                    + "\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}"),
-                event("{\"type\":\"content_block_delta\",\"index\":0,"
-                    + "\"delta\":{\"type\":\"thinking_delta\","
-                    + "\"thinking\":\"Inspect\"}}"),
-                event("{\"type\":\"content_block_delta\",\"index\":0,"
-                    + "\"delta\":{\"type\":\"signature_delta\","
-                    + "\"signature\":\"signed-1\"}}"),
-                event("{\"type\":\"content_block_stop\",\"index\":0}"),
-                event("{\"type\":\"content_block_start\",\"index\":1,"
-                    + "\"content_block\":{\"type\":\"tool_use\",\"id\":\"tool-1\","
-                    + "\"name\":\"search\",\"input\":{}}}"),
-                event("{\"type\":\"content_block_delta\",\"index\":1,"
-                    + "\"delta\":{\"type\":\"input_json_delta\","
-                    + "\"partial_json\":\"{\\\"q\\\":\\\"Halo\\\"}\"}}"),
-                event("{\"type\":\"content_block_stop\",\"index\":1}"),
-                event("{\"type\":\"message_delta\",\"delta\":{"
-                    + "\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":5}}"),
-                event("{\"type\":\"message_stop\"}")
-            )).getBytes(StandardCharsets.UTF_8);
+            var bytes = String.join(
+                            "",
+                            List.of(
+                                    event("{\"type\":\"message_start\",\"message\":{\"usage\":{"
+                                            + "\"input_tokens\":8,\"cache_read_input_tokens\":2}}}"),
+                                    event("{\"type\":\"content_block_start\",\"index\":0,"
+                                            + "\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}"),
+                                    event("{\"type\":\"content_block_delta\",\"index\":0,"
+                                            + "\"delta\":{\"type\":\"thinking_delta\","
+                                            + "\"thinking\":\"Inspect\"}}"),
+                                    event("{\"type\":\"content_block_delta\",\"index\":0,"
+                                            + "\"delta\":{\"type\":\"signature_delta\","
+                                            + "\"signature\":\"signed-1\"}}"),
+                                    event("{\"type\":\"content_block_stop\",\"index\":0}"),
+                                    event("{\"type\":\"content_block_start\",\"index\":1,"
+                                            + "\"content_block\":{\"type\":\"tool_use\",\"id\":\"tool-1\","
+                                            + "\"name\":\"search\",\"input\":{}}}"),
+                                    event("{\"type\":\"content_block_delta\",\"index\":1,"
+                                            + "\"delta\":{\"type\":\"input_json_delta\","
+                                            + "\"partial_json\":\"{\\\"q\\\":\\\"Halo\\\"}\"}}"),
+                                    event("{\"type\":\"content_block_stop\",\"index\":1}"),
+                                    event("{\"type\":\"message_delta\",\"delta\":{"
+                                            + "\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":5}}"),
+                                    event("{\"type\":\"message_stop\"}")))
+                    .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, bytes.length);
             exchange.getResponseBody().write(bytes);
         });
         try {
             var options = ChatCompletionsOptions.builder()
-                .baseUrl(baseUrl(server)).apiKey("secret").model("model-1")
-                .maxTokens(1024).build();
-            var model = new AnthropicMessagesModel(options, WebClient.builder(),
-                new TestProfile());
+                    .baseUrl(baseUrl(server))
+                    .apiKey("secret")
+                    .model("model-1")
+                    .maxTokens(1024)
+                    .build();
+            var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
 
             var parts = model.streamParts(new Prompt(new UserMessage("Find"), options))
-                .collectList().block();
+                    .collectList()
+                    .block();
 
             assertThat(parts).isNotNull();
-            assertThat(parts).filteredOn(ProviderStreamPart.ToolInputStartPart.class::isInstance)
-                .singleElement().satisfies(part -> assertThat(part)
-                    .isEqualTo(new ProviderStreamPart.ToolInputStartPart(1, "tool-1", "search")));
-            assertThat(parts).filteredOn(ProviderStreamPart.ToolInputDeltaPart.class::isInstance)
-                .singleElement().satisfies(part -> assertThat(part)
-                    .isEqualTo(new ProviderStreamPart.ToolInputDeltaPart(
-                        1, "{\"q\":\"Halo\"}")));
-            assertThat(parts).filteredOn(ProviderStreamPart.ToolInputEndPart.class::isInstance)
-                .singleElement();
+            assertThat(parts)
+                    .filteredOn(ProviderStreamPart.ToolInputStartPart.class::isInstance)
+                    .singleElement()
+                    .satisfies(part -> assertThat(part)
+                            .isEqualTo(new ProviderStreamPart.ToolInputStartPart(1, "tool-1", "search")));
+            assertThat(parts)
+                    .filteredOn(ProviderStreamPart.ToolInputDeltaPart.class::isInstance)
+                    .singleElement()
+                    .satisfies(part -> assertThat(part)
+                            .isEqualTo(new ProviderStreamPart.ToolInputDeltaPart(1, "{\"q\":\"Halo\"}")));
+            assertThat(parts)
+                    .filteredOn(ProviderStreamPart.ToolInputEndPart.class::isInstance)
+                    .singleElement();
             var responses = parts.stream()
-                .filter(ProviderStreamPart.ChatResponsePart.class::isInstance)
-                .map(ProviderStreamPart.ChatResponsePart.class::cast)
-                .map(ProviderStreamPart.ChatResponsePart::response)
-                .toList();
-            assertThat(responses).anySatisfy(response -> assertThat(
-                response.getResult().getOutput().getMetadata())
-                .containsEntry("reasoningContent", "Inspect"));
-            assertThat(responses).anySatisfy(response -> assertThat(
-                response.getResult().getOutput().getMetadata())
-                .containsEntry("reasoningSignature", "signed-1")
-                .containsKey("reasoningBlocks"));
+                    .filter(ProviderStreamPart.ChatResponsePart.class::isInstance)
+                    .map(ProviderStreamPart.ChatResponsePart.class::cast)
+                    .map(ProviderStreamPart.ChatResponsePart::response)
+                    .toList();
+            assertThat(responses)
+                    .anySatisfy(response -> assertThat(
+                                    response.getResult().getOutput().getMetadata())
+                            .containsEntry("reasoningContent", "Inspect"));
+            assertThat(responses)
+                    .anySatisfy(response -> assertThat(
+                                    response.getResult().getOutput().getMetadata())
+                            .containsEntry("reasoningSignature", "signed-1")
+                            .containsKey("reasoningBlocks"));
             assertThat(responses).anySatisfy(response -> {
                 assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(10);
-                assertThat(response.getMetadata().getUsage().getCompletionTokens()).isEqualTo(5);
+                assertThat(response.getMetadata().getUsage().getCompletionTokens())
+                        .isEqualTo(5);
             });
         } finally {
             server.stop(0);
@@ -206,23 +229,28 @@ class AnthropicMessagesModelTest {
     void preservesLongUsageAcrossStreamingEvents() throws Exception {
         var server = server("/v1/messages", exchange -> {
             var bytes = (event("{\"type\":\"message_start\",\"message\":{\"usage\":{"
-                + "\"input_tokens\":3000000000,\"cache_read_input_tokens\":7}}}")
-                + event("{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},"
-                + "\"usage\":{\"output_tokens\":5}}"))
-                .getBytes(StandardCharsets.UTF_8);
+                                    + "\"input_tokens\":3000000000,\"cache_read_input_tokens\":7}}}")
+                            + event("{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},"
+                                    + "\"usage\":{\"output_tokens\":5}}"))
+                    .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, bytes.length);
             exchange.getResponseBody().write(bytes);
         });
         try {
-            var options = ChatCompletionsOptions.builder().baseUrl(baseUrl(server))
-                .apiKey("secret").model("model-1").maxTokens(1024).build();
+            var options = ChatCompletionsOptions.builder()
+                    .baseUrl(baseUrl(server))
+                    .apiKey("secret")
+                    .model("model-1")
+                    .maxTokens(1024)
+                    .build();
             var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
             var parts = model.streamParts(new Prompt(new UserMessage("Find"), options))
-                .collectList().block();
+                    .collectList()
+                    .block();
             var response = (ProviderStreamPart.ChatResponsePart) parts.getLast();
             var usage = (run.halo.aifoundation.provider.usage.ProviderUsage)
-                response.response().getMetadata().getUsage();
+                    response.response().getMetadata().getUsage();
             assertThat(usage.inputTokens()).isEqualTo(3_000_000_007L);
             assertThat(usage.totalTokens()).isEqualTo(3_000_000_012L);
         } finally {
@@ -242,22 +270,29 @@ class AnthropicMessagesModelTest {
                 {"type":"message_delta","delta":{"stop_reason":"end_turn"},
                  "usage":{"input_tokens":20,"output_tokens":5,"cache_read_input_tokens":8,
                    "output_tokens_details":{"thinking_tokens":2}}}
-                """.replace("\n", ""))).getBytes(StandardCharsets.UTF_8);
+                """.replace("\n", "")))
+                    .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, bytes.length);
             exchange.getResponseBody().write(bytes);
         });
         try {
-            var options = ChatCompletionsOptions.builder().baseUrl(baseUrl(server))
-                .apiKey("secret").model("model-1").maxTokens(1024).build();
+            var options = ChatCompletionsOptions.builder()
+                    .baseUrl(baseUrl(server))
+                    .apiKey("secret")
+                    .model("model-1")
+                    .maxTokens(1024)
+                    .build();
             var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
             var parts = model.streamParts(new Prompt(new UserMessage("Find"), options))
-                .collectList().block();
+                    .collectList()
+                    .block();
             var snapshots = parts.stream()
-                .filter(ProviderStreamPart.ChatResponsePart.class::isInstance)
-                .map(ProviderStreamPart.ChatResponsePart.class::cast)
-                .map(part -> (run.halo.aifoundation.provider.usage.ProviderUsage)
-                    part.response().getMetadata().getUsage()).toList();
+                    .filter(ProviderStreamPart.ChatResponsePart.class::isInstance)
+                    .map(ProviderStreamPart.ChatResponsePart.class::cast)
+                    .map(part -> (run.halo.aifoundation.provider.usage.ProviderUsage)
+                            part.response().getMetadata().getUsage())
+                    .toList();
             assertThat(snapshots.get(1).complete()).isFalse();
             assertThat(snapshots.getFirst().inputTokens()).isEqualTo(16L);
             assertThat(snapshots.getLast().inputTokens()).isEqualTo(30L);
@@ -270,8 +305,7 @@ class AnthropicMessagesModelTest {
     }
 
     private HttpServer server(String path, ExchangeHandler handler) throws Exception {
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext(path, exchange -> {
             try (exchange) {
                 handler.handle(exchange);

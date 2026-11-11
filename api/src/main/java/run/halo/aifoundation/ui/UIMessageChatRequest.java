@@ -11,8 +11,8 @@ import java.util.Objects;
  * @param trigger chat action to perform
  * @param messageId assistant message id used by regeneration requests
  */
-public record UIMessageChatRequest<M>(String id, List<UIMessage<M>> messages,
-                                      UIMessageChatTrigger trigger, String messageId) {
+public record UIMessageChatRequest<M>(
+        String id, List<UIMessage<M>> messages, UIMessageChatTrigger trigger, String messageId) {
 
     public UIMessageChatRequest {
         if (id == null || id.isBlank()) {

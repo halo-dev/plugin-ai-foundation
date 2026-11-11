@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Base64;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -15,7 +15,6 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -28,17 +27,16 @@ import org.springframework.http.MediaType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
+import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 
-/**
- * Reusable Chat Completions wire implementation backed entirely by WebClient.
- */
+/** Reusable Chat Completions wire implementation backed entirely by WebClient. */
 public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -52,13 +50,13 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
     private final StreamDialect streamDialect;
     private final ChatCompletionsRequestEncoder requestEncoder;
 
-    public ChatCompletionsModel(ChatCompletionsOptions defaultOptions,
-        WebClient.Builder webClientBuilder, ChatCompletionsProfile profile) {
+    public ChatCompletionsModel(
+            ChatCompletionsOptions defaultOptions, WebClient.Builder webClientBuilder, ChatCompletionsProfile profile) {
         this.defaultOptions = defaultOptions;
         this.webClient = webClientBuilder.build();
         this.profile = java.util.Objects.requireNonNull(profile, "profile must not be null");
-        this.streamDialect = java.util.Objects.requireNonNull(profile.toolInputStreamDialect(),
-            "profile.toolInputStreamDialect must not be null");
+        this.streamDialect = java.util.Objects.requireNonNull(
+                profile.toolInputStreamDialect(), "profile.toolInputStreamDialect must not be null");
         this.requestEncoder = new ChatCompletionsRequestEncoder(profile);
     }
 
@@ -72,35 +70,35 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         var requestPrompt = requestPrompt(prompt);
         var options = requestOptions(requestPrompt);
         var body = requestEncoder.encode(requestPrompt, options, false);
-        var diagnostics = ProviderDiagnostics.create(profile.providerType(),
-            profile.adapterType());
+        var diagnostics = ProviderDiagnostics.create(profile.providerType(), profile.adapterType());
         var diagnosticId = diagnostics.invocationId();
         var url = chatCompletionsUrl(options);
         diagnostics.request(url, body, false);
-        return webClient.method(HttpMethod.POST)
-            .uri(URI.create(url))
-            .headers(headers -> applyHeaders(headers, options))
-            .bodyValue(body)
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response, profile.providerType(),
-                        "chat", diagnostics);
-                }
-                return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> {
-                        var chatResponse = chatResponse(data, options, diagnosticId);
-                        traceNormalizedResponse(diagnosticId, chatResponse, false);
-                        return chatResponse;
-                    });
-            })
-            .block(options.getTimeout());
+        return webClient
+                .method(HttpMethod.POST)
+                .uri(URI.create(url))
+                .headers(headers -> applyHeaders(headers, options))
+                .bodyValue(body)
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(
+                                response, profile.providerType(), "chat", diagnostics);
+                    }
+                    return ProviderHttpResponseSupport.body(response, diagnostics)
+                            .map(data -> {
+                                var chatResponse = chatResponse(data, options, diagnosticId);
+                                traceNormalizedResponse(diagnosticId, chatResponse, false);
+                                return chatResponse;
+                            });
+                })
+                .block(options.getTimeout());
     }
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
         return streamParts(prompt)
-            .ofType(ProviderStreamPart.ChatResponsePart.class)
-            .map(ProviderStreamPart.ChatResponsePart::response);
+                .ofType(ProviderStreamPart.ChatResponsePart.class)
+                .map(ProviderStreamPart.ChatResponsePart::response);
     }
 
     @Override
@@ -109,45 +107,43 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
             var requestPrompt = requestPrompt(prompt);
             var options = requestOptions(requestPrompt);
             var body = requestEncoder.encode(requestPrompt, options, true);
-            var diagnostics = ProviderDiagnostics.create(profile.providerType(),
-                profile.adapterType());
+            var diagnostics = ProviderDiagnostics.create(profile.providerType(), profile.adapterType());
             var diagnosticId = diagnostics.invocationId();
             var url = chatCompletionsUrl(options);
             diagnostics.request(url, body, true);
-            return webClient.method(HttpMethod.POST)
-                .uri(URI.create(url))
-                .headers(headers -> applyHeaders(headers, options))
-                .bodyValue(body)
-                .exchangeToFlux(response -> {
-                    if (!response.statusCode().is2xxSuccessful()) {
-                        return ProviderHttpResponseSupport.errorFlux(response,
-                            profile.providerType(), "chat", diagnostics);
-                    }
-                    return ProviderHttpResponseSupport.sse(response, diagnostics)
-                        .map(event -> event.data())
-                        .filter(data -> !data.isBlank() && !SSE_DONE.equals(data))
-                        .transform(data -> providerStreamParts(data, options, diagnosticId));
-                });
+            return webClient
+                    .method(HttpMethod.POST)
+                    .uri(URI.create(url))
+                    .headers(headers -> applyHeaders(headers, options))
+                    .bodyValue(body)
+                    .exchangeToFlux(response -> {
+                        if (!response.statusCode().is2xxSuccessful()) {
+                            return ProviderHttpResponseSupport.errorFlux(
+                                    response, profile.providerType(), "chat", diagnostics);
+                        }
+                        return ProviderHttpResponseSupport.sse(response, diagnostics)
+                                .map(event -> event.data())
+                                .filter(data -> !data.isBlank() && !SSE_DONE.equals(data))
+                                .transform(data -> providerStreamParts(data, options, diagnosticId));
+                    });
         });
     }
 
-    private Flux<ProviderStreamPart> providerStreamParts(Flux<String> data,
-        ChatCompletionsOptions options, String diagnosticId) {
+    private Flux<ProviderStreamPart> providerStreamParts(
+            Flux<String> data, ChatCompletionsOptions options, String diagnosticId) {
         return Flux.defer(() -> {
             var state = new ToolCallStreamAssembler(profile.providerType(), streamDialect);
-            return data.concatMapIterable(chunk ->
-                    providerStreamParts(chunk, state, options, diagnosticId))
-                .concatWith(Flux.defer(() -> Flux.fromIterable(state.finishParts())));
+            return data.concatMapIterable(chunk -> providerStreamParts(chunk, state, options, diagnosticId))
+                    .concatWith(Flux.defer(() -> Flux.fromIterable(state.finishParts())));
         });
     }
 
-    private Flux<ProviderStreamPart> providerStreamParts(Flux<String> data,
-        ChatCompletionsOptions options) {
+    private Flux<ProviderStreamPart> providerStreamParts(Flux<String> data, ChatCompletionsOptions options) {
         return providerStreamParts(data, options, AiFoundationDiagnostics.newInvocationId());
     }
 
-    private List<ProviderStreamPart> providerStreamParts(String data, ToolCallStreamAssembler state,
-        ChatCompletionsOptions options, String diagnosticId) {
+    private List<ProviderStreamPart> providerStreamParts(
+            String data, ToolCallStreamAssembler state, ChatCompletionsOptions options, String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
             var parts = new ArrayList<ProviderStreamPart>();
@@ -170,8 +166,8 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
             }
             return parts;
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to parse " + profile.providerType()
-                + " Chat Completions stream chunk", e);
+            throw new IllegalStateException(
+                    "Failed to parse " + profile.providerType() + " Chat Completions stream chunk", e);
         }
     }
 
@@ -190,26 +186,30 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         return (ChatCompletionsOptions) prompt.getOptions();
     }
 
-    private void traceNormalizedResponse(String diagnosticId, ChatResponse response,
-        boolean stream) {
+    private void traceNormalizedResponse(String diagnosticId, ChatResponse response, boolean stream) {
         AiFoundationDiagnostics.trace("provider-normalized-output", diagnosticId, () -> {
             var result = response != null ? response.getResult() : null;
             var output = result != null ? result.getOutput() : null;
             return AiFoundationDiagnostics.fields(
-                "stream", stream,
-                "responseId", response != null && response.getMetadata() != null
-                    ? response.getMetadata().getId() : null,
-                "model", response != null && response.getMetadata() != null
-                    ? response.getMetadata().getModel() : null,
-                "finishReason", result != null && result.getMetadata() != null
-                    ? result.getMetadata().getFinishReason() : null,
-                "text", output != null ? output.getText() : null,
-                "outputMetadata", output != null ? output.getMetadata() : null);
+                    "stream", stream,
+                    "responseId",
+                            response != null && response.getMetadata() != null
+                                    ? response.getMetadata().getId()
+                                    : null,
+                    "model",
+                            response != null && response.getMetadata() != null
+                                    ? response.getMetadata().getModel()
+                                    : null,
+                    "finishReason",
+                            result != null && result.getMetadata() != null
+                                    ? result.getMetadata().getFinishReason()
+                                    : null,
+                    "text", output != null ? output.getText() : null,
+                    "outputMetadata", output != null ? output.getMetadata() : null);
         });
     }
 
-    private void applyHeaders(org.springframework.http.HttpHeaders headers,
-        ChatCompletionsOptions options) {
+    private void applyHeaders(org.springframework.http.HttpHeaders headers, ChatCompletionsOptions options) {
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (hasText(options.getApiKey())) {
             headers.setBearerAuth(options.getApiKey());
@@ -219,8 +219,7 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         }
     }
 
-    private Map<String, Object> requestBody(Prompt prompt, ChatCompletionsOptions options,
-        boolean stream) {
+    private Map<String, Object> requestBody(Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         return requestEncoder.encode(prompt, options, stream);
     }
 
@@ -228,49 +227,52 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         return chatResponse(data, options, AiFoundationDiagnostics.newInvocationId());
     }
 
-    private ChatResponse chatResponse(String data, ChatCompletionsOptions options,
-        String diagnosticId) {
+    private ChatResponse chatResponse(String data, ChatCompletionsOptions options, String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
+            rejectError(root, data, "chat");
             var id = root.path(Fields.ID).asText("");
             var model = root.path(Fields.MODEL).asText("");
             var usage = usage(root.path(Fields.USAGE));
             var choices = root.path(Fields.CHOICES);
             if (!choices.isArray() || choices.isEmpty()) {
-                return new ChatResponse(List.of(),
-                    metadata(id, model, usage, root, diagnosticId));
+                return new ChatResponse(List.of(), metadata(id, model, usage, root, diagnosticId));
             }
             var generations = new ArrayList<Generation>();
             for (var choice : choices) {
                 generations.add(generation(choice, choice.path(Fields.MESSAGE), id, null, options));
             }
-            return new ChatResponse(generations,
-                metadata(id, model, usage, root, diagnosticId));
+            return new ChatResponse(generations, metadata(id, model, usage, root, diagnosticId));
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to parse " + profile.providerType()
-                + " Chat Completions response", e);
+            throw new IllegalStateException(
+                    "Failed to parse " + profile.providerType() + " Chat Completions response", e);
         }
     }
 
-    private ChatResponse chatResponseChunk(String data, ToolCallStreamAssembler toolCallState,
-        ChatCompletionsOptions options) {
-        return chatResponseChunk(data, toolCallState, options,
-            AiFoundationDiagnostics.newInvocationId());
+    private void rejectError(JsonNode root, String data, String operation) {
+        if (root.hasNonNull(Fields.ERROR)) {
+            throw new ProviderHttpException(profile.providerType(), operation, 200, data);
+        }
     }
 
-    private ChatResponse chatResponseChunk(String data, ToolCallStreamAssembler toolCallState,
-        ChatCompletionsOptions options, String diagnosticId) {
+    private ChatResponse chatResponseChunk(
+            String data, ToolCallStreamAssembler toolCallState, ChatCompletionsOptions options) {
+        return chatResponseChunk(data, toolCallState, options, AiFoundationDiagnostics.newInvocationId());
+    }
+
+    private ChatResponse chatResponseChunk(
+            String data, ToolCallStreamAssembler toolCallState, ChatCompletionsOptions options, String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
+            rejectError(root, data, "chat-stream");
             var id = root.path(Fields.ID).asText("");
             var model = root.path(Fields.MODEL).asText("");
             var usage = usage(root.path(Fields.USAGE));
             var choices = root.path(Fields.CHOICES);
             if (!choices.isArray() || choices.isEmpty()) {
                 return usage != null
-                    ? new ChatResponse(List.of(),
-                        metadata(id, model, usage, root, diagnosticId))
-                    : null;
+                        ? new ChatResponse(List.of(), metadata(id, model, usage, root, diagnosticId))
+                        : null;
             }
             var generations = new ArrayList<Generation>();
             for (var choice : choices) {
@@ -283,27 +285,30 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
             if (generations.isEmpty() && usage == null) {
                 return null;
             }
-            return new ChatResponse(generations,
-                metadata(id, model, usage, root, diagnosticId));
+            return new ChatResponse(generations, metadata(id, model, usage, root, diagnosticId));
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to parse " + profile.providerType()
-                + " Chat Completions stream chunk", e);
+            throw new IllegalStateException(
+                    "Failed to parse " + profile.providerType() + " Chat Completions stream chunk", e);
         }
     }
 
     private boolean isEmptyDelta(JsonNode choice, JsonNode delta) {
         return !hasContent(textOrNull(delta.path(Fields.CONTENT)))
-            && !hasContent(textOrNull(delta.path(Fields.REASONING_CONTENT)))
-            && !hasContent(textOrNull(delta.path(Fields.REASONING)))
-            && !hasContent(profile.reasoningContent(delta))
-            && profile.additionalMessageMetadata(delta).isEmpty()
-            && !hasText(textOrNull(delta.path(Fields.AUDIO).path(Fields.DATA)))
-            && !delta.has(Fields.TOOL_CALLS)
-            && !hasText(textOrNull(choice.path(Fields.FINISH_REASON)));
+                && !hasContent(textOrNull(delta.path(Fields.REASONING_CONTENT)))
+                && !hasContent(textOrNull(delta.path(Fields.REASONING)))
+                && !hasContent(profile.reasoningContent(delta))
+                && profile.additionalMessageMetadata(delta).isEmpty()
+                && !hasText(textOrNull(delta.path(Fields.AUDIO).path(Fields.DATA)))
+                && !delta.has(Fields.TOOL_CALLS)
+                && !hasText(textOrNull(choice.path(Fields.FINISH_REASON)));
     }
 
-    private Generation generation(JsonNode choice, JsonNode message, String id,
-        ToolCallStreamAssembler toolCallState, ChatCompletionsOptions options) {
+    private Generation generation(
+            JsonNode choice,
+            JsonNode message,
+            String id,
+            ToolCallStreamAssembler toolCallState,
+            ChatCompletionsOptions options) {
         var content = textOrEmpty(message.path(Fields.CONTENT));
         var audio = message.path(Fields.AUDIO);
         if (!hasContent(content)) {
@@ -327,18 +332,18 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         messageMetadata.putAll(profile.additionalMessageMetadata(message));
         addAudioMetadata(messageMetadata, audio);
         var outputBuilder = AssistantMessage.builder()
-            .content(content)
-            .properties(messageMetadata)
-            .toolCalls(toolCalls(message.path(Fields.TOOL_CALLS), toolCallState));
+                .content(content)
+                .properties(messageMetadata)
+                .toolCalls(toolCalls(message.path(Fields.TOOL_CALLS), toolCallState));
         var audioMedia = audioMedia(audio, options);
         if (!audioMedia.isEmpty()) {
             outputBuilder.media(audioMedia);
         }
         var output = outputBuilder.build();
         var generationMetadata = ChatGenerationMetadata.builder()
-            .finishReason(finishReason)
-            .metadata(messageMetadata)
-            .build();
+                .finishReason(finishReason)
+                .metadata(messageMetadata)
+                .build();
         return new Generation(output, generationMetadata);
     }
 
@@ -364,8 +369,9 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
             return List.of();
         }
         var format = firstText(audio, Fields.FORMAT);
-        if (!hasText(format) && options.getOutputAudio() != null
-            && options.getOutputAudio().format() != null) {
+        if (!hasText(format)
+                && options.getOutputAudio() != null
+                && options.getOutputAudio().format() != null) {
             format = options.getOutputAudio().format().name().toLowerCase(Locale.ROOT);
         }
         if (!hasText(format)) {
@@ -373,8 +379,8 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         }
         var bytes = Base64.getDecoder().decode(audio.path(Fields.DATA).asText());
         var mediaBuilder = Media.builder()
-            .mimeType(MimeTypeUtils.parseMimeType(Values.AUDIO_MIME_PREFIX + format))
-            .data(new ByteArrayResource(bytes));
+                .mimeType(MimeTypeUtils.parseMimeType(Values.AUDIO_MIME_PREFIX + format))
+                .data(new ByteArrayResource(bytes));
         var audioId = textOrNull(audio.path(Fields.ID));
         if (hasText(audioId)) {
             mediaBuilder.id(audioId);
@@ -382,8 +388,7 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         return List.of(mediaBuilder.build());
     }
 
-    private List<AssistantMessage.ToolCall> toolCalls(JsonNode node,
-        ToolCallStreamAssembler toolCallState) {
+    private List<AssistantMessage.ToolCall> toolCalls(JsonNode node, ToolCallStreamAssembler toolCallState) {
         if (!node.isArray() || node.isEmpty()) {
             return List.of();
         }
@@ -394,31 +399,27 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         var ordinal = 0;
         for (var item : node) {
             var function = item.path(Fields.FUNCTION);
-            var index = item.path(Fields.INDEX).isNumber()
-                ? item.path(Fields.INDEX).asInt()
-                : ordinal;
+            var index =
+                    item.path(Fields.INDEX).isNumber() ? item.path(Fields.INDEX).asInt() : ordinal;
             toolCalls.add(new AssistantMessage.ToolCall(
-                textOrFallback(item.path(Fields.ID), fallbackToolCallId(index)),
-                textOrFallback(item.path(Fields.TYPE), Values.FUNCTION),
-                textOrEmpty(function.path(Fields.NAME)),
-                textOrEmpty(function.path(Fields.ARGUMENTS))
-            ));
+                    textOrFallback(item.path(Fields.ID), fallbackToolCallId(index)),
+                    textOrFallback(item.path(Fields.TYPE), Values.FUNCTION),
+                    textOrEmpty(function.path(Fields.NAME)),
+                    textOrEmpty(function.path(Fields.ARGUMENTS))));
             ordinal++;
         }
         return toolCalls;
     }
 
     private String fallbackToolCallId(int index) {
-        return TOOL_CALL_ID_PREFIX + UUID.randomUUID().toString().replace("-", "")
-            + "_" + Math.max(index, 0);
+        return TOOL_CALL_ID_PREFIX + UUID.randomUUID().toString().replace("-", "") + "_" + Math.max(index, 0);
     }
 
-    private ChatResponseMetadata metadata(String id, String model, Usage usage, JsonNode root,
-        String diagnosticId) {
+    private ChatResponseMetadata metadata(String id, String model, Usage usage, JsonNode root, String diagnosticId) {
         var builder = ChatResponseMetadata.builder()
-            .id(id)
-            .model(model)
-            .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
+                .id(id)
+                .model(model)
+                .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
         if (usage != null) {
             builder.usage(usage);
         }
@@ -435,14 +436,13 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         while (fields.hasNext()) {
             var field = fields.next();
             if (Fields.ID.equals(field.getKey())
-                || Fields.MODEL.equals(field.getKey())
-                || Fields.CHOICES.equals(field.getKey())
-                || Fields.USAGE.equals(field.getKey())
-                || Fields.CREATED.equals(field.getKey())) {
+                    || Fields.MODEL.equals(field.getKey())
+                    || Fields.CHOICES.equals(field.getKey())
+                    || Fields.USAGE.equals(field.getKey())
+                    || Fields.CREATED.equals(field.getKey())) {
                 continue;
             }
-            providerMetadata.put(field.getKey(),
-                OBJECT_MAPPER.convertValue(field.getValue(), Object.class));
+            providerMetadata.put(field.getKey(), OBJECT_MAPPER.convertValue(field.getValue(), Object.class));
         }
         profile.normalizeProviderMetadata(providerMetadata).forEach(builder::keyValue);
     }
@@ -515,5 +515,4 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
     private String lower(String value) {
         return hasText(value) ? value.toLowerCase(Locale.ROOT) : value;
     }
-
 }

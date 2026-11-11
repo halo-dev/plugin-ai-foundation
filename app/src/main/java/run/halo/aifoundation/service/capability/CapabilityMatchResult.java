@@ -2,9 +2,7 @@ package run.halo.aifoundation.service.capability;
 
 import java.util.List;
 
-/**
- * Result of checking a model capability snapshot against a requirement.
- */
+/** Result of checking a model capability snapshot against a requirement. */
 public record CapabilityMatchResult(boolean matched, List<CapabilityMatchIssue> issues) {
 
     public static CapabilityMatchResult success() {

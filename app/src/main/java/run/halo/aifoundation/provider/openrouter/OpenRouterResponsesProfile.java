@@ -21,8 +21,7 @@ final class OpenRouterResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         body.put("store", false);
         OpenRouterRoutingOptions.validate(body.get("provider"), "responses");
         appendServerTools(body);
@@ -60,8 +59,7 @@ final class OpenRouterResponsesProfile implements ResponsesProfile {
         if (isServerToolType(type)) {
             return;
         }
-        throw new IllegalArgumentException(
-            "OpenRouter serverTools entries require a non-function type");
+        throw new IllegalArgumentException("OpenRouter serverTools entries require a non-function type");
     }
 
     private boolean isServerToolType(Object type) {

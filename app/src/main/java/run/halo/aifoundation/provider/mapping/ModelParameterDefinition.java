@@ -15,9 +15,14 @@ public final class ModelParameterDefinition {
     private final boolean common;
     private final SelectionAccessor accessor;
 
-    ModelParameterDefinition(ModelParameter parameter, ModelParameterDomain domain, String field,
-        String displayName, String description, boolean common,
-        SelectionAccessor accessor) {
+    ModelParameterDefinition(
+            ModelParameter parameter,
+            ModelParameterDomain domain,
+            String field,
+            String displayName,
+            String description,
+            boolean common,
+            SelectionAccessor accessor) {
         this.parameter = Objects.requireNonNull(parameter);
         this.domain = Objects.requireNonNull(domain);
         this.field = Objects.requireNonNull(field);
@@ -59,8 +64,7 @@ public final class ModelParameterDefinition {
         return mappings == null ? null : accessor.read(mappings);
     }
 
-    public void write(ModelParameterMappings mappings,
-        ModelParameterMappings.Selection selection) {
+    public void write(ModelParameterMappings mappings, ModelParameterMappings.Selection selection) {
         accessor.write(Objects.requireNonNull(mappings), selection);
     }
 

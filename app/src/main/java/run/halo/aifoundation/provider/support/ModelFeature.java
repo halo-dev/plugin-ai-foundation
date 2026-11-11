@@ -26,8 +26,7 @@ public enum ModelFeature {
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static ModelFeature fromValue(String value) {
-        return find(value)
-            .orElseThrow(() -> new IllegalArgumentException("Unsupported model feature: " + value));
+        return find(value).orElseThrow(() -> new IllegalArgumentException("Unsupported model feature: " + value));
     }
 
     public static Optional<ModelFeature> find(String value) {
@@ -35,7 +34,7 @@ public enum ModelFeature {
             return Optional.empty();
         }
         return Arrays.stream(values())
-            .filter(feature -> feature.value.equals(value))
-            .findFirst();
+                .filter(feature -> feature.value.equals(value))
+                .findFirst();
     }
 }

@@ -33,23 +33,23 @@ public class DefaultModelSlotConsoleEndpoint implements CustomEndpoint {
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.aifoundation.halo.run/v1alpha1/DefaultModelSlot";
-        return route()
-            .GET("default-model-slots", this::getDefaultModelSlots,
-                builder -> builder.operationId("GetDefaultModelSlots")
-                    .description("Get AI Foundation default model slots.")
-                    .tag(tag)
-                    .response(responseBuilder().implementation(DefaultModelSlots.class))
-            )
-            .PUT("default-model-slots", this::updateDefaultModelSlots,
-                builder -> builder.operationId("UpdateDefaultModelSlots")
-                    .description("Update AI Foundation default model slots.")
-                    .tag(tag)
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(DefaultModelSlots.class))
-                    .response(responseBuilder().implementation(DefaultModelSlots.class))
-            )
-            .build();
+        return route().GET(
+                        "default-model-slots",
+                        this::getDefaultModelSlots,
+                        builder -> builder.operationId("GetDefaultModelSlots")
+                                .description("Get AI Foundation default model slots.")
+                                .tag(tag)
+                                .response(responseBuilder().implementation(DefaultModelSlots.class)))
+                .PUT(
+                        "default-model-slots",
+                        this::updateDefaultModelSlots,
+                        builder -> builder.operationId("UpdateDefaultModelSlots")
+                                .description("Update AI Foundation default model slots.")
+                                .tag(tag)
+                                .requestBody(
+                                        requestBodyBuilder().required(true).implementation(DefaultModelSlots.class))
+                                .response(responseBuilder().implementation(DefaultModelSlots.class)))
+                .build();
     }
 
     @Override
@@ -58,27 +58,26 @@ public class DefaultModelSlotConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> getDefaultModelSlots(ServerRequest request) {
-        return defaultModelSlotStore.get()
-            .flatMap(slots -> ServerResponse.ok().bodyValue(slots));
+        return defaultModelSlotStore.get().flatMap(slots -> ServerResponse.ok().bodyValue(slots));
     }
 
     private Mono<ServerResponse> updateDefaultModelSlots(ServerRequest request) {
         return request.bodyToMono(DefaultModelSlots.class)
-            .flatMap(slots -> validateSlots(slots)
-                .then(Mono.defer(() -> defaultModelSlotStore.save(slots)))
-            )
-            .flatMap(saved -> ServerResponse.ok().bodyValue(saved));
+                .flatMap(slots -> validateSlots(slots).then(Mono.defer(() -> defaultModelSlotStore.save(slots))))
+                .flatMap(saved -> ServerResponse.ok().bodyValue(saved));
     }
 
     private Mono<Void> validateSlots(DefaultModelSlots slots) {
         return Flux.concat(List.of(
-                validateSlot("languageModelName", slots.getLanguageModelName(), ModelType.LANGUAGE),
-                validateSlot("embeddingModelName", slots.getEmbeddingModelName(), ModelType.EMBEDDING),
-                validateSlot("rerankModelName", slots.getRerankModelName(), ModelType.RERANK),
-                validateSlot("imageGenerationModelName", slots.getImageGenerationModelName(),
-                    ModelType.IMAGE_GENERATION)
-            ))
-            .then();
+                        validateSlot("decisionModelName", slots.getDecisionModelName(), ModelType.DECISION),
+                        validateSlot("languageModelName", slots.getLanguageModelName(), ModelType.LANGUAGE),
+                        validateSlot("embeddingModelName", slots.getEmbeddingModelName(), ModelType.EMBEDDING),
+                        validateSlot("rerankModelName", slots.getRerankModelName(), ModelType.RERANK),
+                        validateSlot(
+                                "imageGenerationModelName",
+                                slots.getImageGenerationModelName(),
+                                ModelType.IMAGE_GENERATION)))
+                .then();
     }
 
     private Mono<Void> validateSlot(String slotName, String modelName, ModelType expectedType) {
@@ -86,39 +85,41 @@ public class DefaultModelSlotConsoleEndpoint implements CustomEndpoint {
             return Mono.empty();
         }
         return client.fetch(AiModel.class, modelName)
-            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Default slot '" + slotName + "' references missing model: " + modelName)))
-            .flatMap(model -> {
-                if (!model.getSpec().isEnabled()) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Default slot '" + slotName + "' references disabled model: "
-                            + modelName));
-                }
-                var actualType = model.getSpec().getModelType();
-                if (actualType != expectedType) {
-                    var actualValue = actualType != null ? actualType.getValue() : "null";
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Default slot '" + slotName + "' requires modelType '"
-                            + expectedType.getValue() + "' but model '" + modelName
-                            + "' has modelType '" + actualValue + "'"));
-                }
-                var providerName = model.getSpec().getProviderName();
-                return client.fetch(AiProvider.class, providerName)
-                    .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Default slot '" + slotName + "' references model '" + modelName
-                            + "' with missing provider: " + providerName)))
-                    .flatMap(provider -> validateProviderEnabled(provider, slotName, modelName));
-            });
+                .switchIfEmpty(Mono.error(new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Default slot '" + slotName + "' references missing model: " + modelName)))
+                .flatMap(model -> {
+                    if (!model.getSpec().isEnabled()) {
+                        return Mono.error(new ResponseStatusException(
+                                HttpStatus.BAD_REQUEST,
+                                "Default slot '" + slotName + "' references disabled model: " + modelName));
+                    }
+                    var actualType = model.getSpec().getModelType();
+                    if (actualType != expectedType) {
+                        var actualValue = actualType != null ? actualType.getValue() : "null";
+                        return Mono.error(new ResponseStatusException(
+                                HttpStatus.BAD_REQUEST,
+                                "Default slot '" + slotName + "' requires modelType '"
+                                        + expectedType.getValue() + "' but model '" + modelName
+                                        + "' has modelType '" + actualValue + "'"));
+                    }
+                    var providerName = model.getSpec().getProviderName();
+                    return client.fetch(AiProvider.class, providerName)
+                            .switchIfEmpty(Mono.error(new ResponseStatusException(
+                                    HttpStatus.BAD_REQUEST,
+                                    "Default slot '" + slotName + "' references model '" + modelName
+                                            + "' with missing provider: " + providerName)))
+                            .flatMap(provider -> validateProviderEnabled(provider, slotName, modelName));
+                });
     }
 
-    private Mono<Void> validateProviderEnabled(AiProvider provider, String slotName,
-        String modelName) {
+    private Mono<Void> validateProviderEnabled(AiProvider provider, String slotName, String modelName) {
         if (provider.getSpec().isEnabled()) {
             return Mono.empty();
         }
-        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-            "Default slot '" + slotName + "' references model '" + modelName
-                + "' with disabled provider: " + provider.getMetadata().getName()));
+        return Mono.error(new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Default slot '" + slotName + "' references model '" + modelName + "' with disabled provider: "
+                        + provider.getMetadata().getName()));
     }
-
 }

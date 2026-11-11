@@ -14,12 +14,11 @@ import run.halo.aifoundation.provider.AiProviderType;
 @Component
 public class ProviderClientCache {
 
+    private final Map<String, ProviderDecisionClient> decisionClientCache = new ConcurrentHashMap<>();
     private final Map<String, ChatModel> chatModelCache = new ConcurrentHashMap<>();
     private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
-    private final Map<String, ProviderRerankingClient> rerankingClientCache =
-        new ConcurrentHashMap<>();
-    private final Map<String, ProviderImageGenerationClient> imageGenerationClientCache =
-        new ConcurrentHashMap<>();
+    private final Map<String, ProviderRerankingClient> rerankingClientCache = new ConcurrentHashMap<>();
+    private final Map<String, ProviderImageGenerationClient> imageGenerationClientCache = new ConcurrentHashMap<>();
     private final ApplicationContext applicationContext;
 
     private volatile Map<String, AiProviderType> providerTypeMap;
@@ -32,16 +31,12 @@ public class ProviderClientCache {
         if (providerTypeMap == null) {
             synchronized (this) {
                 if (providerTypeMap == null) {
-                    providerTypeMap = applicationContext.getBeansOfType(AiProviderType.class)
-                        .values().stream()
-                        .collect(java.util.stream.Collectors.toMap(
-                            AiProviderType::getProviderType,
-                            java.util.function.Function.identity(),
-                            (a, b) -> {
-                                log.warn("Duplicate provider type: {}, keeping first", a.getProviderType());
-                                return a;
-                            }
-                        ));
+                    providerTypeMap = applicationContext.getBeansOfType(AiProviderType.class).values().stream()
+                            .collect(java.util.stream.Collectors.toMap(
+                                    AiProviderType::getProviderType, java.util.function.Function.identity(), (a, b) -> {
+                                        log.warn("Duplicate provider type: {}, keeping first", a.getProviderType());
+                                        return a;
+                                    }));
                 }
             }
         }
@@ -56,21 +51,22 @@ public class ProviderClientCache {
         return type;
     }
 
-    public ChatModel getOrCreateChatModel(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    public ChatModel getOrCreateChatModel(AiProvider provider, String apiKey, ProviderModelRef model) {
         var name = provider.getMetadata().getName();
         var type = getProviderType(provider.getSpec().getProviderType());
         var resolvedModel = ProviderModelResolver.resolve(type, model);
         var key = cacheKey(name, resolvedModel);
         return chatModelCache.computeIfAbsent(key, k -> {
-            log.debug("Creating chat model for provider: {}, model: {}, adapter: {}", name,
-                resolvedModel.modelId(), resolvedModel.adapterType());
+            log.debug(
+                    "Creating chat model for provider: {}, model: {}, adapter: {}",
+                    name,
+                    resolvedModel.modelId(),
+                    resolvedModel.adapterType());
             return type.buildChatModel(provider, apiKey, resolvedModel);
         });
     }
 
-    public EmbeddingModel getOrCreateEmbeddingModel(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    public EmbeddingModel getOrCreateEmbeddingModel(AiProvider provider, String apiKey, ProviderModelRef model) {
         var name = provider.getMetadata().getName();
         var type = getProviderType(provider.getSpec().getProviderType());
         var resolvedModel = ProviderModelResolver.resolve(type, model);
@@ -87,8 +83,8 @@ public class ProviderClientCache {
         return prev != null ? prev : embeddingModel;
     }
 
-    public ProviderRerankingClient getOrCreateRerankingClient(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    public ProviderRerankingClient getOrCreateRerankingClient(
+            AiProvider provider, String apiKey, ProviderModelRef model) {
         var name = provider.getMetadata().getName();
         var type = getProviderType(provider.getSpec().getProviderType());
         var resolvedModel = ProviderModelResolver.resolve(type, model);
@@ -105,8 +101,8 @@ public class ProviderClientCache {
         return prev != null ? prev : client;
     }
 
-    public ProviderImageGenerationClient getOrCreateImageGenerationClient(AiProvider provider,
-        String apiKey, ProviderModelRef model) {
+    public ProviderImageGenerationClient getOrCreateImageGenerationClient(
+            AiProvider provider, String apiKey, ProviderModelRef model) {
         var name = provider.getMetadata().getName();
         var type = getProviderType(provider.getSpec().getProviderType());
         var resolvedModel = ProviderModelResolver.resolve(type, model);
@@ -123,8 +119,18 @@ public class ProviderClientCache {
         return prev != null ? prev : client;
     }
 
+    public ProviderDecisionClient getOrCreateDecisionClient(
+            AiProvider provider, String apiKey, ProviderModelRef model) {
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var resolved = ProviderModelResolver.resolve(type, model);
+        var key = cacheKey(provider.getMetadata().getName(), resolved);
+        return decisionClientCache.computeIfAbsent(
+                key, ignored -> type.buildDecisionClient(provider, apiKey, resolved));
+    }
+
     public void invalidate(String providerName) {
         var prefix = providerName + "/";
+        decisionClientCache.keySet().removeIf(key -> key.startsWith(prefix));
         chatModelCache.keySet().removeIf(key -> key.startsWith(prefix));
         embeddingModelCache.keySet().removeIf(key -> key.startsWith(prefix));
         rerankingClientCache.keySet().removeIf(key -> key.startsWith(prefix));
@@ -133,6 +139,7 @@ public class ProviderClientCache {
     }
 
     public void invalidateAll() {
+        decisionClientCache.clear();
         chatModelCache.clear();
         embeddingModelCache.clear();
         rerankingClientCache.clear();
@@ -141,7 +148,6 @@ public class ProviderClientCache {
     }
 
     private String cacheKey(String providerName, ProviderModelRef model) {
-        return providerName + "/" + model.modelType().getValue() + "/" + model.modelId() + "/"
-            + model.cacheSegment();
+        return providerName + "/" + model.modelType().getValue() + "/" + model.modelId() + "/" + model.cacheSegment();
     }
 }

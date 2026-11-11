@@ -15,50 +15,30 @@ import run.halo.aifoundation.tool.ToolDefinition;
 /**
  * Lifecycle event emitted immediately before a provider generation step starts.
  *
- * <p>The event exposes the effective messages, tools, tool choice, stop condition, timeouts, and
- * typed settings for that step. It is intended for observability and debugging, not mutation.
+ * <p>The event exposes the effective messages, tools, tool choice, stop condition, timeouts, and typed settings for
+ * that step. It is intended for observability and debugging, not mutation.
  */
 @Value
 @Builder
 public class GenerationStepStartEvent {
-    /**
-     * Zero-based generation step index.
-     */
+    /** Zero-based generation step index. */
     int stepIndex;
-    /**
-     * Original generation request.
-     */
+    /** Original generation request. */
     GenerateTextRequest request;
-    /**
-     * Effective messages sent to the provider for this step.
-     */
+    /** Effective messages sent to the provider for this step. */
     List<ModelMessage> messages;
-    /**
-     * Steps completed before this step starts.
-     */
+    /** Steps completed before this step starts. */
     List<GenerationStep> previousSteps;
-    /**
-     * Effective tool definitions available to this step.
-     */
+    /** Effective tool definitions available to this step. */
     List<ToolDefinition> tools;
-    /**
-     * Effective tool choice for this step.
-     */
+    /** Effective tool choice for this step. */
     ToolChoice toolChoice;
-    /**
-     * Effective stop condition for the generation loop.
-     */
+    /** Effective stop condition for the generation loop. */
     StopCondition stopWhen;
-    /**
-     * Effective timeout settings.
-     */
+    /** Effective timeout settings. */
     GenerationTimeouts timeouts;
-    /**
-     * Caller-supplied metadata copied from the request.
-     */
+    /** Caller-supplied metadata copied from the request. */
     Map<String, Object> metadata;
-    /**
-     * Caller-supplied context copied from the request.
-     */
+    /** Caller-supplied context copied from the request. */
     Map<String, Object> context;
 }

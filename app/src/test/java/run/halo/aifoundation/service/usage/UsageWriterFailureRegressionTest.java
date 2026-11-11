@@ -31,8 +31,8 @@ import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 class UsageWriterFailureRegressionTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
-    private static final ModelCallContext MODEL_CONTEXT = new ModelCallContext(
-        ModelType.LANGUAGE, "model", "provider", "openai", "gpt-test");
+    private static final ModelCallContext MODEL_CONTEXT =
+            new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt-test");
 
     @TempDir
     Path directory;
@@ -42,7 +42,7 @@ class UsageWriterFailureRegressionTest {
         try (var fixture = new Fixture()) {
             int pages;
             try (var statement = fixture.connection.createStatement();
-                var rows = statement.executeQuery("PRAGMA page_count")) {
+                    var rows = statement.executeQuery("PRAGMA page_count")) {
                 assertThat(rows.next()).isTrue();
                 pages = rows.getInt(1);
             }
@@ -57,8 +57,9 @@ class UsageWriterFailureRegressionTest {
                 fixture.awaitWriter();
             }
 
-            assertThat(fixture.connection.isClosed()).as("SQLite full invalidated writer")
-                .isTrue();
+            assertThat(fixture.connection.isClosed())
+                    .as("SQLite full invalidated writer")
+                    .isTrue();
             fixture.assertDisabledWithoutAffectingModels();
         }
     }
@@ -67,20 +68,20 @@ class UsageWriterFailureRegressionTest {
     void rollbackFailureDisablesStatisticsAndPreservesModelResults() throws Exception {
         try (var fixture = new Fixture()) {
             var firstCommit = new AtomicBoolean(true);
-            var proxy = (Connection) Proxy.newProxyInstance(getClass().getClassLoader(),
-                new Class<?>[] {Connection.class}, (ignored, method, arguments) -> {
-                    if (method.getName().equals("commit") && firstCommit.getAndSet(false)) {
-                        throw new SQLException("Injected commit I/O failure", null, 10);
-                    }
-                    if (method.getName().equals("rollback")) {
-                        throw new SQLException("Injected rollback failure");
-                    }
-                    try {
-                        return method.invoke(fixture.connection, arguments);
-                    } catch (InvocationTargetException error) {
-                        throw error.getCause();
-                    }
-                });
+            var proxy = (Connection) Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Connection.class}, (ignored, method, arguments) -> {
+                        if (method.getName().equals("commit") && firstCommit.getAndSet(false)) {
+                            throw new SQLException("Injected commit I/O failure", null, 10);
+                        }
+                        if (method.getName().equals("rollback")) {
+                            throw new SQLException("Injected rollback failure");
+                        }
+                        try {
+                            return method.invoke(fixture.connection, arguments);
+                        } catch (InvocationTargetException error) {
+                            throw error.getCause();
+                        }
+                    });
             var field = SqliteUsageStatisticsStore.class.getDeclaredField("writer");
             field.setAccessible(true);
             field.set(fixture.store, proxy);
@@ -104,8 +105,12 @@ class UsageWriterFailureRegressionTest {
         private Fixture() throws Exception {
             store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(directory));
             var resolver = mock(CallerPluginResolver.class);
-            when(resolver.resolveCurrentCallerSnapshot()).thenReturn(CallerPluginInfo.builder()
-                .pluginName("consumer").version("1").detectionSource("test").build());
+            when(resolver.resolveCurrentCallerSnapshot())
+                    .thenReturn(CallerPluginInfo.builder()
+                            .pluginName("consumer")
+                            .version("1")
+                            .detectionSource("test")
+                            .build());
             service = new UsageStatisticsService(store, resolver);
             service.initialize();
             assertThat(service.health().available()).isTrue();
@@ -119,36 +124,41 @@ class UsageWriterFailureRegressionTest {
         }
 
         private void awaitWriter() throws Exception {
-            writer.submit(() -> { }).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            writer.submit(() -> {}).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         }
 
         private void assertDisabledWithoutAffectingModels() throws Exception {
             var health = service.health();
-            assertThat(health.available()).as("closed writer disables statistics").isFalse();
+            assertThat(health.available())
+                    .as("closed writer disables statistics")
+                    .isFalse();
             assertThat(health.complete()).isFalse();
             assertThat(health.writeFailures()).isPositive();
             assertThat(health.queueDepth()).isZero();
-            assertThat(service.beginCall(descriptor)).as("disabled statistics reject admission")
-                .isNull();
+            assertThat(service.beginCall(descriptor))
+                    .as("disabled statistics reject admission")
+                    .isNull();
 
             var now = Instant.now();
-            var query = new UsageQuery(now.minusSeconds(60), now.plusSeconds(60),
-                null, null, null, null, null, null, null, null, null);
+            var query = new UsageQuery(
+                    now.minusSeconds(60), now.plusSeconds(60), null, null, null, null, null, null, null, null, null);
             assertThatThrownBy(() -> service.summary(query).block(TIMEOUT))
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("unavailable");
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("unavailable");
             assertThatThrownBy(() -> service.reset("RESET").block(TIMEOUT))
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("unavailable");
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("unavailable");
 
             var delegate = mock(LanguageModel.class);
             var result = GenerateTextResult.builder().text("answer").build();
             var failure = new IllegalArgumentException("provider failure");
             when(delegate.generateText("success")).thenReturn(Mono.just(result));
             when(delegate.generateText("failure")).thenReturn(Mono.error(failure));
-            var model = new AuditedLanguageModel(delegate, MODEL_CONTEXT,
-                mock(CallerPluginAuditRecorder.class), service);
+            var model =
+                    new AuditedLanguageModel(delegate, MODEL_CONTEXT, mock(CallerPluginAuditRecorder.class), service);
             assertThat(model.generateText("success").block(TIMEOUT)).isSameAs(result);
             assertThatThrownBy(() -> model.generateText("failure").block(TIMEOUT))
-                .isSameAs(failure);
+                    .isSameAs(failure);
             awaitWriter();
 
             // No new statistics work, retries, or drop accounting after admission is disabled.

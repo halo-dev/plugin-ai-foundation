@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
@@ -28,17 +27,15 @@ class ImageGenerationMiddlewaresTest {
     void generateImageAppliesModelAndRequestMiddlewareInOrder() {
         var events = new ArrayList<String>();
         var model = new RecordingImageGenerationModel();
-        var wrapped = ImageGenerationMiddlewares.wrap(model,
-            appendPrompt("model", events, "|model"));
+        var wrapped = ImageGenerationMiddlewares.wrap(model, appendPrompt("model", events, "|model"));
         var request = GenerateImageRequest.builder()
-            .prompt("draw")
-            .middleware(appendPrompt("request", events, "|request"))
-            .build();
+                .prompt("draw")
+                .middleware(appendPrompt("request", events, "|request"))
+                .build();
 
         StepVerifier.create(wrapped.generateImage(request))
-            .assertNext(result -> assertThat(result.getImage().getBase64())
-                .isEqualTo("draw|model|request"))
-            .verifyComplete();
+                .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("draw|model|request"))
+                .verifyComplete();
 
         assertThat(events).containsExactly("model", "request");
         assertThat(model.capturedRequest.getMiddleware()).isNull();
@@ -49,13 +46,13 @@ class ImageGenerationMiddlewaresTest {
         var events = new ArrayList<String>();
         var model = new RecordingImageGenerationModel();
         var request = GenerateImageRequest.builder()
-            .prompt("draw")
-            .middleware(appendPrompt("request", events, "|request"))
-            .build();
+                .prompt("draw")
+                .middleware(appendPrompt("request", events, "|request"))
+                .build();
 
         StepVerifier.create(ImageGenerationMiddlewares.applyRequestMiddleware(model, request))
-            .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("draw|request"))
-            .verifyComplete();
+                .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("draw|request"))
+                .verifyComplete();
 
         assertThat(events).containsExactly("request");
         assertThat(model.capturedRequest.getMiddleware()).isNull();
@@ -65,15 +62,14 @@ class ImageGenerationMiddlewaresTest {
     void terminalRequestPreservesNegativePrompt() {
         var model = new RecordingImageGenerationModel();
         var request = GenerateImageRequest.builder()
-            .prompt("draw")
-            .negativePrompt("blurry")
-            .middleware(new ImageGenerationMiddleware() {
-            })
-            .build();
+                .prompt("draw")
+                .negativePrompt("blurry")
+                .middleware(new ImageGenerationMiddleware() {})
+                .build();
 
         StepVerifier.create(ImageGenerationMiddlewares.applyRequestMiddleware(model, request))
-            .expectNextCount(1)
-            .verifyComplete();
+                .expectNextCount(1)
+                .verifyComplete();
 
         assertThat(model.capturedRequest.getNegativePrompt()).isEqualTo("blurry");
     }
@@ -84,8 +80,8 @@ class ImageGenerationMiddlewaresTest {
         var wrapped = ImageGenerationMiddlewares.wrap(model, shortCircuit("cached"));
 
         StepVerifier.create(wrapped.generateImage("draw"))
-            .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("cached"))
-            .verifyComplete();
+                .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("cached"))
+                .verifyComplete();
 
         assertThat(model.calls).hasValue(0);
     }
@@ -96,15 +92,14 @@ class ImageGenerationMiddlewaresTest {
         var failure = new IllegalStateException("blocked");
         var wrapped = ImageGenerationMiddlewares.wrap(model, new ImageGenerationMiddleware() {
             @Override
-            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context,
-                GenerateImageNext next) {
+            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context, GenerateImageNext next) {
                 return Mono.error(failure);
             }
         });
 
         StepVerifier.create(wrapped.generateImage("draw"))
-            .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
-            .verify();
+                .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
+                .verify();
 
         assertThat(model.calls).hasValue(0);
     }
@@ -114,15 +109,14 @@ class ImageGenerationMiddlewaresTest {
         var model = new RecordingImageGenerationModel();
         var wrapped = ImageGenerationMiddlewares.wrap(model, new ImageGenerationMiddleware() {
             @Override
-            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context,
-                GenerateImageNext next) {
+            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context, GenerateImageNext next) {
                 return Mono.just(GenerateImageResult.builder().images(List.of()).build());
             }
         });
 
         StepVerifier.create(wrapped.generateImage("draw"))
-            .expectError(ImageGenerationException.class)
-            .verify();
+                .expectError(ImageGenerationException.class)
+                .verify();
 
         assertThat(model.calls).hasValue(0);
     }
@@ -132,15 +126,14 @@ class ImageGenerationMiddlewaresTest {
         var model = new RecordingImageGenerationModel();
         var wrapped = ImageGenerationMiddlewares.wrap(model, new ImageGenerationMiddleware() {
             @Override
-            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context,
-                GenerateImageNext next) {
+            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context, GenerateImageNext next) {
                 return Mono.empty();
             }
         });
 
         StepVerifier.create(wrapped.generateImage("draw"))
-            .expectError(ImageGenerationException.class)
-            .verify();
+                .expectError(ImageGenerationException.class)
+                .verify();
 
         assertThat(model.calls).hasValue(0);
     }
@@ -150,9 +143,10 @@ class ImageGenerationMiddlewaresTest {
         var model = new RecordingImageGenerationModel();
         var wrapped = ImageGenerationMiddlewares.wrap(model, shortCircuit("cached"));
 
-        StepVerifier.create(wrapped.generateImage(GenerateImageRequest.builder().prompt("").build()))
-            .expectErrorMessage("Image generation prompt is required")
-            .verify();
+        StepVerifier.create(wrapped.generateImage(
+                        GenerateImageRequest.builder().prompt("").build()))
+                .expectErrorMessage("Image generation prompt is required")
+                .verify();
 
         assertThat(model.calls).hasValue(0);
     }
@@ -161,32 +155,33 @@ class ImageGenerationMiddlewaresTest {
     void helperMiddlewareAndWarningHelpersComposeResults() {
         var model = new RecordingImageGenerationModel();
         var defaults = GenerateImageRequest.builder()
-            .size(1024)
-            .responseFormat(ImageResponseFormat.BASE64)
-            .negativePrompt("blurry")
-            .build();
+                .size(1024)
+                .responseFormat(ImageResponseFormat.BASE64)
+                .negativePrompt("blurry")
+                .build();
         var warning = ImageGenerationWarning.builder()
-            .code("test-warning")
-            .message("added")
-            .build();
-        var wrapped = ImageGenerationMiddlewares.wrap(model,
-            ImageGenerationMiddlewares.defaultSettings(defaults),
-            ImageGenerationMiddlewares.mapRequest(request -> GenerateImageRequest.builder()
-                .prompt(request.getPrompt() + "|mapped")
-                .size(request.getSize())
-                .responseFormat(request.getResponseFormat())
-                .negativePrompt(request.getNegativePrompt())
-                .build()),
-            ImageGenerationMiddlewares.mapResult(result ->
-                ImageGenerationResults.withWarnings(result, warning)));
+                .code("test-warning")
+                .message("added")
+                .build();
+        var wrapped = ImageGenerationMiddlewares.wrap(
+                model,
+                ImageGenerationMiddlewares.defaultSettings(defaults),
+                ImageGenerationMiddlewares.mapRequest(request -> GenerateImageRequest.builder()
+                        .prompt(request.getPrompt() + "|mapped")
+                        .size(request.getSize())
+                        .responseFormat(request.getResponseFormat())
+                        .negativePrompt(request.getNegativePrompt())
+                        .build()),
+                ImageGenerationMiddlewares.mapResult(result -> ImageGenerationResults.withWarnings(result, warning)));
 
         StepVerifier.create(wrapped.generateImage("draw"))
-            .assertNext(result -> {
-                assertThat(result.getImage().getBase64()).isEqualTo("draw|mapped");
-                assertThat(result.getWarnings()).extracting(ImageGenerationWarning::getCode)
-                    .containsExactly("test-warning");
-            })
-            .verifyComplete();
+                .assertNext(result -> {
+                    assertThat(result.getImage().getBase64()).isEqualTo("draw|mapped");
+                    assertThat(result.getWarnings())
+                            .extracting(ImageGenerationWarning::getCode)
+                            .containsExactly("test-warning");
+                })
+                .verifyComplete();
 
         assertThat(model.capturedRequest.getSize()).isEqualTo("1024x1024");
         assertThat(model.capturedRequest.getResponseFormat()).isEqualTo(ImageResponseFormat.BASE64);
@@ -199,7 +194,8 @@ class ImageGenerationMiddlewaresTest {
         var wrapped = ImageGenerationMiddlewares.wrap(model, new ImageGenerationMiddleware() {
             @Override
             public Mono<GenerateImageRequest> transformRequest(ImageGenerationContext context) {
-                assertThat(context.capabilities().getImageGeneration().getTextToImage()).isTrue();
+                assertThat(context.capabilities().getImageGeneration().getTextToImage())
+                        .isTrue();
                 assertThat(context.modelInfo().getName()).isEqualTo("image-model");
                 assertThat(context.providerInfo().getName()).isEqualTo("openai-provider");
                 assertThat(context.providerInfo().getProviderType()).isEqualTo("openai");
@@ -207,21 +203,18 @@ class ImageGenerationMiddlewaresTest {
             }
         });
 
-        StepVerifier.create(wrapped.generateImage("draw"))
-            .expectNextCount(1)
-            .verifyComplete();
+        StepVerifier.create(wrapped.generateImage("draw")).expectNextCount(1).verifyComplete();
     }
 
-    private static ImageGenerationMiddleware appendPrompt(String name, List<String> events,
-        String suffix) {
+    private static ImageGenerationMiddleware appendPrompt(String name, List<String> events, String suffix) {
         return new ImageGenerationMiddleware() {
             @Override
             public Mono<GenerateImageRequest> transformRequest(ImageGenerationContext context) {
                 return Mono.fromSupplier(() -> {
                     events.add(name);
                     return GenerateImageRequest.builder()
-                        .prompt(context.request().getPrompt() + suffix)
-                        .build();
+                            .prompt(context.request().getPrompt() + suffix)
+                            .build();
                 });
             }
         };
@@ -230,8 +223,7 @@ class ImageGenerationMiddlewaresTest {
     private static ImageGenerationMiddleware shortCircuit(String base64) {
         return new ImageGenerationMiddleware() {
             @Override
-            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context,
-                GenerateImageNext next) {
+            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context, GenerateImageNext next) {
                 return Mono.just(result(base64));
             }
         };
@@ -239,8 +231,8 @@ class ImageGenerationMiddlewaresTest {
 
     private static GenerateImageResult result(String base64) {
         return GenerateImageResult.builder()
-            .images(List.of(GeneratedFile.base64(base64, "image/png")))
-            .build();
+                .images(List.of(GeneratedFile.base64(base64, "image/png")))
+                .build();
     }
 
     private static final class RecordingImageGenerationModel implements ImageGenerationModel {
@@ -256,28 +248,27 @@ class ImageGenerationMiddlewaresTest {
 
         @Override
         public ModelCapabilities capabilities() {
-            return ModelCapabilities.imageGeneration(ImageGenerationCapability.builder()
-                .textToImage(true)
-                .build());
+            return ModelCapabilities.imageGeneration(
+                    ImageGenerationCapability.builder().textToImage(true).build());
         }
 
         @Override
         public ModelInfo modelInfo() {
             return ModelInfo.builder()
-                .name("image-model")
-                .providerName("openai-provider")
-                .modelId("gpt-image-1")
-                .enabled(true)
-                .build();
+                    .name("image-model")
+                    .providerName("openai-provider")
+                    .modelId("gpt-image-1")
+                    .enabled(true)
+                    .build();
         }
 
         @Override
         public ProviderInfo providerInfo() {
             return ProviderInfo.builder()
-                .name("openai-provider")
-                .providerType("openai")
-                .enabled(true)
-                .build();
+                    .name("openai-provider")
+                    .providerType("openai")
+                    .enabled(true)
+                    .build();
         }
     }
 }

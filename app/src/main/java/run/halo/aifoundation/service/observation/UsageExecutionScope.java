@@ -13,8 +13,13 @@ public final class UsageExecutionScope {
     private final Instant startedAt;
     private final AtomicBoolean terminal = new AtomicBoolean();
 
-    UsageExecutionScope(UsageCallSession session, String id, UsageUnitKind kind, int unitIndex,
-        int attemptIndex, Instant startedAt) {
+    UsageExecutionScope(
+            UsageCallSession session,
+            String id,
+            UsageUnitKind kind,
+            int unitIndex,
+            int attemptIndex,
+            Instant startedAt) {
         this.session = session;
         this.id = id;
         this.kind = kind;
@@ -36,11 +41,10 @@ public final class UsageExecutionScope {
         finish(UsageStatus.CANCELLED, null, usage, responseModelId);
     }
 
-    private void finish(UsageStatus status, Throwable error, NormalizedUsage usage,
-        String responseModelId) {
+    private void finish(UsageStatus status, Throwable error, NormalizedUsage usage, String responseModelId) {
         if (terminal.compareAndSet(false, true)) {
-            session.recordExecution(id, kind, unitIndex, attemptIndex, startedAt, status, error,
-                responseModelId, usage);
+            session.recordExecution(
+                    id, kind, unitIndex, attemptIndex, startedAt, status, error, responseModelId, usage);
         }
     }
 }

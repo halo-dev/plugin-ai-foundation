@@ -17,29 +17,43 @@ public class AuditedRerankingModel implements RerankingModel {
     private final CallerPluginAuditRecorder auditRecorder;
     private final UsageObservation usageStatistics;
 
-    public AuditedRerankingModel(RerankingModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
+    public AuditedRerankingModel(
+            RerankingModel delegate,
+            ModelCallContext context,
+            CallerPluginAuditRecorder auditRecorder,
+            UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
-        this.auditRecorder = Objects.requireNonNull(auditRecorder,
-            "auditRecorder must not be null");
-        this.usageStatistics = Objects.requireNonNull(usageStatistics,
-            "usageStatistics must not be null");
+        this.auditRecorder = Objects.requireNonNull(auditRecorder, "auditRecorder must not be null");
+        this.usageStatistics = Objects.requireNonNull(usageStatistics, "usageStatistics must not be null");
     }
 
     @Override
     public Mono<RerankResponse> rerank(String query, List<String> documents) {
         auditRecorder.recordModelInvocation(context, UsageOperation.RERANK);
-        return UsageCallRecorder.record(usageStatistics, context, UsageOperation.RERANK, false,
-            null, () -> delegate.rerank(query, documents), 1, AuditedRerankingModel::succeed);
+        return UsageCallRecorder.record(
+                usageStatistics,
+                context,
+                UsageOperation.RERANK,
+                false,
+                null,
+                () -> delegate.rerank(query, documents),
+                1,
+                AuditedRerankingModel::succeed);
     }
 
     @Override
     public Mono<RerankResponse> rerank(RerankRequest request) {
         auditRecorder.recordModelInvocation(context, UsageOperation.RERANK);
-        return UsageCallRecorder.record(usageStatistics, context, UsageOperation.RERANK, false,
-            request == null ? null : request.getMetadata(), () -> delegate.rerank(request), 1,
-            AuditedRerankingModel::succeed);
+        return UsageCallRecorder.record(
+                usageStatistics,
+                context,
+                UsageOperation.RERANK,
+                false,
+                request == null ? null : request.getMetadata(),
+                () -> delegate.rerank(request),
+                1,
+                AuditedRerankingModel::succeed);
     }
 
     private static void succeed(UsageCallSession session, RerankResponse response) {
@@ -47,8 +61,8 @@ public class AuditedRerankingModel implements RerankingModel {
             session.succeed(null, 0);
             return;
         }
-        var responseModel = response.getResponse() == null
-            ? null : response.getResponse().getModel();
+        var responseModel =
+                response.getResponse() == null ? null : response.getResponse().getModel();
         session.succeed(responseModel, 1);
     }
 }

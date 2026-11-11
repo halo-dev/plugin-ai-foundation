@@ -4,14 +4,26 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.ai.chat.metadata.Usage;
 
 /** Protocol-normalized inclusive counts. Raw data is solely for the existing public SDK. */
-public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalTokens,
-                            Long cacheReadTokens, Long cacheWriteTokens, Long reasoningTokens,
-                            Object nativeUsage, boolean complete) implements Usage {
+public record ProviderUsage(
+        Long inputTokens,
+        Long outputTokens,
+        Long totalTokens,
+        Long cacheReadTokens,
+        Long cacheWriteTokens,
+        Long reasoningTokens,
+        Object nativeUsage,
+        boolean complete)
+        implements Usage {
     public static ProviderUsage chatCompletions(JsonNode node, Object raw) {
-        return new ProviderUsage(count(node, "prompt_tokens"), count(node, "completion_tokens"),
-            count(node, "total_tokens"), chatCacheRead(node),
-            count(node.path("prompt_tokens_details"), "cache_write_tokens"),
-            count(node.path("completion_tokens_details"), "reasoning_tokens"), raw, true);
+        return new ProviderUsage(
+                count(node, "prompt_tokens"),
+                count(node, "completion_tokens"),
+                count(node, "total_tokens"),
+                chatCacheRead(node),
+                count(node.path("prompt_tokens_details"), "cache_write_tokens"),
+                count(node.path("completion_tokens_details"), "reasoning_tokens"),
+                raw,
+                true);
     }
 
     private static Long chatCacheRead(JsonNode node) {
@@ -21,9 +33,15 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
     }
 
     public static ProviderUsage responses(JsonNode node, Object raw) {
-        return new ProviderUsage(count(node, "input_tokens"), count(node, "output_tokens"),
-            count(node, "total_tokens"), count(node.path("input_tokens_details"), "cached_tokens"),
-            null, count(node.path("output_tokens_details"), "reasoning_tokens"), raw, true);
+        return new ProviderUsage(
+                count(node, "input_tokens"),
+                count(node, "output_tokens"),
+                count(node, "total_tokens"),
+                count(node.path("input_tokens_details"), "cached_tokens"),
+                null,
+                count(node.path("output_tokens_details"), "reasoning_tokens"),
+                raw,
+                true);
     }
 
     public static ProviderUsage ollama(JsonNode node, Object raw) {
@@ -32,8 +50,7 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
         return new ProviderUsage(input, output, sum(input, output), null, null, null, raw, true);
     }
 
-    public static ProviderUsage embedding(JsonNode node, String inputField, String totalField,
-        Object raw) {
+    public static ProviderUsage embedding(JsonNode node, String inputField, String totalField, Object raw) {
         var input = count(node, inputField);
         var output = count(node, "completion_tokens");
         if (input != null) {
@@ -53,9 +70,15 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
         var input = executor.input();
         input = sum(input, cacheCount(node, "cache_read_input_tokens"));
         input = sum(input, cacheCount(node, "cache_creation_input_tokens"));
-        return new ProviderUsage(input, executor.output(), sum(input, executor.output()),
-            count(node, "cache_read_input_tokens"), count(node, "cache_creation_input_tokens"),
-            count(node.path("output_tokens_details"), "thinking_tokens"), raw, executor.complete());
+        return new ProviderUsage(
+                input,
+                executor.output(),
+                sum(input, executor.output()),
+                count(node, "cache_read_input_tokens"),
+                count(node, "cache_creation_input_tokens"),
+                count(node.path("output_tokens_details"), "thinking_tokens"),
+                raw,
+                executor.complete());
     }
 
     private static ExecutorUsage messagesExecutorUsage(JsonNode node) {
@@ -64,15 +87,14 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
         var complete = true;
         for (var iteration : iterations) {
             switch (iteration.path("type").asText()) {
-                case "compaction", "message" -> { }
+                case "compaction", "message" -> {}
                 case "fallback_message" -> fallback = true;
                 // Advisor sub-inferences have their own model attribution. Keep known executor
                 // totals, but do not claim complete usage for unaccounted server-side work.
                 default -> complete = false;
             }
         }
-        var topLevel = new ExecutorUsage(count(node, "input_tokens"),
-            count(node, "output_tokens"), complete);
+        var topLevel = new ExecutorUsage(count(node, "input_tokens"), count(node, "output_tokens"), complete);
         if (!iterations.isArray()) {
             return topLevel;
         }
@@ -103,7 +125,7 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
         };
     }
 
-    private record ExecutorUsage(Long input, Long output, boolean complete) { }
+    private record ExecutorUsage(Long input, Long output, boolean complete) {}
 
     private static Long cacheCount(JsonNode node, String field) {
         // Omitted cache counters mean no cache use; explicitly invalid counters remain unknown.
@@ -114,8 +136,15 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
     }
 
     public ProviderUsage partial() {
-        return new ProviderUsage(inputTokens, outputTokens, totalTokens, cacheReadTokens,
-            cacheWriteTokens, reasoningTokens, nativeUsage, false);
+        return new ProviderUsage(
+                inputTokens,
+                outputTokens,
+                totalTokens,
+                cacheReadTokens,
+                cacheWriteTokens,
+                reasoningTokens,
+                nativeUsage,
+                false);
     }
 
     private static Long count(JsonNode node, String field) {
@@ -156,14 +185,22 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
     }
 
     @Override
-    public Integer getPromptTokens() { return sdkCount(inputTokens); }
+    public Integer getPromptTokens() {
+        return sdkCount(inputTokens);
+    }
 
     @Override
-    public Integer getCompletionTokens() { return sdkCount(outputTokens); }
+    public Integer getCompletionTokens() {
+        return sdkCount(outputTokens);
+    }
 
     @Override
-    public Integer getTotalTokens() { return sdkCount(totalTokens); }
+    public Integer getTotalTokens() {
+        return sdkCount(totalTokens);
+    }
 
     @Override
-    public Object getNativeUsage() { return nativeUsage; }
+    public Object getNativeUsage() {
+        return nativeUsage;
+    }
 }

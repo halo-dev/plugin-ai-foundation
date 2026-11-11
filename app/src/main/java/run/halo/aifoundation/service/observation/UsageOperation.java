@@ -8,8 +8,8 @@ public final class UsageOperation {
     public static final String EMBEDDING_EMBED = "embedding.embed";
     public static final String EMBEDDING_EMBED_QUERY = "embedding.embedQuery";
     public static final String IMAGE_GENERATE_IMAGE = "image.generateImage";
+    public static final String DECISION = "decision.decide";
     public static final String RERANK = "rerank.rerank";
 
-    private UsageOperation() {
-    }
+    private UsageOperation() {}
 }

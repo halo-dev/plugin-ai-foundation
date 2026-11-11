@@ -11,6 +11,7 @@ import java.util.function.Consumer;
  * Validates persisted UI messages before they are converted or reused.
  *
  * <p>Example:
+ *
  * <pre>{@code
  * List<UIMessage<MyMetadata>> valid = UIMessageValidators.validate(messages, options -> options
  *     .metadataValidator((message, metadata, context) -> validateMetadata(message, metadata))
@@ -19,8 +20,7 @@ import java.util.function.Consumer;
  */
 public final class UIMessageValidators {
 
-    private UIMessageValidators() {
-    }
+    private UIMessageValidators() {}
 
     /**
      * Validates messages with default validation options.
@@ -31,8 +31,7 @@ public final class UIMessageValidators {
      * @throws InvalidUIMessageException when validation fails
      */
     public static <M> List<UIMessage<M>> validate(List<UIMessage<M>> messages) {
-        return validate(messages, options -> {
-        });
+        return validate(messages, options -> {});
     }
 
     /**
@@ -44,8 +43,8 @@ public final class UIMessageValidators {
      * @return immutable validated messages
      * @throws InvalidUIMessageException when validation fails
      */
-    public static <M> List<UIMessage<M>> validate(List<UIMessage<M>> messages,
-        Consumer<UIMessageValidationOptions<M>> configure) {
+    public static <M> List<UIMessage<M>> validate(
+            List<UIMessage<M>> messages, Consumer<UIMessageValidationOptions<M>> configure) {
         var result = safeValidate(messages, configure);
         if (!result.isValid()) {
             throw new InvalidUIMessageException(result.issues());
@@ -61,8 +60,7 @@ public final class UIMessageValidators {
      * @return validation result
      */
     public static <M> UIMessageValidationResult<M> safeValidate(List<UIMessage<M>> messages) {
-        return safeValidate(messages, options -> {
-        });
+        return safeValidate(messages, options -> {});
     }
 
     /**
@@ -73,14 +71,15 @@ public final class UIMessageValidators {
      * @param <M> message metadata type
      * @return validation result
      */
-    public static <M> UIMessageValidationResult<M> safeValidate(List<UIMessage<M>> messages,
-        Consumer<UIMessageValidationOptions<M>> configure) {
+    public static <M> UIMessageValidationResult<M> safeValidate(
+            List<UIMessage<M>> messages, Consumer<UIMessageValidationOptions<M>> configure) {
         Objects.requireNonNull(configure, "configure must not be null");
         var options = new UIMessageValidationOptions<M>();
         configure.accept(options);
         if (messages == null) {
-            return new UIMessageValidationResult<>(List.of(), List.of(issue(null, null, null,
-                null, "messages.required", "UI messages must not be null")));
+            return new UIMessageValidationResult<>(
+                    List.of(),
+                    List.of(issue(null, null, null, null, "messages.required", "UI messages must not be null")));
         }
         var state = new State<M>(List.copyOf(messages), options);
         return state.validate();
@@ -107,68 +106,68 @@ public final class UIMessageValidators {
 
         private void validateMessage(UIMessage<M> message, int messageIndex) {
             if (message == null) {
-                issues.add(issue(null, null, null, null, "message.null",
-                    "UI message must not be null"));
+                issues.add(issue(null, null, null, null, "message.null", "UI message must not be null"));
                 return;
             }
             if (isBlank(message.id())) {
-                issues.add(issue(message, null, null, "message.id.required",
-                    "UI message id must not be blank"));
+                issues.add(issue(message, null, null, "message.id.required", "UI message id must not be blank"));
             }
             if (message.role() == null) {
-                issues.add(issue(message.id(), null, null, null, "message.role.required",
-                    "UI message role must not be null"));
+                issues.add(issue(
+                        message.id(), null, null, null, "message.role.required", "UI message role must not be null"));
             }
             if (message.parts() == null) {
-                issues.add(issue(message, null, null, "message.parts.required",
-                    "UI message parts must not be null"));
+                issues.add(issue(message, null, null, "message.parts.required", "UI message parts must not be null"));
                 return;
             }
-            var messageContext = new UIMessageValidationContext<>(messages, message, messageIndex,
-                null, -1);
+            var messageContext = new UIMessageValidationContext<>(messages, message, messageIndex, null, -1);
             runMetadataValidators(message, messageContext);
             for (var partIndex = 0; partIndex < message.parts().size(); partIndex++) {
                 validatePart(message, messageIndex, message.parts().get(partIndex), partIndex);
             }
         }
 
-        private void validatePart(UIMessage<M> message, int messageIndex, UIMessagePart part,
-            int partIndex) {
-            var context = new UIMessageValidationContext<>(messages, message, messageIndex, part,
-                partIndex);
+        private void validatePart(UIMessage<M> message, int messageIndex, UIMessagePart part, int partIndex) {
+            var context = new UIMessageValidationContext<>(messages, message, messageIndex, part, partIndex);
             if (part == null) {
-                issues.add(issue(message, null, null, "part.null",
-                    "UI message part must not be null"));
+                issues.add(issue(message, null, null, "part.null", "UI message part must not be null"));
                 return;
             }
             if (isBlank(part.type())) {
-                issues.add(issue(message, part, partId(part), "part.type.required",
-                    "UI message part type must not be blank"));
+                issues.add(issue(
+                        message, part, partId(part), "part.type.required", "UI message part type must not be blank"));
             }
             switch (part) {
                 case StepStartPart ignored -> {
                     if (message.role() != UIMessageRole.ASSISTANT) {
-                        issues.add(issue(message, part, null, "part.step-start.role.invalid",
-                            "Step-start parts are only allowed in assistant messages"));
+                        issues.add(issue(
+                                message,
+                                part,
+                                null,
+                                "part.step-start.role.invalid",
+                                "Step-start parts are only allowed in assistant messages"));
                     }
                 }
-                case TextPart text -> require(message, part, text.id(), "part.id.required",
-                    "Text part id must not be blank");
-                case ReasoningPart reasoning -> require(message, part, reasoning.id(),
-                    "part.id.required", "Reasoning part id must not be blank");
+                case TextPart text ->
+                    require(message, part, text.id(), "part.id.required", "Text part id must not be blank");
+                case ReasoningPart reasoning ->
+                    require(message, part, reasoning.id(), "part.id.required", "Reasoning part id must not be blank");
                 case DataPart data -> {
-                    require(message, part, data.id(), "part.data.id.required",
-                        "Data part id must not be blank");
-                    require(message, part, data.name(), "part.data.name.required",
-                        "Data part name must not be blank");
+                    require(message, part, data.id(), "part.data.id.required", "Data part id must not be blank");
+                    require(message, part, data.name(), "part.data.name.required", "Data part name must not be blank");
                     validateDynamicData(message, data);
                     runDataValidators(message, data, context);
                 }
-                case SourceUrlPart source -> require(message, part, source.sourceId(),
-                    "part.source.id.required", "Source part id must not be blank");
+                case SourceUrlPart source ->
+                    require(
+                            message,
+                            part,
+                            source.sourceId(),
+                            "part.source.id.required",
+                            "Source part id must not be blank");
                 case SourceDocumentPart source -> validateSourceDocumentPart(message, source);
-                case FilePart file -> require(message, part, file.fileId(),
-                    "part.file.id.required", "File part id must not be blank");
+                case FilePart file ->
+                    require(message, part, file.fileId(), "part.file.id.required", "File part id must not be blank");
                 case ToolPart tool -> {
                     validateToolPart(message, tool);
                     runNamedToolValidators(message, tool, context);
@@ -181,87 +180,109 @@ public final class UIMessageValidators {
             try {
                 UIMessageDynamicNames.requireDataType(data.type(), data.name());
             } catch (IllegalArgumentException e) {
-                issues.add(issue(message, data, data.id(), "part.data.type.invalid",
-                    e.getMessage()));
+                issues.add(issue(message, data, data.id(), "part.data.type.invalid", e.getMessage()));
             }
         }
 
         private void validateSourceDocumentPart(UIMessage<M> message, SourceDocumentPart source) {
-            require(message, source, source.sourceId(), "part.source.id.required",
-                "Source part id must not be blank");
-            require(message, source, source.mediaType(),
-                "part.source-document.media-type.required",
-                "Document source media type must not be blank");
-            require(message, source, source.title(), "part.source-document.title.required",
-                "Document source title must not be blank");
+            require(message, source, source.sourceId(), "part.source.id.required", "Source part id must not be blank");
+            require(
+                    message,
+                    source,
+                    source.mediaType(),
+                    "part.source-document.media-type.required",
+                    "Document source media type must not be blank");
+            require(
+                    message,
+                    source,
+                    source.title(),
+                    "part.source-document.title.required",
+                    "Document source title must not be blank");
         }
 
         private void validateToolPart(UIMessage<M> message, ToolPart tool) {
-            require(message, tool, tool.toolCallId(), "part.tool.id.required",
-                "Tool call id must not be blank");
-            require(message, tool, tool.toolName(), "part.tool.name.required",
-                "Tool name must not be blank");
+            require(message, tool, tool.toolCallId(), "part.tool.id.required", "Tool call id must not be blank");
+            require(message, tool, tool.toolName(), "part.tool.name.required", "Tool name must not be blank");
             if (tool.state() == null) {
-                issues.add(issue(message, tool, tool.toolCallId(), "part.tool.state.required",
-                    "Tool state must not be null"));
+                issues.add(issue(
+                        message, tool, tool.toolCallId(), "part.tool.state.required", "Tool state must not be null"));
                 return;
             }
             try {
                 UIMessageDynamicNames.requireToolType(tool.type(), tool.toolName());
             } catch (IllegalArgumentException e) {
-                issues.add(issue(message, tool, tool.toolCallId(), "part.tool.type.invalid",
-                    e.getMessage()));
+                issues.add(issue(message, tool, tool.toolCallId(), "part.tool.type.invalid", e.getMessage()));
             }
             if (tool.state() == ToolPartState.OUTPUT_ERROR) {
-                require(message, tool, tool.errorText(), "part.tool.error-text.required",
-                    "Tool error text must not be blank");
+                require(
+                        message,
+                        tool,
+                        tool.errorText(),
+                        "part.tool.error-text.required",
+                        "Tool error text must not be blank");
             }
-            if (tool.state() == ToolPartState.APPROVAL_RESPONDED
-                || tool.state() == ToolPartState.OUTPUT_DENIED) {
+            if (tool.state() == ToolPartState.APPROVAL_RESPONDED || tool.state() == ToolPartState.OUTPUT_DENIED) {
                 validateApprovalResponse(message, tool);
             }
             if (tool.state() == ToolPartState.OUTPUT_AVAILABLE
-                || tool.state() == ToolPartState.OUTPUT_ERROR
-                || tool.state() == ToolPartState.OUTPUT_DENIED) {
-                var previous = finalToolOutputs.putIfAbsent(tool.toolCallId(),
-                    tool.state().value());
+                    || tool.state() == ToolPartState.OUTPUT_ERROR
+                    || tool.state() == ToolPartState.OUTPUT_DENIED) {
+                var previous = finalToolOutputs.putIfAbsent(
+                        tool.toolCallId(), tool.state().value());
                 if (previous != null) {
-                    issues.add(issue(message, tool, tool.toolCallId(), "tool.result.duplicate",
-                        "Tool call id must have at most one final result or error"));
+                    issues.add(issue(
+                            message,
+                            tool,
+                            tool.toolCallId(),
+                            "tool.result.duplicate",
+                            "Tool call id must have at most one final result or error"));
                 }
             }
         }
 
         private void validateApprovalResponse(UIMessage<M> message, ToolPart tool) {
             if (tool.approval() == null) {
-                issues.add(issue(message, tool, tool.toolCallId(), "part.tool.approval.required",
-                    "Tool approval response must include approval metadata"));
+                issues.add(issue(
+                        message,
+                        tool,
+                        tool.toolCallId(),
+                        "part.tool.approval.required",
+                        "Tool approval response must include approval metadata"));
                 return;
             }
-            require(message, tool, tool.approval().id(), "part.tool.approval.id.required",
-                "Tool approval id must not be blank");
+            require(
+                    message,
+                    tool,
+                    tool.approval().id(),
+                    "part.tool.approval.id.required",
+                    "Tool approval id must not be blank");
             if (tool.approval().approved() == null) {
-                issues.add(issue(message, tool, tool.toolCallId(),
-                    "part.tool.approval.approved.required",
-                    "Tool approval response must include an approved decision"));
+                issues.add(issue(
+                        message,
+                        tool,
+                        tool.toolCallId(),
+                        "part.tool.approval.approved.required",
+                        "Tool approval response must include an approved decision"));
             }
-            if (tool.approval().id() != null && !tool.approval().id().isBlank()
-                && !approvalResponses.add(tool.approval().id())) {
-                issues.add(issue(message, tool, tool.toolCallId(), "tool.approval.duplicate",
-                    "Tool approval id must have at most one response"));
+            if (tool.approval().id() != null
+                    && !tool.approval().id().isBlank()
+                    && !approvalResponses.add(tool.approval().id())) {
+                issues.add(issue(
+                        message,
+                        tool,
+                        tool.toolCallId(),
+                        "tool.approval.duplicate",
+                        "Tool approval id must have at most one response"));
             }
         }
 
-        private void runMetadataValidators(UIMessage<M> message,
-            UIMessageValidationContext<M> context) {
+        private void runMetadataValidators(UIMessage<M> message, UIMessageValidationContext<M> context) {
             for (var validator : options.metadataValidators()) {
-                collect(message, null, () -> validator.validate(message, message.metadata(),
-                    context));
+                collect(message, null, () -> validator.validate(message, message.metadata(), context));
             }
         }
 
-        private void runDataValidators(UIMessage<M> message, DataPart part,
-            UIMessageValidationContext<M> context) {
+        private void runDataValidators(UIMessage<M> message, DataPart part, UIMessageValidationContext<M> context) {
             var validators = options.dataValidators().get(part.name());
             if (validators == null) {
                 return;
@@ -271,15 +292,15 @@ public final class UIMessageValidators {
             }
         }
 
-        private void runToolValidators(UIMessage<M> message, UIMessagePart part,
-            UIMessageValidationContext<M> context) {
+        private void runToolValidators(
+                UIMessage<M> message, UIMessagePart part, UIMessageValidationContext<M> context) {
             for (var validator : options.toolValidators()) {
                 collect(message, part, () -> validator.validate(message, part, context));
             }
         }
 
-        private void runNamedToolValidators(UIMessage<M> message, ToolPart part,
-            UIMessageValidationContext<M> context) {
+        private void runNamedToolValidators(
+                UIMessage<M> message, ToolPart part, UIMessageValidationContext<M> context) {
             var validators = options.namedToolValidators().get(part.toolName());
             if (validators == null) {
                 return;
@@ -296,19 +317,20 @@ public final class UIMessageValidators {
                     issues.addAll(supplied);
                 }
             } catch (Throwable error) {
-                issues.add(issue(message, part, partId(part), "validator.exception",
-                    error.getMessage() != null ? error.getMessage()
-                        : "UI message validator failed"));
+                issues.add(issue(
+                        message,
+                        part,
+                        partId(part),
+                        "validator.exception",
+                        error.getMessage() != null ? error.getMessage() : "UI message validator failed"));
             }
         }
 
-        private void require(UIMessage<M> message, UIMessagePart part, String value, String code,
-            String messageText) {
+        private void require(UIMessage<M> message, UIMessagePart part, String value, String code, String messageText) {
             if (isBlank(value)) {
                 issues.add(issue(message, part, partId(part), code, messageText));
             }
         }
-
     }
 
     @FunctionalInterface
@@ -316,20 +338,20 @@ public final class UIMessageValidators {
         List<UIMessageValidationIssue> get();
     }
 
-    private static UIMessageValidationIssue issue(UIMessage<?> message, UIMessagePart part,
-        String partId, String code, String messageText) {
-        return issue(message != null ? message.id() : null,
-            message != null && message.role() != null ? message.role().name() : null,
-            part != null ? part.type() : null,
-            partId,
-            code,
-            messageText);
+    private static UIMessageValidationIssue issue(
+            UIMessage<?> message, UIMessagePart part, String partId, String code, String messageText) {
+        return issue(
+                message != null ? message.id() : null,
+                message != null && message.role() != null ? message.role().name() : null,
+                part != null ? part.type() : null,
+                partId,
+                code,
+                messageText);
     }
 
-    private static UIMessageValidationIssue issue(String messageId, String role, String partType,
-        String partId, String code, String messageText) {
-        return new UIMessageValidationIssue(messageId, role, partType, partId, code,
-            messageText);
+    private static UIMessageValidationIssue issue(
+            String messageId, String role, String partType, String partId, String code, String messageText) {
+        return new UIMessageValidationIssue(messageId, role, partType, partId, code, messageText);
     }
 
     private static String partId(UIMessagePart part) {

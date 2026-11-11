@@ -76,7 +76,8 @@ export const ModelParameterDefinitionInfoModelTypeEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type ModelParameterDefinitionInfoModelTypeEnum = typeof ModelParameterDefinitionInfoModelTypeEnum[keyof typeof ModelParameterDefinitionInfoModelTypeEnum];

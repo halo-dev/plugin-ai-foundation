@@ -18,20 +18,23 @@ public record EffectiveParameterMappings(Map<ModelParameter, EffectiveMapping> v
     }
 
     public record EffectiveMapping(
-        ModelParameterMappings.Mode mode,
-        String template,
-        String field,
-        ModelParameterMappings.ReasoningMapping reasoningMapping,
-        Source source
-    ) {
-        public EffectiveMapping(ModelParameterMappings.Mode mode, String template,
-            ModelParameterMappings.ReasoningMapping reasoningMapping, Source source) {
+            ModelParameterMappings.Mode mode,
+            String template,
+            String field,
+            ModelParameterMappings.ReasoningMapping reasoningMapping,
+            Source source) {
+        public EffectiveMapping(
+                ModelParameterMappings.Mode mode,
+                String template,
+                ModelParameterMappings.ReasoningMapping reasoningMapping,
+                Source source) {
             this(mode, template, null, reasoningMapping, source);
         }
     }
 
     public enum Source {
         BUILT_IN,
+        CATALOG,
         PROVIDER,
         MODEL
     }

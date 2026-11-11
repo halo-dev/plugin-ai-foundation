@@ -6,24 +6,20 @@ import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 
-/**
- * Provider adapter used by the image generation runtime.
- */
+/** Provider adapter used by the image generation runtime. */
 public interface ProviderImageGenerationClient {
 
     Mono<GenerateImageResult> generateImage(GenerateImageRequest request);
 
-    default Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target) {
+    default Mono<GenerateImageResult> generateImage(GenerateImageRequest request, ParameterMappingTarget target) {
         return generateImage(request);
     }
 
-    default Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+    default Mono<GenerateImageResult> generateImage(
+            GenerateImageRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         if (nativeOptions == null || nativeOptions.isEmpty()) {
             return generateImage(request, target);
         }
-        return Mono.error(new IllegalStateException(
-            "Image provider does not support configured native options"));
+        return Mono.error(new IllegalStateException("Image provider does not support configured native options"));
     }
 }

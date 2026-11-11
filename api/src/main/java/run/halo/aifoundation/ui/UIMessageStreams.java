@@ -14,6 +14,7 @@ import run.halo.aifoundation.exception.AiGenerationCancelledException;
  * Entry points for creating Halo UI message streams.
  *
  * <p>Example:
+ *
  * <pre>{@code
  * UIMessageStream stream = UIMessageStreams.createWithOptions(options -> options
  *     .messageId("msg_1")
@@ -26,8 +27,7 @@ import run.halo.aifoundation.exception.AiGenerationCancelledException;
  */
 public final class UIMessageStreams {
 
-    private UIMessageStreams() {
-    }
+    private UIMessageStreams() {}
 
     /**
      * Creates a stream by executing a writer callback.
@@ -46,25 +46,23 @@ public final class UIMessageStreams {
      * @param execute callback that writes chunks or merges other chunk streams
      * @return UI message stream
      */
-    public static UIMessageStream create(String messageId,
-        Consumer<UIMessageStreamWriter> execute) {
-        return UIMessageStreams.<Void>createWithOptions(options -> options.messageId(messageId)
-            .execute(execute));
+    public static UIMessageStream create(String messageId, Consumer<UIMessageStreamWriter> execute) {
+        return UIMessageStreams.<Void>createWithOptions(
+                options -> options.messageId(messageId).execute(execute));
     }
 
     /**
      * Creates a stream with full lifecycle options.
      *
-     * <p>The callback is invoked when the stream is subscribed. Writer errors are
-     * mapped to error or abort chunks, and {@link UIMessageStreamOptions#onFinish(Consumer)}
-     * receives the aggregated response message after the stream reaches its terminal state.
+     * <p>The callback is invoked when the stream is subscribed. Writer errors are mapped to error or abort chunks, and
+     * {@link UIMessageStreamOptions#onFinish(Consumer)} receives the aggregated response message after the stream
+     * reaches its terminal state.
      *
      * @param configure option customizer
      * @param <M> message metadata type
      * @return UI message stream
      */
-    public static <M> UIMessageStream createWithOptions(
-        Consumer<UIMessageStreamOptions<M>> configure) {
+    public static <M> UIMessageStream createWithOptions(Consumer<UIMessageStreamOptions<M>> configure) {
         Objects.requireNonNull(configure, "configure must not be null");
         return new UIMessageStream(Flux.deferContextual(context -> {
             var options = new UIMessageStreamOptions<M>();
@@ -76,21 +74,21 @@ public final class UIMessageStreams {
                 writer.write(writer.errorChunk(error));
             }
             var chunks = writer.toFlux().cache();
-            var reader = UIMessageStreamReader.<M>read(readerOptions -> readerOptions
-                .stream(new UIMessageStream(chunks))
-                .message(options.message())
-                .originalMessages(options.originalMessages())
-                .messageIdGenerator(options.messageIdGenerator())
-                .metadataSupplier(options.metadataSupplier())
-                .metadataMerger(options.metadataMerger())
-                .errorHandler(options.errorHandler())
-                .onError(options.readErrorHandler())
-                .terminateOnError(options.terminateOnError()));
+            var reader =
+                    UIMessageStreamReader.<M>read(readerOptions -> readerOptions.stream(new UIMessageStream(chunks))
+                            .message(options.message())
+                            .originalMessages(options.originalMessages())
+                            .messageIdGenerator(options.messageIdGenerator())
+                            .metadataSupplier(options.metadataSupplier())
+                            .metadataMerger(options.metadataMerger())
+                            .errorHandler(options.errorHandler())
+                            .onError(options.readErrorHandler())
+                            .terminateOnError(options.terminateOnError()));
             reader.responseMessage()
-                .zipWith(reader.finish())
-                .map(tuple -> toFinish(options.originalMessages(), tuple.getT1(), tuple.getT2()))
-                .contextWrite(context)
-                .subscribe(options.finishHandler());
+                    .zipWith(reader.finish())
+                    .map(tuple -> toFinish(options.originalMessages(), tuple.getT1(), tuple.getT2()))
+                    .contextWrite(context)
+                    .subscribe(options.finishHandler());
             return chunks;
         }));
     }
@@ -108,16 +106,16 @@ public final class UIMessageStreams {
         @Override
         public void write(UIMessageChunk chunk) {
             segments.add(Flux.just(Objects.requireNonNull(chunk, "chunk must not be null"))
-                .handle(this::emitIfAllowed));
+                    .handle(this::emitIfAllowed));
         }
 
         @Override
         public void merge(Publisher<? extends UIMessageChunk> stream) {
             Objects.requireNonNull(stream, "stream must not be null");
             segments.add(Flux.from(stream)
-                .cast(UIMessageChunk.class)
-                .onErrorResume(error -> Flux.just(errorChunk(error)))
-                .handle(this::emitIfAllowed));
+                    .cast(UIMessageChunk.class)
+                    .onErrorResume(error -> Flux.just(errorChunk(error)))
+                    .handle(this::emitIfAllowed));
         }
 
         @Override
@@ -145,7 +143,7 @@ public final class UIMessageStreams {
 
         private boolean isCancellation(Throwable error) {
             if (options.cancellationToken() != null
-                && options.cancellationToken().isCancellationRequested()) {
+                    && options.cancellationToken().isCancellationRequested()) {
                 return true;
             }
             var current = error;
@@ -182,19 +180,18 @@ public final class UIMessageStreams {
 
         private String nextTextId() {
             var prefix = options.messageId() == null || options.messageId().isBlank()
-                ? "text"
-                : options.messageId() + "-text";
+                    ? "text"
+                    : options.messageId() + "-text";
             return prefix + "-" + (++textIdSequence);
         }
-
     }
 
-    private static <M> UIMessageStreamFinish<M> toFinish(List<UIMessage<M>> originalMessages,
-        UIMessage<M> responseMessage, UIMessageStreamTerminal terminal) {
+    private static <M> UIMessageStreamFinish<M> toFinish(
+            List<UIMessage<M>> originalMessages, UIMessage<M> responseMessage, UIMessageStreamTerminal terminal) {
         var updated = new ArrayList<>(originalMessages);
         var continuation = !updated.isEmpty()
-            && updated.getLast().role() == UIMessageRole.ASSISTANT
-            && updated.getLast().id().equals(responseMessage.id());
+                && updated.getLast().role() == UIMessageRole.ASSISTANT
+                && updated.getLast().id().equals(responseMessage.id());
         if (continuation) {
             updated.set(updated.size() - 1, responseMessage);
         } else {

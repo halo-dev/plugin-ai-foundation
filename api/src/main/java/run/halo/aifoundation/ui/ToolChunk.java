@@ -16,10 +16,18 @@ import java.util.Map;
  * @param approval optional approval metadata
  * @param providerMetadata provider-specific metadata
  */
-public record ToolChunk(String type, String toolCallId, String toolName, ToolPartState state,
-                        Object input, String inputTextDelta, Object output, String errorText,
-                        ToolApproval approval, Map<String, Object> providerMetadata)
-    implements UIMessageChunk {
+public record ToolChunk(
+        String type,
+        String toolCallId,
+        String toolName,
+        ToolPartState state,
+        Object input,
+        String inputTextDelta,
+        Object output,
+        String errorText,
+        ToolApproval approval,
+        Map<String, Object> providerMetadata)
+        implements UIMessageChunk {
 
     public ToolChunk {
         UIMessageDynamicNames.requireToolType(type, toolName);

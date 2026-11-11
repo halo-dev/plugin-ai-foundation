@@ -4,9 +4,7 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.Value;
 
-/**
- * Safe RAG lifecycle event payload.
- */
+/** Safe RAG lifecycle event payload. */
 @Value
 @Builder
 public class RagLifecycleEvent {

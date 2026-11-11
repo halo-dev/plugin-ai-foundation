@@ -7,6 +7,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.lang.Nullable;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
@@ -18,6 +19,7 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
+import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderModelResolver;
@@ -105,24 +107,32 @@ public interface AiProviderType {
     }
 
     default List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
-        if (adapterType == null || adapterType.getModelType() != ModelType.LANGUAGE
-            || !getSupportedAdapterTypes().contains(adapterType)) {
+        if (adapterType == null
+                || adapterType.getModelType() != ModelType.LANGUAGE
+                || !getSupportedAdapterTypes().contains(adapterType)) {
             return List.of();
         }
         return getSupportedFeatures();
     }
 
-    default java.util.Map<ModelParameter, DefaultParameterMapping>
-        getDefaultParameterMappings() {
+    default java.util.Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         return ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes());
     }
 
-    default java.util.Map<ModelParameter, DefaultParameterMapping>
-        getDefaultParameterMappings(AdapterType adapterType) {
+    default java.util.Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
+            AdapterType adapterType) {
         return getDefaultParameterMappings();
     }
 
     // ── Behavior ──────────────────────────────────────────────
+
+    default DecisionCapability decisionCapabilities() {
+        return null;
+    }
+
+    default ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey, ProviderModelRef model) {
+        return null;
+    }
 
     ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId);
 
@@ -147,8 +157,7 @@ public interface AiProviderType {
         return null;
     }
 
-    default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, ProviderModelRef model) {
         return buildEmbeddingModel(provider, apiKey, model.modelId());
     }
 
@@ -157,24 +166,22 @@ public interface AiProviderType {
     }
 
     @Nullable
-    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
         return null;
     }
 
-    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, ProviderModelRef model) {
         return buildRerankingClient(provider, apiKey, model.modelId());
     }
 
     @Nullable
-    default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
+    default ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
         return null;
     }
 
-    default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, ProviderModelRef model) {
+    default ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, ProviderModelRef model) {
         return buildImageGenerationClient(provider, apiKey, model.modelId());
     }
 

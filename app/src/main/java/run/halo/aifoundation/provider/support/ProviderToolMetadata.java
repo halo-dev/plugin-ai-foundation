@@ -5,16 +5,13 @@ import java.util.Map;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.tool.ToolDefinition;
 
-/**
- * Internal provider-neutral view of tool metadata used by provider option builders.
- */
+/** Internal provider-neutral view of tool metadata used by provider option builders. */
 public record ProviderToolMetadata(
-    String name,
-    String description,
-    Map<String, Object> inputSchema,
-    Boolean strict,
-    List<Map<String, Object>> inputExamples
-) {
+        String name,
+        String description,
+        Map<String, Object> inputSchema,
+        Boolean strict,
+        List<Map<String, Object>> inputExamples) {
 
     public static List<ProviderToolMetadata> from(GenerateTextRequest request) {
         if (request == null) {
@@ -26,19 +23,16 @@ public record ProviderToolMetadata(
         if (request.getTools().isEmpty()) {
             return List.of();
         }
-        return request.getTools().stream()
-            .map(ProviderToolMetadata::from)
-            .toList();
+        return request.getTools().stream().map(ProviderToolMetadata::from).toList();
     }
 
     public static ProviderToolMetadata from(ToolDefinition tool) {
         return new ProviderToolMetadata(
-            tool.getName(),
-            tool.getDescription(),
-            defaultInputSchema(tool),
-            tool.getStrict(),
-            tool.getInputExamples() != null ? List.copyOf(tool.getInputExamples()) : List.of()
-        );
+                tool.getName(),
+                tool.getDescription(),
+                defaultInputSchema(tool),
+                tool.getStrict(),
+                tool.getInputExamples() != null ? List.copyOf(tool.getInputExamples()) : List.of());
     }
 
     public boolean hasNativeStrictMetadata() {

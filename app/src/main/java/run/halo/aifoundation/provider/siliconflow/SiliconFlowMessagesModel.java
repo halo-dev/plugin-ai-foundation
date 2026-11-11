@@ -9,8 +9,13 @@ import run.halo.aifoundation.provider.protocol.messages.StandardAnthropicMessage
 public final class SiliconFlowMessagesModel extends AnthropicMessagesModel {
 
     public SiliconFlowMessagesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
-        super(options, webClientBuilder, new StandardAnthropicMessagesProfile(
-            "siliconflow", "siliconflow-messages", "/messages",
-            StandardAnthropicMessagesProfile.Authentication.BEARER));
+        super(
+                options,
+                webClientBuilder,
+                new StandardAnthropicMessagesProfile(
+                        "siliconflow",
+                        "siliconflow-messages",
+                        "/messages",
+                        StandardAnthropicMessagesProfile.Authentication.BEARER));
     }
 }

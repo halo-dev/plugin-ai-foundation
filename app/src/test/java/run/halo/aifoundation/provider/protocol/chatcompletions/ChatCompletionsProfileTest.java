@@ -11,25 +11,22 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClient;
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsModel;
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
 
 @ProviderContractSource(
-    provider = "chat-completions-wire",
-    officialDocumentation = "https://platform.openai.com/docs/api-reference/chat",
-    retrievedAt = "2026-08-24"
-)
+        provider = "chat-completions-wire",
+        officialDocumentation = "https://platform.openai.com/docs/api-reference/chat",
+        retrievedAt = "2026-08-24")
 class ChatCompletionsProfileTest {
 
     @Test
     @SuppressWarnings("unchecked")
     void providerProfileOwnsRequestAndResponseMetadataPolicy() {
         var options = ChatCompletionsOptions.builder()
-            .baseUrl("https://provider.example/v1")
-            .apiKey("test-key")
-            .model("model-a")
-            .build();
+                .baseUrl("https://provider.example/v1")
+                .apiKey("test-key")
+                .model("model-a")
+                .build();
         var profile = new ChatCompletionsProfile() {
             @Override
             public String providerType() {
@@ -42,8 +39,8 @@ class ChatCompletionsProfileTest {
             }
 
             @Override
-            public void customizeRequest(Map<String, Object> body, Prompt prompt,
-                ChatCompletionsOptions requestOptions, boolean stream) {
+            public void customizeRequest(
+                    Map<String, Object> body, Prompt prompt, ChatCompletionsOptions requestOptions, boolean stream) {
                 body.put("provider_hint", "strict");
             }
 
@@ -57,8 +54,7 @@ class ChatCompletionsProfileTest {
         var model = new ChatCompletionsModel(options, WebClient.builder(), profile);
         var prompt = new Prompt(List.of(new UserMessage("hello")), options);
 
-        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
-            "requestBody", prompt, options, false);
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model, "requestBody", prompt, options, false);
         var response = (ChatResponse) ReflectionTestUtils.invokeMethod(model, "chatResponse", """
             {"id":"response-1","model":"model-a","provider_request_id":"request-1",
              "choices":[{"message":{"role":"assistant","content":"hello"},
@@ -66,10 +62,8 @@ class ChatCompletionsProfileTest {
             """, options);
 
         assertThat(body).containsEntry("provider_hint", "strict");
-        assertThat((Object) response.getMetadata().get("provider_request_id"))
-            .isEqualTo("request-1");
-        assertThat((Object) response.getMetadata().get("normalizedBy"))
-            .isEqualTo("fixture-provider");
+        assertThat((Object) response.getMetadata().get("provider_request_id")).isEqualTo("request-1");
+        assertThat((Object) response.getMetadata().get("normalizedBy")).isEqualTo("fixture-provider");
     }
 
     @Test
@@ -77,19 +71,20 @@ class ChatCompletionsProfileTest {
         var profile = new StandardChatCompletionsProfile("provider", "provider-chat");
 
         assertThat(profile.toolInputStreamDialect()
-            .normalizeArguments(0, "{", "\"name\":\"Halo\"}").delta())
-            .isEqualTo("\"name\":\"Halo\"}");
+                        .normalizeArguments(0, "{", "\"name\":\"Halo\"}")
+                        .delta())
+                .isEqualTo("\"name\":\"Halo\"}");
     }
 
     @Test
     void standardProfileOmitsNullProviderMetadata() {
         var options = ChatCompletionsOptions.builder()
-            .baseUrl("https://provider.example/v1")
-            .apiKey("test-key")
-            .model("model-a")
-            .build();
-        var model = new ChatCompletionsModel(options, WebClient.builder(),
-            new StandardChatCompletionsProfile("provider", "provider-chat"));
+                .baseUrl("https://provider.example/v1")
+                .apiKey("test-key")
+                .model("model-a")
+                .build();
+        var model = new ChatCompletionsModel(
+                options, WebClient.builder(), new StandardChatCompletionsProfile("provider", "provider-chat"));
 
         var response = (ChatResponse) ReflectionTestUtils.invokeMethod(model, "chatResponse", """
             {"id":"response-1","model":"model-a","system_fingerprint":null,
@@ -101,7 +96,7 @@ class ChatCompletionsProfileTest {
         metadata.put("system_fingerprint", null);
 
         assertThat((Object) response.getMetadata().get("system_fingerprint")).isNull();
-        assertThat(new StandardChatCompletionsProfile("provider", "provider-chat")
-            .normalizeProviderMetadata(metadata)).doesNotContainKey("system_fingerprint");
+        assertThat(new StandardChatCompletionsProfile("provider", "provider-chat").normalizeProviderMetadata(metadata))
+                .doesNotContainKey("system_fingerprint");
     }
 }

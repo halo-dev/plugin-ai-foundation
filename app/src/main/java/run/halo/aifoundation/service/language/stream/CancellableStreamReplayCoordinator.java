@@ -11,12 +11,12 @@ import reactor.core.publisher.FluxSink;
 import reactor.util.context.Context;
 
 /**
- * Lazily runs one source subscription, replays its complete history, and cancels the source when
- * the last live view is cancelled.
+ * Lazily runs one source subscription, replays its complete history, and cancels the source when the last live view is
+ * cancelled.
  *
- * <p>Unlike Reactor {@code cache()}, this coordinator requests source values one at a time only
- * while at least one caught-up subscriber has demand. A cancelled run is completed with a supplied
- * terminal value so later subscribers observe the partial history without reconnecting.
+ * <p>Unlike Reactor {@code cache()}, this coordinator requests source values one at a time only while at least one
+ * caught-up subscriber has demand. A cancelled run is completed with a supplied terminal value so later subscribers
+ * observe the partial history without reconnecting.
  */
 public final class CancellableStreamReplayCoordinator<T> {
     private final Flux<T> source;
@@ -30,11 +30,10 @@ public final class CancellableStreamReplayCoordinator<T> {
     private boolean terminal;
     private Throwable terminalError;
 
-    public CancellableStreamReplayCoordinator(Flux<T> source,
-        Supplier<T> cancellationTerminal) {
+    public CancellableStreamReplayCoordinator(Flux<T> source, Supplier<T> cancellationTerminal) {
         this.source = Objects.requireNonNull(source, "source must not be null");
-        this.cancellationTerminal = Objects.requireNonNull(cancellationTerminal,
-            "cancellationTerminal must not be null");
+        this.cancellationTerminal =
+                Objects.requireNonNull(cancellationTerminal, "cancellationTerminal must not be null");
     }
 
     /** Returns a lazy replay view over the single coordinated source run. */

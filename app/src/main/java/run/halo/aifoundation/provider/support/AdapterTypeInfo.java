@@ -16,7 +16,9 @@ public class AdapterTypeInfo {
     private String displayName;
     private String description;
     private List<ModelFeature> supportedFeatures;
+
     @Schema(description = "Adapter-specific parameter mapping defaults that override provider defaults")
     private Map<String, DefaultParameterMappingInfo> defaultParameterMappingOverrides;
+
     private boolean recommended;
 }

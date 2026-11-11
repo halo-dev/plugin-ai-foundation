@@ -12,13 +12,10 @@ import java.util.Objects;
  * @param <M> message metadata type
  */
 public final class UIMessageConversionOptions<M> {
-    private UnsupportedUIMessagePartPolicy unsupportedPartPolicy =
-        UnsupportedUIMessagePartPolicy.WARN;
+    private UnsupportedUIMessagePartPolicy unsupportedPartPolicy = UnsupportedUIMessagePartPolicy.WARN;
     private EmptyUIMessagePolicy emptyMessagePolicy = EmptyUIMessagePolicy.SKIP;
-    private UIReasoningConversion reasoningConversion =
-        UIReasoningConversion.AUTO;
-    private final Map<String, UIMessageDataConverter<M>> dataConverters =
-        new LinkedHashMap<>();
+    private UIReasoningConversion reasoningConversion = UIReasoningConversion.AUTO;
+    private final Map<String, UIMessageDataConverter<M>> dataConverters = new LinkedHashMap<>();
     private final List<UIMessagePartConverter<M>> partConverters = new ArrayList<>();
 
     /**
@@ -27,8 +24,7 @@ public final class UIMessageConversionOptions<M> {
      * @param policy unsupported part policy
      * @return this options object
      */
-    public UIMessageConversionOptions<M> unsupportedPartPolicy(
-        UnsupportedUIMessagePartPolicy policy) {
+    public UIMessageConversionOptions<M> unsupportedPartPolicy(UnsupportedUIMessagePartPolicy policy) {
         this.unsupportedPartPolicy = Objects.requireNonNull(policy, "policy must not be null");
         return this;
     }
@@ -51,8 +47,7 @@ public final class UIMessageConversionOptions<M> {
      * @return this options object
      */
     public UIMessageConversionOptions<M> reasoningConversion(UIReasoningConversion conversion) {
-        this.reasoningConversion = Objects.requireNonNull(conversion,
-            "conversion must not be null");
+        this.reasoningConversion = Objects.requireNonNull(conversion, "conversion must not be null");
         return this;
     }
 
@@ -63,13 +58,11 @@ public final class UIMessageConversionOptions<M> {
      * @param converter converter to produce model message parts
      * @return this options object
      */
-    public UIMessageConversionOptions<M> dataConverter(String name,
-        UIMessageDataConverter<M> converter) {
+    public UIMessageConversionOptions<M> dataConverter(String name, UIMessageDataConverter<M> converter) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("data converter name must not be blank");
         }
-        dataConverters.put(name, Objects.requireNonNull(converter,
-            "converter must not be null"));
+        dataConverters.put(name, Objects.requireNonNull(converter, "converter must not be null"));
         return this;
     }
 

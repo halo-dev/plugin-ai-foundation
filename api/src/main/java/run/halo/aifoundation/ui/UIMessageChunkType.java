@@ -1,8 +1,6 @@
 package run.halo.aifoundation.ui;
 
-/**
- * Protocol type values for UI message chunks and persisted parts.
- */
+/** Protocol type values for UI message chunks and persisted parts. */
 public final class UIMessageChunkType {
 
     /** Starts an assistant message stream. */
@@ -68,6 +66,5 @@ public final class UIMessageChunkType {
     /** Terminal abort chunk type. */
     public static final String ABORT = "abort";
 
-    private UIMessageChunkType() {
-    }
+    private UIMessageChunkType() {}
 }

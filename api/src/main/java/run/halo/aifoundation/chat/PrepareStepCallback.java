@@ -3,9 +3,8 @@ package run.halo.aifoundation.chat;
 /**
  * Prepares request overrides before a model step starts.
  *
- * <p>The callback receives immutable step context and returns a {@link PreparedStep} with settings
- * for the next model invocation. Return {@code null} or {@link PreparedStep#empty()} to keep the
- * current request settings.
+ * <p>The callback receives immutable step context and returns a {@link PreparedStep} with settings for the next model
+ * invocation. Return {@code null} or {@link PreparedStep#empty()} to keep the current request settings.
  *
  * <pre>{@code
  * GenerateTextRequest request = GenerateTextRequest.builder()
@@ -21,8 +20,6 @@ package run.halo.aifoundation.chat;
 @FunctionalInterface
 public interface PrepareStepCallback {
 
-    /**
-     * Returns step-scoped request overrides.
-     */
+    /** Returns step-scoped request overrides. */
     PreparedStep prepare(StepContext context);
 }

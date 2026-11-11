@@ -6,15 +6,13 @@ import java.util.Map;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.TextStreamPart;
-import run.halo.aifoundation.ui.UIMessageChunk;
-import run.halo.aifoundation.ui.UIMessagePart;
 import run.halo.aifoundation.ui.SourceUrlPart;
-import run.halo.aifoundation.ui.UIMessageParts;
+import run.halo.aifoundation.ui.UIMessageChunk;
 import run.halo.aifoundation.ui.UIMessageChunks;
+import run.halo.aifoundation.ui.UIMessagePart;
+import run.halo.aifoundation.ui.UIMessageParts;
 
-/**
- * Mapping helpers between retrieval sources, public references, and transport parts.
- */
+/** Mapping helpers between retrieval sources, public references, and transport parts. */
 public final class SourceReferences {
 
     public static final String DEFAULT_SOURCE_TYPE = "source";
@@ -27,39 +25,32 @@ public final class SourceReferences {
     private static final String DEFAULT_MEDIA_TYPE = "text/plain";
     private static final String DEFAULT_TITLE = "Source";
 
-    private SourceReferences() {
-    }
+    private SourceReferences() {}
 
-    /**
-     * Maps a retrieved source to a display-safe reference.
-     */
+    /** Maps a retrieved source to a display-safe reference. */
     public static SourceReference fromRetrievedSource(RetrievedSource source) {
         if (source == null) {
             return null;
         }
         return SourceReference.builder()
-            .id(source.getId())
-            .sourceType(sourceType(source.getSourceType(), source.getUrl()))
-            .title(source.getTitle())
-            .url(source.getUrl())
-            .score(source.getScore())
-            .metadata(sanitizedMetadata(source.getMetadata(),
-                sourceType(source.getSourceType(), source.getUrl()), source.getScore()))
-            .build();
+                .id(source.getId())
+                .sourceType(sourceType(source.getSourceType(), source.getUrl()))
+                .title(source.getTitle())
+                .url(source.getUrl())
+                .score(source.getScore())
+                .metadata(sanitizedMetadata(
+                        source.getMetadata(), sourceType(source.getSourceType(), source.getUrl()), source.getScore()))
+                .build();
     }
 
-    /**
-     * Maps retrieved sources to display-safe references.
-     */
+    /** Maps retrieved sources to display-safe references. */
     public static List<SourceReference> fromRetrievedSources(List<RetrievedSource> sources) {
         return nullSafe(sources).stream()
-            .map(SourceReferences::fromRetrievedSource)
-            .toList();
+                .map(SourceReferences::fromRetrievedSource)
+                .toList();
     }
 
-    /**
-     * Maps a generation source content part to a display-safe reference.
-     */
+    /** Maps a generation source content part to a display-safe reference. */
     public static SourceReference fromContentPart(GenerationContentPart part) {
         if (part == null || !PartType.SOURCE.equals(part.getType())) {
             return null;
@@ -68,67 +59,63 @@ public final class SourceReferences {
         var sourceType = value(metadata.get(SOURCE_TYPE_KEY));
         var score = doubleValue(metadata.get(SCORE_KEY));
         return SourceReference.builder()
-            .id(part.getId())
-            .sourceType(sourceType(sourceType, part.getUrl()))
-            .title(part.getTitle())
-            .url(part.getUrl())
-            .score(score)
-            .metadata(metadata)
-            .build();
+                .id(part.getId())
+                .sourceType(sourceType(sourceType, part.getUrl()))
+                .title(part.getTitle())
+                .url(part.getUrl())
+                .score(score)
+                .metadata(metadata)
+                .build();
     }
 
-    /**
-     * Maps a source stream part to a display-safe reference.
-     */
+    /** Maps a source stream part to a display-safe reference. */
     public static SourceReference fromStreamPart(TextStreamPart part) {
         if (part == null || !PartType.SOURCE.equals(part.getType())) {
             return null;
         }
-        var metadata = part.getProviderMetadata() != null
-            ? part.getProviderMetadata()
-            : Map.<String, Object>of();
+        var metadata = part.getProviderMetadata() != null ? part.getProviderMetadata() : Map.<String, Object>of();
         var sourceType = value(metadata.get(SOURCE_TYPE_KEY));
         var score = doubleValue(metadata.get(SCORE_KEY));
         return SourceReference.builder()
-            .id(part.getId())
-            .sourceType(sourceType(sourceType, part.getUrl()))
-            .title(part.getTitle())
-            .url(part.getUrl())
-            .score(score)
-            .metadata(metadata)
-            .build();
+                .id(part.getId())
+                .sourceType(sourceType(sourceType, part.getUrl()))
+                .title(part.getTitle())
+                .url(part.getUrl())
+                .score(score)
+                .metadata(metadata)
+                .build();
     }
 
-    /**
-     * Extracts source references from generation content parts.
-     */
+    /** Extracts source references from generation content parts. */
     public static List<SourceReference> fromContent(List<GenerationContentPart> content) {
         return nullSafe(content).stream()
-            .filter(part -> part != null && PartType.SOURCE.equals(part.getType()))
-            .map(SourceReferences::fromContentPart)
-            .toList();
+                .filter(part -> part != null && PartType.SOURCE.equals(part.getType()))
+                .map(SourceReferences::fromContentPart)
+                .toList();
     }
 
-    /**
-     * Maps a source reference to an existing generation source part.
-     */
+    /** Maps a source reference to an existing generation source part. */
     public static GenerationContentPart toContentPart(SourceReference source) {
         if (source == null) {
             return null;
         }
-        return GenerationContentPart.source(source.getId(), source.getUrl(), source.getTitle(),
-            sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
+        return GenerationContentPart.source(
+                source.getId(),
+                source.getUrl(),
+                source.getTitle(),
+                sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
     }
 
-    /**
-     * Maps a URL source reference to an existing UI source URL part.
-     */
+    /** Maps a URL source reference to an existing UI source URL part. */
     public static SourceUrlPart toSourceUrlPart(SourceReference source) {
         if (source == null) {
             return null;
         }
-        return UIMessageParts.sourceUrl(source.getId(), source.getUrl(), source.getTitle(),
-            sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
+        return UIMessageParts.sourceUrl(
+                source.getId(),
+                source.getUrl(),
+                source.getTitle(),
+                sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
     }
 
     /**
@@ -144,31 +131,38 @@ public final class SourceReferences {
         if (hasUrl(source)) {
             return toSourceUrlPart(source);
         }
-        var metadata = sanitizedMetadata(source.getMetadata(), source.getSourceType(),
-            source.getScore());
-        return UIMessageParts.sourceDocument(source.getId(), mediaType(metadata),
-            title(source), filename(metadata), providerMetadataWithoutDocumentFields(metadata));
+        var metadata = sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore());
+        return UIMessageParts.sourceDocument(
+                source.getId(),
+                mediaType(metadata),
+                title(source),
+                filename(metadata),
+                providerMetadataWithoutDocumentFields(metadata));
     }
 
-    /**
-     * Maps a source reference to a UI message stream chunk.
-     */
+    /** Maps a source reference to a UI message stream chunk. */
     public static UIMessageChunk toUIMessageChunk(SourceReference source) {
         if (source == null) {
             return null;
         }
         if (hasUrl(source)) {
-            return UIMessageChunks.sourceUrl(source.getId(), source.getUrl(), source.getTitle(),
-                sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
+            return UIMessageChunks.sourceUrl(
+                    source.getId(),
+                    source.getUrl(),
+                    source.getTitle(),
+                    sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
         }
-        var metadata = sanitizedMetadata(source.getMetadata(), source.getSourceType(),
-            source.getScore());
-        return UIMessageChunks.sourceDocument(source.getId(), mediaType(metadata), title(source),
-            filename(metadata), providerMetadataWithoutDocumentFields(metadata));
+        var metadata = sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore());
+        return UIMessageChunks.sourceDocument(
+                source.getId(),
+                mediaType(metadata),
+                title(source),
+                filename(metadata),
+                providerMetadataWithoutDocumentFields(metadata));
     }
 
-    private static Map<String, Object> sanitizedMetadata(Map<String, Object> metadata,
-        String sourceType, Double score) {
+    private static Map<String, Object> sanitizedMetadata(
+            Map<String, Object> metadata, String sourceType, Double score) {
         var result = new LinkedHashMap<String, Object>();
         if (metadata != null) {
             result.putAll(metadata);
@@ -214,8 +208,7 @@ public final class SourceReferences {
         return DEFAULT_TITLE;
     }
 
-    private static Map<String, Object> providerMetadataWithoutDocumentFields(
-        Map<String, Object> metadata) {
+    private static Map<String, Object> providerMetadataWithoutDocumentFields(Map<String, Object> metadata) {
         if (metadata == null || metadata.isEmpty()) {
             return Map.of();
         }

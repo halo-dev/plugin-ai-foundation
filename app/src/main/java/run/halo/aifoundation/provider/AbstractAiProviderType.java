@@ -3,6 +3,7 @@ package run.halo.aifoundation.provider;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -12,7 +13,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.client.RestClient;
@@ -28,13 +28,13 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsNa
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptionsFactory;
 import run.halo.aifoundation.provider.support.AdapterType;
-import run.halo.aifoundation.provider.support.DiscoveryConfidence;
-import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.transport.ProviderHttpClientFactory;
@@ -43,9 +43,8 @@ import run.halo.aifoundation.provider.transport.ProviderHttpClientFactory;
 public abstract class AbstractAiProviderType implements AiProviderType {
 
     protected static final String COMPLETIONS_PATH = "/chat/completions";
-    private static final List<String> MODEL_TYPE_FIELDS = List.of(
-        "type", "model_type", "modelType", "capabilities", "features",
-        "supported_endpoint_types");
+    private static final List<String> MODEL_TYPE_FIELDS =
+            List.of("type", "model_type", "modelType", "capabilities", "features", "supported_endpoint_types");
     private static final List<String> CAPABILITY_FIELDS = List.of("capabilities", "features");
 
     @Override
@@ -55,13 +54,11 @@ public abstract class AbstractAiProviderType implements AiProviderType {
 
     @Override
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
-        var defaults =
-            new java.util.EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
+        var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes()));
         var reasoningTemplate = defaultReasoningMappingTemplate();
         if (reasoningTemplate != null && !reasoningTemplate.isBlank()) {
-            defaults.put(ModelParameter.REASONING,
-                DefaultParameterMapping.template(reasoningTemplate));
+            defaults.put(ModelParameter.REASONING, DefaultParameterMapping.template(reasoningTemplate));
         }
         return Map.copyOf(defaults);
     }
@@ -69,9 +66,8 @@ public abstract class AbstractAiProviderType implements AiProviderType {
     /**
      * Returns the provider's current protocol-level reasoning mapping.
      *
-     * <p>Model mappings remain authoritative and may replace this default when a model generation
-     * uses a different wire shape. Provider implementations must not select this value by
-     * inspecting a model identifier.</p>
+     * <p>Model mappings remain authoritative and may replace this default when a model generation uses a different wire
+     * shape. Provider implementations must not select this value by inspecting a model identifier.
      */
     protected String defaultReasoningMappingTemplate() {
         return null;
@@ -82,10 +78,8 @@ public abstract class AbstractAiProviderType implements AiProviderType {
     }
 
     @Override
-    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
-        AdapterType adapterType) {
-        var defaults = new java.util.EnumMap<ModelParameter, DefaultParameterMapping>(
-            ModelParameter.class);
+    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(AdapterType adapterType) {
+        var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(getDefaultParameterMappings());
         if (adapterType == null || adapterType.getModelType() != ModelType.LANGUAGE) {
             return Map.copyOf(defaults);
@@ -95,8 +89,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             defaults.put(ModelParameter.REASONING, DefaultParameterMapping.unsupported());
             return Map.copyOf(defaults);
         }
-        defaults.put(ModelParameter.REASONING,
-            DefaultParameterMapping.template(reasoningTemplate));
+        defaults.put(ModelParameter.REASONING, DefaultParameterMapping.template(reasoningTemplate));
         return Map.copyOf(defaults);
     }
 
@@ -108,9 +101,8 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         }
         var defaultUrl = getDefaultBaseUrl();
         if (defaultUrl == null || defaultUrl.isBlank()) {
-            throw new IllegalArgumentException(
-                "baseUrl is required for " + getProviderType()
-                    + " provider: " + provider.getMetadata().getName());
+            throw new IllegalArgumentException("baseUrl is required for " + getProviderType() + " provider: "
+                    + provider.getMetadata().getName());
         }
         return defaultUrl;
     }
@@ -132,66 +124,61 @@ public abstract class AbstractAiProviderType implements AiProviderType {
     }
 
     protected LanguageModelProviderOptions chatCompletionsLanguageModelProviderOptions(
-        ReasoningControlOptions reasoningControlOptions,
-        BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
-        return chatCompletionsLanguageModelProviderOptions(reasoningControlOptions,
-            extraBodyCustomizer, false);
+            ReasoningControlOptions reasoningControlOptions,
+            BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
+        return chatCompletionsLanguageModelProviderOptions(reasoningControlOptions, extraBodyCustomizer, false);
     }
 
     protected LanguageModelProviderOptions chatCompletionsLanguageModelProviderOptions(
-        ReasoningControlOptions reasoningControlOptions,
-        BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer,
-        boolean nativeStrictToolSchemas) {
-        var optionsFactory = ChatCompletionsOptionsFactory
-            .builder(getProviderType(), reasoningControlOptions)
-            .extraBodyCustomizer(extraBodyCustomizer)
-            .nativeStrictToolSchemas(nativeStrictToolSchemas)
-            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
-            .build();
+            ReasoningControlOptions reasoningControlOptions,
+            BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer,
+            boolean nativeStrictToolSchemas) {
+        var optionsFactory = ChatCompletionsOptionsFactory.builder(getProviderType(), reasoningControlOptions)
+                .extraBodyCustomizer(extraBodyCustomizer)
+                .nativeStrictToolSchemas(nativeStrictToolSchemas)
+                .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
+                .build();
         return LanguageModelProviderOptions.builder()
-            .requestHeadersSupported(true)
-            .seedSupported(true)
-            .nativeStrictToolSchemas(nativeStrictToolSchemas)
-            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .nativeOptionsApplicator(ChatCompletionsNativeOptions::apply)
-            .reasoningControlOptions(reasoningControlOptions)
-            .build();
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .nativeStrictToolSchemas(nativeStrictToolSchemas)
+                .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .nativeOptionsApplicator(ChatCompletionsNativeOptions::apply)
+                .reasoningControlOptions(reasoningControlOptions)
+                .build();
     }
 
-    /**
-     * Starts provider-owned Chat Completions options with model-native option support enabled.
-     */
+    /** Starts provider-owned Chat Completions options with model-native option support enabled. */
     protected LanguageModelProviderOptions.Builder chatCompletionsProviderOptionsBuilder() {
-        return LanguageModelProviderOptions.builder()
-            .nativeOptionsApplicator(ChatCompletionsNativeOptions::apply);
+        return LanguageModelProviderOptions.builder().nativeOptionsApplicator(ChatCompletionsNativeOptions::apply);
     }
 
     protected ChatCompletionsOptionsFactory chatCompletionsOptionsFactory(
-        ReasoningControlOptions reasoningControlOptions, boolean nativeStrictToolSchemas,
-        StructuredOutputSupport structuredOutputSupport) {
+            ReasoningControlOptions reasoningControlOptions,
+            boolean nativeStrictToolSchemas,
+            StructuredOutputSupport structuredOutputSupport) {
         return ChatCompletionsOptionsFactory.builder(getProviderType(), reasoningControlOptions)
-            .nativeStrictToolSchemas(nativeStrictToolSchemas)
-            .structuredOutputSupport(structuredOutputSupport)
-            .build();
+                .nativeStrictToolSchemas(nativeStrictToolSchemas)
+                .structuredOutputSupport(structuredOutputSupport)
+                .build();
     }
 
-    protected ChatCompletionsOptions chatCompletionsOptions(AiProvider provider, String apiKey,
-        String modelId, Map<String, String> customHeaders) {
+    protected ChatCompletionsOptions chatCompletionsOptions(
+            AiProvider provider, String apiKey, String modelId, Map<String, String> customHeaders) {
         var builder = ChatCompletionsOptions.builder();
         builder.baseUrl(resolveBaseUrl(provider))
-            .endpointPath(chatCompletionsEndpointPath(provider))
-            .apiKey(apiKey)
-            .model(modelId);
+                .endpointPath(chatCompletionsEndpointPath(provider))
+                .apiKey(apiKey)
+                .model(modelId);
         applyChatCompletionsClientOptions(builder, provider, customHeaders);
         return builder.build();
     }
 
     protected String chatCompletionsEndpointPath(AiProvider provider) {
-        var path = supportsChatEndpointOverrides()
-            ? provider.getSpec().getChatEndpointPath() : null;
+        var path = supportsChatEndpointOverrides() ? provider.getSpec().getChatEndpointPath() : null;
         if (path == null || path.isBlank()) {
             path = getChatEndpointPath();
         }
@@ -205,8 +192,8 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         return false;
     }
 
-    private void applyChatCompletionsClientOptions(ChatCompletionsOptions.Builder builder, AiProvider provider,
-        Map<String, String> customHeaders) {
+    private void applyChatCompletionsClientOptions(
+            ChatCompletionsOptions.Builder builder, AiProvider provider, Map<String, String> customHeaders) {
         var proxy = chatCompletionsProxy(provider);
         if (proxy != null) {
             builder.proxy(proxy);
@@ -230,8 +217,9 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         if (spec.getProxyPort() == null) {
             return null;
         }
-        return new java.net.Proxy(java.net.Proxy.Type.HTTP,
-            new java.net.InetSocketAddress(spec.getProxyHost().trim(), spec.getProxyPort()));
+        return new java.net.Proxy(
+                java.net.Proxy.Type.HTTP,
+                new java.net.InetSocketAddress(spec.getProxyHost().trim(), spec.getProxyPort()));
     }
 
     protected reactor.netty.http.client.HttpClient httpClient(AiProvider provider) {
@@ -249,50 +237,96 @@ public abstract class AbstractAiProviderType implements AiProviderType {
     }
 
     /**
-     * Discovers an identifier-only provider catalog without treating adapter capabilities as
-     * evidence about every returned model.
+     * Discovers an identifier-only provider catalog without treating adapter capabilities as evidence about every
+     * returned model.
      */
-    protected Mono<List<DiscoveredModel>> discoverIdentifierOnlyModels(AiProvider provider,
-        String apiKey, String path) {
-        return discoverDataArrayModels(provider, apiKey, path,
-            node -> providerDefaultModelProfile(stringValue(node, "id")));
+    protected Mono<List<DiscoveredModel>> discoverIdentifierOnlyModels(
+            AiProvider provider, String apiKey, String path) {
+        return discoverIdentifierOnlyModels(provider, apiKey, path, null);
     }
 
-    protected Mono<List<DiscoveredModel>> discoverDataArrayModels(AiProvider provider,
-        String apiKey) {
-        return discoverDataArrayModels(provider, apiKey, "/models",
-            node -> modelProfile(node, stringValue(node, "id")));
+    protected Mono<List<DiscoveredModel>> discoverIdentifierOnlyModels(
+            AiProvider provider, String apiKey, String path, String displayNameField) {
+        return discoverDataArrayModels(provider, apiKey, path, node -> {
+            var model = providerDefaultModelProfile(stringValue(node, "id"));
+            if (model == null) {
+                return null;
+            }
+            var displayName = displayNameField != null ? stringValue(node, displayNameField) : null;
+            return displayName == null || displayName.isBlank()
+                    ? model
+                    : new DiscoveredModel(
+                            model.modelId(),
+                            displayName,
+                            model.modelType(),
+                            model.features(),
+                            model.adapterType(),
+                            model.source(),
+                            model.confidence());
+        });
     }
 
-    private Mono<List<DiscoveredModel>> discoverDataArrayModels(AiProvider provider,
-        String apiKey, String path, Function<Map<?, ?>, DiscoveredModel> profileMapper) {
+    protected Mono<List<DiscoveredModel>> discoverDataArrayModels(AiProvider provider, String apiKey) {
+        return discoverDataArrayModels(
+                provider, apiKey, "/models", node -> modelProfile(node, stringValue(node, "id")));
+    }
+
+    private Mono<List<DiscoveredModel>> discoverDataArrayModels(
+            AiProvider provider, String apiKey, String path, Function<Map<?, ?>, DiscoveredModel> profileMapper) {
         var baseUrl = resolveBaseUrl(provider);
         var providerName = provider.getMetadata().getName();
-        log.info("Discovering models for provider {}: type={}, baseUrl={}",
-            providerName, getProviderType(), baseUrl);
+        log.info("Discovering models for provider {}: type={}, baseUrl={}", providerName, getProviderType(), baseUrl);
 
-        return getDiscoveryJson(provider, apiKey, uriBuilder -> uriBuilder.path(path).build(),
-                this::customizeDiscoveryRequest)
-            .map(json -> {
-                var dataList = listValue(json, "data");
-                if (dataList == null) {
-                    log.warn("Provider API response missing 'data' array for {}", providerName);
-                    return List.<DiscoveredModel>of();
-                }
-                var models = discoveredModelsFromNodes(dataList, "id", profileMapper);
-                log.info("Discovered {} models for provider {}", models.size(), providerName);
-                return models;
-            });
+        return getDiscoveryJson(
+                        provider, apiKey, uriBuilder -> uriBuilder.path(path).build(), this::customizeDiscoveryRequest)
+                .map(json -> {
+                    var dataList = listValue(json, "data");
+                    if (dataList == null) {
+                        log.warn("Provider API response missing 'data' array for {}", providerName);
+                        return List.<DiscoveredModel>of();
+                    }
+                    var models = discoveredModelsFromNodes(dataList, "id", profileMapper);
+                    log.info("Discovered {} models for provider {}", models.size(), providerName);
+                    return models;
+                });
     }
 
     protected DiscoveredModel modelProfile(Map<?, ?> node, String modelId) {
         var explicitType = explicitModelType(node);
-        if (explicitType != null) {
-            return remoteDiscoveredModel(modelId, explicitType,
-                explicitFeatures(node, explicitType),
-                recommendAdapterType(explicitType).orElse(null));
+        var model = explicitType != null
+                ? remoteDiscoveredModel(
+                        modelId,
+                        explicitType,
+                        explicitFeatures(node, explicitType),
+                        recommendAdapterType(explicitType).orElse(null))
+                : providerDefaultModelProfile(modelId);
+        if (model == null || model.modelType() != ModelType.LANGUAGE || node == null) {
+            return model;
         }
-        return providerDefaultModelProfile(modelId);
+        var evidence = new EnumMap<ModelFeature, Boolean>(ModelFeature.class);
+        if (node.get("features") instanceof Collection<?>) {
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(
+                    evidence,
+                    explicitFeatures(node, ModelType.LANGUAGE),
+                    ModelFeature.VISION,
+                    ModelFeature.AUDIO_INPUT,
+                    ModelFeature.TOOL_CALL,
+                    ModelFeature.STRUCTURED_OUTPUT,
+                    ModelFeature.REASONING);
+        }
+        evidence.putAll(DiscoveryFeatureEvidence.fromBooleanFields(node));
+        var features = new LinkedHashSet<>(model.features());
+        evidence.forEach((feature, enabled) -> {
+            if (enabled) {
+                features.add(feature);
+            } else {
+                features.remove(feature);
+            }
+        });
+        return model.toBuilder()
+                .features(Set.copyOf(features))
+                .featureEvidence(evidence)
+                .build();
     }
 
     protected DiscoveredModel providerDefaultModelProfile(String modelId) {
@@ -302,8 +336,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         }
         var adapter = recommendAdapterType(modelType).orElse(null);
         var features = defaultDiscoveredModelFeatures(adapter);
-        return discoveredModel(modelId, modelType, features, adapter,
-            DiscoverySource.RULE, DiscoveryConfidence.LOW);
+        return discoveredModel(modelId, modelType, features, adapter, DiscoverySource.RULE, DiscoveryConfidence.LOW);
     }
 
     private Set<ModelFeature> defaultDiscoveredModelFeatures(AdapterType adapterType) {
@@ -334,10 +367,18 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         if (fieldsContainAnyToken(node, MODEL_TYPE_FIELDS, "embedding")) {
             return ModelType.EMBEDDING;
         }
-        if (fieldsContainAnyToken(node, MODEL_TYPE_FIELDS,
-            "image-generation", "image_generation", "imagegeneration",
-            "text-to-image", "text_to_image", "text2image",
-            "image-to-image", "image_to_image", "image2image")) {
+        if (fieldsContainAnyToken(
+                node,
+                MODEL_TYPE_FIELDS,
+                "image-generation",
+                "image_generation",
+                "imagegeneration",
+                "text-to-image",
+                "text_to_image",
+                "text2image",
+                "image-to-image",
+                "image_to_image",
+                "image2image")) {
             return ModelType.IMAGE_GENERATION;
         }
         if (fieldsContainAnyToken(node, MODEL_TYPE_FIELDS, "chat", "language")) {
@@ -346,28 +387,32 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         return null;
     }
 
-    protected DiscoveredModel discoveredModel(String modelId, ModelType modelType,
-        Set<ModelFeature> features, AdapterType adapterType, DiscoverySource source,
-        DiscoveryConfidence confidence) {
+    protected DiscoveredModel discoveredModel(
+            String modelId,
+            ModelType modelType,
+            Set<ModelFeature> features,
+            AdapterType adapterType,
+            DiscoverySource source,
+            DiscoveryConfidence confidence) {
         var resolvedAdapter = adapterType;
         if (resolvedAdapter == null) {
             resolvedAdapter = recommendAdapterType(modelType).orElse(null);
         }
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(modelType)
-            .features(features)
-            .adapterType(resolvedAdapter)
-            .source(source)
-            .confidence(confidence)
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(modelType)
+                .features(features)
+                .adapterType(resolvedAdapter)
+                .source(source)
+                .confidence(confidence)
+                .build();
     }
 
-    protected DiscoveredModel remoteDiscoveredModel(String modelId, ModelType modelType,
-        Set<ModelFeature> features, AdapterType adapterType) {
-        return discoveredModel(modelId, modelType, features, adapterType, DiscoverySource.REMOTE,
-            DiscoveryConfidence.HIGH);
+    protected DiscoveredModel remoteDiscoveredModel(
+            String modelId, ModelType modelType, Set<ModelFeature> features, AdapterType adapterType) {
+        return discoveredModel(
+                modelId, modelType, features, adapterType, DiscoverySource.REMOTE, DiscoveryConfidence.HIGH);
     }
 
     protected Set<ModelFeature> explicitFeatures(Map<?, ?> node, ModelType modelType) {
@@ -384,20 +429,48 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "reasoning", "thinking")) {
             features.add(ModelFeature.REASONING);
         }
-        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "tools", "functioncalling")) {
+        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "audio", "audioinput")) {
+            features.add(ModelFeature.AUDIO_INPUT);
+        }
+        if (fieldsContainAnyToken(
+                node,
+                CAPABILITY_FIELDS,
+                "structuredoutput",
+                "structured-output",
+                "structured_output",
+                "structuredoutputs",
+                "structured-outputs",
+                "structured_outputs",
+                "jsonschema",
+                "json-schema",
+                "json_schema")) {
+            features.add(ModelFeature.STRUCTURED_OUTPUT);
+        }
+        if (fieldsContainAnyToken(
+                node,
+                CAPABILITY_FIELDS,
+                "tools",
+                "functioncalling",
+                "function-calling",
+                "function_calling",
+                "toolcall",
+                "tool-call",
+                "tool_call")) {
             features.add(ModelFeature.TOOL_CALL);
         }
         return Set.copyOf(features);
     }
 
-    protected void customizeDiscoveryRequest(
-        WebClient.RequestHeadersSpec<?> requestSpec) {
-    }
+    protected void customizeDiscoveryRequest(WebClient.RequestHeadersSpec<?> requestSpec) {}
 
-    protected Mono<Map<String, Object>> getDiscoveryJson(AiProvider provider, String apiKey,
-        Function<UriBuilder, URI> uriFunction,
-        Consumer<WebClient.RequestHeadersSpec<?>> requestCustomizer) {
-        var wc = discoveryWebClientBuilder(provider).baseUrl(resolveBaseUrl(provider)).build();
+    protected Mono<Map<String, Object>> getDiscoveryJson(
+            AiProvider provider,
+            String apiKey,
+            Function<UriBuilder, URI> uriFunction,
+            Consumer<WebClient.RequestHeadersSpec<?>> requestCustomizer) {
+        var wc = discoveryWebClientBuilder(provider)
+                .baseUrl(resolveBaseUrl(provider))
+                .build();
         var requestSpec = wc.get().uri(uriFunction);
 
         if (apiKey != null && !apiKey.isBlank()) {
@@ -408,13 +481,11 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             requestCustomizer.accept(requestSpec);
         }
 
-        return requestSpec
-            .retrieve()
-            .bodyToMono(new ParameterizedTypeReference<>() {});
+        return requestSpec.retrieve().bodyToMono(new ParameterizedTypeReference<>() {});
     }
 
-    protected List<DiscoveredModel> discoveredModelsFromNodes(List<?> nodes, String idField,
-        Function<Map<?, ?>, DiscoveredModel> mapper) {
+    protected List<DiscoveredModel> discoveredModelsFromNodes(
+            List<?> nodes, String idField, Function<Map<?, ?>, DiscoveredModel> mapper) {
         var models = new ArrayList<DiscoveredModel>();
         for (var item : nodes) {
             if (!(item instanceof Map<?, ?> node)) {
@@ -481,8 +552,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         return false;
     }
 
-    private boolean fieldsContainAnyToken(Map<?, ?> node, List<String> fields,
-        String... expected) {
+    private boolean fieldsContainAnyToken(Map<?, ?> node, List<String> fields, String... expected) {
         for (var field : fields) {
             if (containsAnyToken(node.get(field), expected)) {
                 return true;

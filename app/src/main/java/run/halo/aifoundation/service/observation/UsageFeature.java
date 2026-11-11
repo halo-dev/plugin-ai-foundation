@@ -9,8 +9,7 @@ public final class UsageFeature {
     public static final String FORMAT = "[a-z0-9._-]{1,64}";
     private static final Pattern PATTERN = Pattern.compile(FORMAT);
 
-    private UsageFeature() {
-    }
+    private UsageFeature() {}
 
     public static boolean isValid(String value) {
         if (value == null) {

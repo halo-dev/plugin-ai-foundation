@@ -30,26 +30,32 @@ class UsageShutdownRegressionTest {
         when(store.currentEpoch()).thenReturn(1L);
         // writeBatch is abstract; replicate the former default implementation.
         doAnswer(invocation -> {
-            invocation.getArgument(0, java.util.List.class).forEach(action ->
-                ((Runnable) action).run());
-            return null;
-        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
+                    invocation.getArgument(0, java.util.List.class).forEach(action -> ((Runnable) action).run());
+                    return null;
+                })
+                .when(store)
+                .writeBatch(org.mockito.ArgumentMatchers.anyList());
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var count = new AtomicInteger();
         doAnswer(invocation -> {
-            if (count.incrementAndGet() == 1) {
-                entered.countDown();
-                assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
-            }
-            return null;
-        }).when(store).startCall(any());
+                    if (count.incrementAndGet() == 1) {
+                        entered.countDown();
+                        assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+                    }
+                    return null;
+                })
+                .when(store)
+                .startCall(any());
         var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class));
         service.initialize();
         try {
-            var descriptor = new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
-                "m", "p", "openai", "gpt"), "language.generateText", false, null,
-                CallerPluginInfo.builder().pluginName("plugin").build());
+            var descriptor = new UsageCallDescriptor(
+                    new ModelCallContext(ModelType.LANGUAGE, "m", "p", "openai", "gpt"),
+                    "language.generateText",
+                    false,
+                    null,
+                    CallerPluginInfo.builder().pluginName("plugin").build());
             service.beginCall(descriptor);
             assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
             for (int i = 0; i < 1500; i++) {
@@ -78,10 +84,11 @@ class UsageShutdownRegressionTest {
         var store = mock(UsageStatisticsStore.class);
         when(store.currentEpoch()).thenReturn(1L);
         doAnswer(invocation -> {
-            invocation.getArgument(0, java.util.List.class).forEach(action ->
-                ((Runnable) action).run());
-            return null;
-        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
+                    invocation.getArgument(0, java.util.List.class).forEach(action -> ((Runnable) action).run());
+                    return null;
+                })
+                .when(store)
+                .writeBatch(org.mockito.ArgumentMatchers.anyList());
         var atReschedule = new CountDownLatch(1);
         var releaseReschedule = new CountDownLatch(1);
         var once = new java.util.concurrent.atomic.AtomicBoolean();
@@ -90,7 +97,7 @@ class UsageShutdownRegressionTest {
             public boolean isEmpty() {
                 var empty = super.isEmpty();
                 if (Thread.currentThread().getName().startsWith("ai-usage-writer-")
-                    && once.compareAndSet(false, true)) {
+                        && once.compareAndSet(false, true)) {
                     atReschedule.countDown();
                     try {
                         assertThat(releaseReschedule.await(4, TimeUnit.SECONDS)).isTrue();
@@ -110,17 +117,22 @@ class UsageShutdownRegressionTest {
         var releaseWrite = new CountDownLatch(1);
         var saved = new AtomicInteger();
         doAnswer(invocation -> {
-            if (saved.incrementAndGet() == 1) {
-                entered.countDown();
-                assertThat(releaseWrite.await(4, TimeUnit.SECONDS)).isTrue();
-            }
-            return null;
-        }).when(store).startCall(any());
+                    if (saved.incrementAndGet() == 1) {
+                        entered.countDown();
+                        assertThat(releaseWrite.await(4, TimeUnit.SECONDS)).isTrue();
+                    }
+                    return null;
+                })
+                .when(store)
+                .startCall(any());
         service.initialize();
         try {
-            var descriptor = new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
-                "m", "p", "openai", "gpt"), "language.generateText", false, null,
-                CallerPluginInfo.builder().pluginName("plugin").build());
+            var descriptor = new UsageCallDescriptor(
+                    new ModelCallContext(ModelType.LANGUAGE, "m", "p", "openai", "gpt"),
+                    "language.generateText",
+                    false,
+                    null,
+                    CallerPluginInfo.builder().pluginName("plugin").build());
             service.beginCall(descriptor);
             assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
             for (int i = 1; i < 1500; i++) {
@@ -156,18 +168,20 @@ class UsageShutdownRegressionTest {
         var release = new CountDownLatch(1);
         var finished = new CountDownLatch(1);
         doAnswer(invocation -> {
-            entered.countDown();
-            var done = false;
-            while (!done) {
-                try {
-                    done = release.await(15, TimeUnit.SECONDS);
-                } catch (InterruptedException ignored) {
-                    // Simulate a driver that does not respond to thread interruption.
-                }
-            }
-            finished.countDown();
-            return Optional.empty();
-        }).when(store).getCall(anyString());
+                    entered.countDown();
+                    var done = false;
+                    while (!done) {
+                        try {
+                            done = release.await(15, TimeUnit.SECONDS);
+                        } catch (InterruptedException ignored) {
+                            // Simulate a driver that does not respond to thread interruption.
+                        }
+                    }
+                    finished.countDown();
+                    return Optional.empty();
+                })
+                .when(store)
+                .getCall(anyString());
         var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class));
         service.initialize();
         service.getCall("call").subscribe();

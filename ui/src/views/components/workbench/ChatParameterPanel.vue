@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+import type { ModelParameterProfile } from '@/api/generated'
+import {
+  supportsLanguageParameter,
+  supportsReasoningIntent,
+  type LanguageParameter,
+} from '@/utils/model-parameter-support'
 import type { OutputMode, ReasoningEffort, ReasoningMode } from '@/utils/model-test-workbench'
 import { VSwitch } from '@halo-dev/components'
 import { computed } from 'vue'
@@ -6,6 +12,8 @@ import RiArrowRightSLine from '~icons/ri/arrow-right-s-line'
 import RiFlaskLine from '~icons/ri/flask-line'
 
 const props = defineProps<{
+  parameterProfile?: ModelParameterProfile
+  parameterError?: string
   systemPrompt?: string
   temperature?: number
   topP?: number
@@ -75,6 +83,11 @@ const outputSchemaHelp = computed(
     (props.outputMode === 'ARRAY' ? '用于校验每个数组元素' : '用于约束最终 JSON 对象'),
 )
 const outputChoicesHelp = computed(() => props.outputError || '每行一个可选值')
+const supportsEffort = computed(() =>
+  (['LOW', 'MEDIUM', 'HIGH'] as const).some((effort) =>
+    supportsReasoningIntent(props.parameterProfile, 'EFFORT', effort),
+  ),
+)
 
 type NumberField =
   | 'temperature'
@@ -130,6 +143,9 @@ function updateNumberField(key: NumberField, value: string) {
 
 <template>
   <div>
+    <p v-if="parameterError" role="alert" class=":uno: mb-3 text-xs text-red-600">
+      {{ parameterError }}
+    </p>
     <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
       <summary
         class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
@@ -169,10 +185,11 @@ function updateNumberField(key: NumberField, value: string) {
           <input
             type="range"
             :value="temperature"
+            :disabled="!supportsLanguageParameter(parameterProfile, 'temperature')"
             min="0"
             max="2"
             step="0.1"
-            class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
+            class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 disabled:cursor-not-allowed [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 disabled:opacity-50 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
             @input="updateNumberField('temperature', ($event.target as HTMLInputElement).value)"
           />
           <div class=":uno: flex justify-between text-[10px] text-slate-400">
@@ -194,10 +211,11 @@ function updateNumberField(key: NumberField, value: string) {
           <input
             type="range"
             :value="topP"
+            :disabled="!supportsLanguageParameter(parameterProfile, 'topP')"
             min="0"
             max="1"
             step="0.05"
-            class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
+            class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 disabled:cursor-not-allowed [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 disabled:opacity-50 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
             @input="updateNumberField('topP', ($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -208,6 +226,8 @@ function updateNumberField(key: NumberField, value: string) {
             <input
               type="number"
               :value="maxTokens"
+              :max="parameterProfile?.constraints?.outputTokens"
+              :disabled="!supportsLanguageParameter(parameterProfile, 'maxOutputTokens')"
               min="1"
               step="1"
               class=":uno: w-20 text-right text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
@@ -222,6 +242,7 @@ function updateNumberField(key: NumberField, value: string) {
             <input
               type="number"
               :value="seed"
+              :disabled="!supportsLanguageParameter(parameterProfile, 'seed')"
               step="1"
               placeholder="随机"
               class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
@@ -285,6 +306,7 @@ function updateNumberField(key: NumberField, value: string) {
           <input
             type="number"
             :value="field.value"
+            :disabled="!supportsLanguageParameter(parameterProfile, field.key as LanguageParameter)"
             :step="field.step"
             :min="field.min"
             placeholder="默认"
@@ -299,6 +321,7 @@ function updateNumberField(key: NumberField, value: string) {
           停止序列（每行一个）
           <textarea
             :value="stopSequencesText"
+            :disabled="!supportsLanguageParameter(parameterProfile, 'stopSequences')"
             rows="3"
             class=":uno: mt-1 w-full resize-none text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
             @input="emit('update:stopSequencesText', ($event.target as HTMLTextAreaElement).value)"
@@ -309,6 +332,7 @@ function updateNumberField(key: NumberField, value: string) {
           Token 概率
           <select
             :value="logprobs === undefined ? '' : String(logprobs)"
+            :disabled="!supportsLanguageParameter(parameterProfile, 'logprobs')"
             class=":uno: mt-1 select-workbench w-full"
             @change="
               emit(
@@ -340,8 +364,18 @@ function updateNumberField(key: NumberField, value: string) {
             "
           >
             <option value="">默认</option>
-            <option value="true">启用</option>
-            <option value="false">禁用</option>
+            <option
+              value="true"
+              :disabled="!supportsLanguageParameter(parameterProfile, 'parallelToolCalls')"
+            >
+              启用
+            </option>
+            <option
+              value="false"
+              :disabled="!supportsLanguageParameter(parameterProfile, 'parallelToolCalls')"
+            >
+              禁用
+            </option>
           </select>
         </label>
       </div>
@@ -368,12 +402,22 @@ function updateNumberField(key: NumberField, value: string) {
             "
           >
             <option value="DEFAULT">默认（不传递推理参数）</option>
-            <option value="ENABLED">启用推理</option>
-            <option value="DISABLED">禁用推理</option>
-            <option value="EFFORT">按 Effort 控制</option>
+            <option
+              value="ENABLED"
+              :disabled="!supportsReasoningIntent(parameterProfile, 'ENABLED', reasoningEffort)"
+            >
+              启用推理
+            </option>
+            <option
+              value="DISABLED"
+              :disabled="!supportsReasoningIntent(parameterProfile, 'DISABLED', reasoningEffort)"
+            >
+              禁用推理
+            </option>
+            <option value="EFFORT" :disabled="!supportsEffort">按 Effort 控制</option>
           </select>
           <div class=":uno: text-[10px] text-slate-400">
-            默认表示不传 provider 原生推理参数；启用、禁用和 effort 需要当前 provider 支持
+            低、中、高会按当前模型的参数配置映射为原生推理强度。
           </div>
         </div>
 
@@ -389,9 +433,24 @@ function updateNumberField(key: NumberField, value: string) {
               )
             "
           >
-            <option value="LOW">Low</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="HIGH">High</option>
+            <option
+              value="LOW"
+              :disabled="!supportsReasoningIntent(parameterProfile, 'EFFORT', 'LOW')"
+            >
+              Low
+            </option>
+            <option
+              value="MEDIUM"
+              :disabled="!supportsReasoningIntent(parameterProfile, 'EFFORT', 'MEDIUM')"
+            >
+              Medium
+            </option>
+            <option
+              value="HIGH"
+              :disabled="!supportsReasoningIntent(parameterProfile, 'EFFORT', 'HIGH')"
+            >
+              High
+            </option>
           </select>
         </div>
       </div>
@@ -494,6 +553,7 @@ function updateNumberField(key: NumberField, value: string) {
         <div class=":uno: flex items-center gap-2">
           <VSwitch
             :model-value="testToolEnabled"
+            :disabled="!testToolEnabled && parameterProfile?.constraints?.toolCalling === false"
             @update:model-value="emit('update:testToolEnabled', $event)"
           />
           <span class=":uno: text-xs text-slate-700">启用测试工具</span>
@@ -501,7 +561,10 @@ function updateNumberField(key: NumberField, value: string) {
         <div class=":uno: mt-2 flex items-center gap-2">
           <VSwitch
             :model-value="testToolApprovalEnabled"
-            :disabled="!testToolEnabled"
+            :disabled="
+              !testToolEnabled ||
+              (!testToolApprovalEnabled && parameterProfile?.constraints?.toolCalling === false)
+            "
             @update:model-value="emit('update:testToolApprovalEnabled', $event)"
           />
           <span
@@ -514,6 +577,9 @@ function updateNumberField(key: NumberField, value: string) {
         <div class=":uno: mt-2 flex items-center gap-2">
           <VSwitch
             :model-value="externalTestToolEnabled"
+            :disabled="
+              !externalTestToolEnabled && parameterProfile?.constraints?.toolCalling === false
+            "
             @update:model-value="emit('update:externalTestToolEnabled', $event)"
           />
           <span class=":uno: text-xs text-slate-700">启用外部测试工具</span>
@@ -521,6 +587,9 @@ function updateNumberField(key: NumberField, value: string) {
         <div class=":uno: mt-2 flex items-center gap-2">
           <VSwitch
             :model-value="agentTestToolsEnabled"
+            :disabled="
+              !agentTestToolsEnabled && parameterProfile?.constraints?.toolCalling === false
+            "
             @update:model-value="emit('update:agentTestToolsEnabled', $event)"
           />
           <span class=":uno: text-xs text-slate-700">启用 Agent 工具测试</span>
@@ -528,6 +597,9 @@ function updateNumberField(key: NumberField, value: string) {
         <div class=":uno: mt-2 flex items-center gap-2">
           <VSwitch
             :model-value="toolInputStreamTestEnabled"
+            :disabled="
+              !toolInputStreamTestEnabled && parameterProfile?.constraints?.toolCalling === false
+            "
             @update:model-value="emit('update:toolInputStreamTestEnabled', $event)"
           />
           <span class=":uno: text-xs text-slate-700">启用流式工具入参诊断</span>
@@ -535,6 +607,9 @@ function updateNumberField(key: NumberField, value: string) {
         <div class=":uno: mt-2 flex items-center gap-2">
           <VSwitch
             :model-value="toolCallRepairEnabled"
+            :disabled="
+              !toolCallRepairEnabled && parameterProfile?.constraints?.toolCalling === false
+            "
             @update:model-value="emit('update:toolCallRepairEnabled', $event)"
           />
           <span class=":uno: text-xs text-slate-700">启用工具调用修复</span>

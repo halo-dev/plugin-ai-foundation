@@ -3,30 +3,22 @@ package run.halo.aifoundation.exception;
 /**
  * Raised when caller-provided media content has an invalid provider-neutral structure.
  *
- * <p>This exception is raised before provider invocation. Callers can use the optional
- * message/part indexes to highlight the failing chat message part, and the media fields to show a
- * recoverable validation prompt without exposing media data.
+ * <p>This exception is raised before provider invocation. Callers can use the optional message/part indexes to
+ * highlight the failing chat message part, and the media fields to show a recoverable validation prompt without
+ * exposing media data.
  */
 public class InvalidMediaContentException extends AiFoundationException {
 
-    /**
-     * Media type associated with the invalid content, when available.
-     */
+    /** Media type associated with the invalid content, when available. */
     private final String mediaType;
 
-    /**
-     * Filename associated with the invalid content, when available.
-     */
+    /** Filename associated with the invalid content, when available. */
     private final String filename;
 
-    /**
-     * Zero-based message index for language-message validation failures, when available.
-     */
+    /** Zero-based message index for language-message validation failures, when available. */
     private final Integer messageIndex;
 
-    /**
-     * Zero-based part index for language-message validation failures, when available.
-     */
+    /** Zero-based part index for language-message validation failures, when available. */
     private final Integer partIndex;
 
     /**
@@ -47,8 +39,8 @@ public class InvalidMediaContentException extends AiFoundationException {
      * @param messageIndex zero-based message index, when available
      * @param partIndex zero-based part index, when available
      */
-    public InvalidMediaContentException(String message, String mediaType, String filename,
-        Integer messageIndex, Integer partIndex) {
+    public InvalidMediaContentException(
+            String message, String mediaType, String filename, Integer messageIndex, Integer partIndex) {
         super(message);
         this.mediaType = mediaType;
         this.filename = filename;
@@ -66,8 +58,13 @@ public class InvalidMediaContentException extends AiFoundationException {
      * @param partIndex zero-based part index, when available
      * @param cause underlying validation cause
      */
-    public InvalidMediaContentException(String message, String mediaType, String filename,
-        Integer messageIndex, Integer partIndex, Throwable cause) {
+    public InvalidMediaContentException(
+            String message,
+            String mediaType,
+            String filename,
+            Integer messageIndex,
+            Integer partIndex,
+            Throwable cause) {
         super(message, cause);
         this.mediaType = mediaType;
         this.filename = filename;

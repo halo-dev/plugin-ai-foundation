@@ -11,6 +11,7 @@ import run.halo.aifoundation.control.CancellationToken;
  * Caller-owned cancellation helper for UI message streams.
  *
  * <p>Example:
+ *
  * <pre>{@code
  * UIMessageCancellation cancellation = UIMessageCancellations.create();
  * UIMessageChatResult<MyMetadata> result = UIMessageChatHandlers.streamText(options -> options
@@ -25,8 +26,7 @@ public final class UIMessageCancellation {
 
     private final CancellationSource source = new CancellationSource();
 
-    UIMessageCancellation() {
-    }
+    UIMessageCancellation() {}
 
     /**
      * Returns the token to pass into chat or stream options.
@@ -37,9 +37,7 @@ public final class UIMessageCancellation {
         return source.token();
     }
 
-    /**
-     * Requests cancellation for the associated stream or model call.
-     */
+    /** Requests cancellation for the associated stream or model call. */
     public void cancel() {
         source.cancel();
     }
@@ -62,7 +60,7 @@ public final class UIMessageCancellation {
      */
     public <T> Flux<T> cancelWhenSubscriberCancels(Flux<T> publisher) {
         return Objects.requireNonNull(publisher, "publisher must not be null")
-            .doFinally(signal -> cancelOnSubscriberCancel(signal));
+                .doFinally(signal -> cancelOnSubscriberCancel(signal));
     }
 
     /**
@@ -74,7 +72,7 @@ public final class UIMessageCancellation {
      */
     public <T> Mono<T> cancelWhenSubscriberCancels(Mono<T> publisher) {
         return Objects.requireNonNull(publisher, "publisher must not be null")
-            .doFinally(signal -> cancelOnSubscriberCancel(signal));
+                .doFinally(signal -> cancelOnSubscriberCancel(signal));
     }
 
     private void cancelOnSubscriberCancel(SignalType signal) {

@@ -14,7 +14,7 @@ import run.halo.aifoundation.provider.support.AdapterType;
 class ParameterMappingValidatorTest {
 
     private final ParameterMappingValidator validator =
-        new ParameterMappingValidator(new ParameterMappingTemplateRegistry());
+            new ParameterMappingValidator(new ParameterMappingTemplateRegistry());
 
     @Test
     void acceptsAndNormalizesConstrainedFieldOverride() {
@@ -28,13 +28,13 @@ class ParameterMappingValidatorTest {
     @Test
     void rejectsUnsafeOrDeepFieldOverride() {
         assertThatThrownBy(() -> validator.validateProvider(
-            mappings(temperatureSelection("request[temperature]")), providerType()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("field must be a dotted identifier");
+                        mappings(temperatureSelection("request[temperature]")), providerType()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("field must be a dotted identifier");
         assertThatThrownBy(() -> validator.validateProvider(
-            mappings(temperatureSelection("one.two.three.four.five")), providerType()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("at most four segments");
+                        mappings(temperatureSelection("one.two.three.four.five")), providerType()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at most four segments");
     }
 
     @Test
@@ -50,12 +50,41 @@ class ParameterMappingValidatorTest {
         reasoning.setLow(value);
         selection.setReasoningMapping(reasoning);
 
-        assertThatThrownBy(() -> validator.validateProvider(reasoningMappings(selection),
-            providerType()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("does not match INTEGER");
+        assertThatThrownBy(() -> validator.validateProvider(reasoningMappings(selection), providerType()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not match INTEGER");
         assertThat(value.getField()).isEqualTo("reasoning.level");
         assertThat(value.getValue()).isEqualTo("invalid");
+    }
+
+    @Test
+    void validatesCompoundIntentsWithoutAllowingNestedOrOverlappingFields() {
+        var selection = new ModelParameterMappings.Selection();
+        selection.setMode(ModelParameterMappings.Mode.TEMPLATE);
+        selection.setTemplate("reasoning.effort");
+        var value = new ModelParameterMappings.ReasoningValueMapping();
+        value.setField("reasoning_effort");
+        value.setValueType(ModelParameterMappings.ValueType.STRING);
+        value.setValue("high");
+        var toggle = new ModelParameterMappings.ReasoningValueMapping();
+        toggle.setField(" thinking.type ");
+        toggle.setValueType(ModelParameterMappings.ValueType.STRING);
+        toggle.setValue("enabled");
+        value.setAdditionalValues(List.of(toggle));
+        var reasoning = new ModelParameterMappings.ReasoningMapping();
+        reasoning.setHigh(value);
+        selection.setReasoningMapping(reasoning);
+        var mappings = reasoningMappings(selection);
+
+        validator.validateProvider(mappings, providerType());
+        assertThat(toggle.getField()).isEqualTo("thinking.type");
+        toggle.setField("reasoning_effort.child");
+        assertThatThrownBy(() -> validator.validateProvider(mappings, providerType()))
+                .hasMessageContaining("must not overlap");
+        toggle.setField("thinking.type");
+        toggle.setAdditionalValues(List.of(value));
+        assertThatThrownBy(() -> validator.validateProvider(mappings, providerType()))
+                .hasMessageContaining("must be scalar values");
     }
 
     private AiProviderType providerType() {

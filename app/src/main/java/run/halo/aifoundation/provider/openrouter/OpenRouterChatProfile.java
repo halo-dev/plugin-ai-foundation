@@ -25,8 +25,7 @@ import run.halo.aifoundation.provider.support.ReasoningProviderMetadata;
 final class OpenRouterChatProfile implements ChatCompletionsProfile {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final Set<String> SIGNED_REASONING_FORMATS = Set.of(
-        "anthropic-claude-v1", "google-gemini-v1");
+    private static final Set<String> SIGNED_REASONING_FORMATS = Set.of("anthropic-claude-v1", "google-gemini-v1");
 
     @Override
     public String providerType() {
@@ -39,8 +38,8 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         rejectResponsesServerTools(body);
         var maxTokens = body.remove("max_tokens");
         if (maxTokens != null && !body.containsKey("max_completion_tokens")) {
@@ -55,15 +54,14 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
         if (!body.containsKey("serverTools")) {
             return;
         }
-        throw new IllegalArgumentException(
-            "OpenRouter serverTools require the openrouter-responses adapter");
+        throw new IllegalArgumentException("OpenRouter serverTools require the openrouter-responses adapter");
     }
 
     @Override
     public Map<String, Object> mediaContentPart(Media media) {
         var mime = media.getMimeType() != null
-            ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
-            : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
+                ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
+                : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
         var reference = mediaReference(media, mime);
         if (mime.startsWith("image/")) {
             return Map.of("type", "image_url", "image_url", Map.of("url", reference));
@@ -72,12 +70,17 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
             return Map.of("type", "video_url", "video_url", Map.of("url", reference));
         }
         if (mime.startsWith("audio/")) {
-            return Map.of("type", "input_audio", "input_audio", Map.of(
-                "data", rawBase64(media), "format", audioFormat(mime)));
+            return Map.of(
+                    "type",
+                    "input_audio",
+                    "input_audio",
+                    Map.of("data", rawBase64(media), "format", audioFormat(mime)));
         }
-        return Map.of("type", "file", "file", Map.of(
-            "filename", media.getName() != null ? media.getName() : "",
-            "file_data", reference));
+        return Map.of(
+                "type",
+                "file",
+                "file",
+                Map.of("filename", media.getName() != null ? media.getName() : "", "file_data", reference));
     }
 
     @Override
@@ -143,8 +146,7 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
         if (continuation.containsKey("annotations")) {
             body.put("annotations", continuation.get("annotations"));
         }
-        var reasoning = message.getMetadata() != null
-            ? message.getMetadata().get("reasoningContent") : null;
+        var reasoning = message.getMetadata() != null ? message.getMetadata().get("reasoningContent") : null;
         if (reasoning == null) {
             return;
         }
@@ -158,8 +160,7 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
     }
 
     private Map<?, ?> continuationMetadata(Map<String, Object> metadata) {
-        var value = ReasoningProviderMetadata.values(metadata, "openrouter")
-            .get("openRouterReasoningMetadata");
+        var value = ReasoningProviderMetadata.values(metadata, "openrouter").get("openRouterReasoningMetadata");
         return value instanceof Map<?, ?> continuation ? continuation : null;
     }
 
@@ -171,7 +172,7 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
         var seen = new HashSet<String>();
         for (var item : messages) {
             if (!(item instanceof Map<?, ?> rawMessage)
-                || !(rawMessage.get("reasoning_details") instanceof List<?> rawDetails)) {
+                    || !(rawMessage.get("reasoning_details") instanceof List<?> rawDetails)) {
                 continue;
             }
             var message = (Map<String, Object>) rawMessage;
@@ -196,10 +197,10 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
         if (!"reasoning.text".equals(detail.get("type"))) {
             return true;
         }
-        var format = detail.get("format") != null
-            ? detail.get("format").toString() : "anthropic-claude-v1";
+        var format = detail.get("format") != null ? detail.get("format").toString() : "anthropic-claude-v1";
         return !SIGNED_REASONING_FORMATS.contains(format)
-            || detail.get("signature") != null && !detail.get("signature").toString().isBlank();
+                || detail.get("signature") != null
+                        && !detail.get("signature").toString().isBlank();
     }
 
     private String reasoningDetailKey(Map<?, ?> detail) {

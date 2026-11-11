@@ -19,8 +19,7 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
     private static final String COUNT_FIELD = "count_field";
     private static final String SIZE_FIELD = "size_field";
 
-    public SiliconFlowImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public SiliconFlowImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
@@ -30,8 +29,7 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
     }
 
     @Override
-    public Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    public Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         validateRequest(request);
         var body = forwardedOptions(nativeOptions);
         body.put("model", options.model());
@@ -46,8 +44,8 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
     }
 
     @Override
-    public GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    public GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "SiliconFlow");
         var files = new ArrayList<GeneratedFile>();
         var mediaType = outputMediaType(outputFormat(nativeOptions));
@@ -64,11 +62,17 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
         if (root.path("seed").isNumber()) {
             rawUsage.put("seed", root.path("seed").asLong());
         }
-        return result(data, root, List.copyOf(files), ImageUsage.builder()
-                .imageCount(files.size())
-                .raw(Map.copyOf(rawUsage))
-                .build(),
-            List.of(), null, options.model());
+        return result(
+                data,
+                root,
+                List.copyOf(files),
+                ImageUsage.builder()
+                        .imageCount(files.size())
+                        .raw(Map.copyOf(rawUsage))
+                        .build(),
+                List.of(),
+                null,
+                options.model());
     }
 
     private void validateRequest(GenerateImageRequest request) {
@@ -99,8 +103,7 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
         return result;
     }
 
-    private void putInputImages(Map<String, Object> body, Map<String, Object> options,
-        GenerateImageRequest request) {
+    private void putInputImages(Map<String, Object> body, Map<String, Object> options, GenerateImageRequest request) {
         if (request.getImages() == null || request.getImages().isEmpty()) {
             return;
         }
@@ -109,8 +112,12 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
         putMapped(body, options, IMAGE_FIELD, "image", value);
     }
 
-    private void putMapped(Map<String, Object> body, Map<String, Object> options,
-        String mappingOption, String defaultField, Object value) {
+    private void putMapped(
+            Map<String, Object> body,
+            Map<String, Object> options,
+            String mappingOption,
+            String defaultField,
+            Object value) {
         if (value == null) {
             return;
         }
@@ -120,8 +127,7 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
             return;
         }
         if (!(field instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("SiliconFlow " + mappingOption
-                + " must be a non-blank field name");
+            throw new IllegalArgumentException("SiliconFlow " + mappingOption + " must be a non-blank field name");
         }
         body.put(text, value);
     }

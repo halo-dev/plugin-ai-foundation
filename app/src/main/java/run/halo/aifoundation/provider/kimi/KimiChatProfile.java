@@ -17,13 +17,12 @@ import run.halo.aifoundation.provider.support.UriReferencePolicy;
 /**
  * Kimi-native Chat Completions policy.
  *
- * <p>Model-specific reasoning and sampling rules belong to {@code AiModel} mappings. This profile
- * validates only the Kimi Chat protocol shape.
+ * <p>Model-specific reasoning and sampling rules belong to {@code AiModel} mappings. This profile validates only the
+ * Kimi Chat protocol shape.
  */
 final class KimiChatProfile implements ChatCompletionsProfile {
 
-    private static final UriReferencePolicy MEDIA_REFERENCES =
-        UriReferencePolicy.allowing("data:", "ms://");
+    private static final UriReferencePolicy MEDIA_REFERENCES = UriReferencePolicy.allowing("data:", "ms://");
     private static final int MAX_TOOLS = 128;
     private static final int MAX_STOP_SEQUENCES = 5;
     private static final int MAX_STOP_BYTES = 32;
@@ -39,8 +38,8 @@ final class KimiChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         useMaxCompletionTokens(body);
         validateThinking(body.get("thinking"));
         validateStops(body.get("stop"));
@@ -59,7 +58,7 @@ final class KimiChatProfile implements ChatCompletionsProfile {
         var field = mediaField(mime);
         if (field == null) {
             throw new IllegalArgumentException(
-                "Kimi Chat supports only image and video media content, received: " + mime);
+                    "Kimi Chat supports only image and video media content, received: " + mime);
         }
         var reference = mediaReference(mime, media.getData());
         return Map.of("type", field, field, Map.of("url", reference));
@@ -108,8 +107,7 @@ final class KimiChatProfile implements ChatCompletionsProfile {
         }
         for (var stop : stops) {
             if (string(stop).getBytes(StandardCharsets.UTF_8).length > MAX_STOP_BYTES) {
-                throw new IllegalArgumentException(
-                    "Each Kimi stop sequence must be at most 32 UTF-8 bytes");
+                throw new IllegalArgumentException("Each Kimi stop sequence must be at most 32 UTF-8 bytes");
             }
         }
     }
@@ -123,14 +121,12 @@ final class KimiChatProfile implements ChatCompletionsProfile {
         }
         var names = new HashSet<String>();
         for (var tool : tools) {
-            if (!(tool instanceof Map<?, ?> toolMap)
-                || !(toolMap.get("function") instanceof Map<?, ?> function)) {
+            if (!(tool instanceof Map<?, ?> toolMap) || !(toolMap.get("function") instanceof Map<?, ?> function)) {
                 continue;
             }
             var name = string(function.get("name"));
             if (!name.isBlank() && !names.add(name)) {
-                throw new IllegalArgumentException("Kimi tool function names must be unique: "
-                    + name);
+                throw new IllegalArgumentException("Kimi tool function names must be unique: " + name);
             }
         }
     }
@@ -141,10 +137,8 @@ final class KimiChatProfile implements ChatCompletionsProfile {
         if (!Boolean.TRUE.equals(partial)) {
             return;
         }
-        if (body.get("response_format") instanceof Map<?, ?> format
-            && !"text".equals(format.get("type"))) {
-            throw new IllegalArgumentException(
-                "Kimi Partial Mode cannot be combined with structured response_format");
+        if (body.get("response_format") instanceof Map<?, ?> format && !"text".equals(format.get("type"))) {
+            throw new IllegalArgumentException("Kimi Partial Mode cannot be combined with structured response_format");
         }
         if (!(body.get("messages") instanceof List<?> messages)) {
             throw new IllegalArgumentException("Kimi Partial Mode requires a final message");
@@ -159,21 +153,19 @@ final class KimiChatProfile implements ChatCompletionsProfile {
         var last = (Map<String, Object>) lastRaw;
         if (!"assistant".equals(last.get("role"))) {
             throw new IllegalArgumentException(
-                "Kimi Partial Mode requires the final message to be an assistant text prefix");
+                    "Kimi Partial Mode requires the final message to be an assistant text prefix");
         }
         if (last.containsKey("tool_calls")) {
             throw new IllegalArgumentException(
-                "Kimi Partial Mode requires the final message to be an assistant text prefix");
+                    "Kimi Partial Mode requires the final message to be an assistant text prefix");
         }
         last.put("partial", true);
     }
 
     private void rejectUndocumentedOptions(Map<String, Object> body) {
-        for (var field : List.of("seed", "parallel_tool_calls", "top_k", "min_p",
-            "repetition_penalty")) {
+        for (var field : List.of("seed", "parallel_tool_calls", "top_k", "min_p", "repetition_penalty")) {
             if (body.containsKey(field)) {
-                throw new IllegalArgumentException(
-                    "Kimi Chat does not document request field: " + field);
+                throw new IllegalArgumentException("Kimi Chat does not document request field: " + field);
             }
         }
     }
@@ -187,8 +179,8 @@ final class KimiChatProfile implements ChatCompletionsProfile {
             return value;
         }
         throw new IllegalArgumentException(
-            "Kimi media must be caller-provided data or an ms:// file reference; external URLs "
-                + "are not accepted by the Kimi API");
+                "Kimi media must be caller-provided data or an ms:// file reference; external URLs "
+                        + "are not accepted by the Kimi API");
     }
 
     private String string(Object value) {

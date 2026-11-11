@@ -6,8 +6,7 @@ import java.sql.SQLException;
 /** Never return a connection with an uncertain transaction to auto-commit mode. */
 final class UsageSqliteTransactions {
 
-    private UsageSqliteTransactions() {
-    }
+    private UsageSqliteTransactions() {}
 
     static boolean rollback(Connection connection, Throwable failure) {
         try {

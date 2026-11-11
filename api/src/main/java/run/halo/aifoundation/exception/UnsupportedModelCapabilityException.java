@@ -3,50 +3,34 @@ package run.halo.aifoundation.exception;
 /**
  * Raised when a resolved model does not satisfy a required semantic capability.
  *
- * <p>This exception is raised before provider invocation for capability failures such as image
- * input on a text-only model, URL media on a data-only model, or image generation modes the model
- * does not support. Callers should use the typed fields instead of parsing the message text.
+ * <p>This exception is raised before provider invocation for capability failures such as image input on a text-only
+ * model, URL media on a data-only model, or image generation modes the model does not support. Callers should use the
+ * typed fields instead of parsing the message text.
  */
 public class UnsupportedModelCapabilityException extends AiFoundationException {
 
-    /**
-     * Halo model resource name that failed the capability check.
-     */
+    /** Halo model resource name that failed the capability check. */
     private final String modelName;
 
-    /**
-     * Halo provider resource name for the model, when available.
-     */
+    /** Halo provider resource name for the model, when available. */
     private final String providerName;
 
-    /**
-     * Provider type identifier for the model, when available.
-     */
+    /** Provider type identifier for the model, when available. */
     private final String providerType;
 
-    /**
-     * Stable capability path, for example {@code language.imageInput}.
-     */
+    /** Stable capability path, for example {@code language.imageInput}. */
     private final String capabilityPath;
 
-    /**
-     * Required value or condition.
-     */
+    /** Required value or condition. */
     private final Object expectedValue;
 
-    /**
-     * Actual value from the model capability snapshot, when available.
-     */
+    /** Actual value from the model capability snapshot, when available. */
     private final Object actualValue;
 
-    /**
-     * Zero-based message index for language-message validation failures, when available.
-     */
+    /** Zero-based message index for language-message validation failures, when available. */
     private final Integer messageIndex;
 
-    /**
-     * Zero-based part index for language-message validation failures, when available.
-     */
+    /** Zero-based part index for language-message validation failures, when available. */
     private final Integer partIndex;
 
     /**
@@ -59,10 +43,14 @@ public class UnsupportedModelCapabilityException extends AiFoundationException {
      * @param expectedValue required value or condition
      * @param actualValue actual value, when available
      */
-    public UnsupportedModelCapabilityException(String modelName, String providerName,
-        String providerType, String capabilityPath, Object expectedValue, Object actualValue) {
-        this(modelName, providerName, providerType, capabilityPath, expectedValue, actualValue,
-            null, null);
+    public UnsupportedModelCapabilityException(
+            String modelName,
+            String providerName,
+            String providerType,
+            String capabilityPath,
+            Object expectedValue,
+            Object actualValue) {
+        this(modelName, providerName, providerType, capabilityPath, expectedValue, actualValue, null, null);
     }
 
     /**
@@ -77,11 +65,16 @@ public class UnsupportedModelCapabilityException extends AiFoundationException {
      * @param messageIndex zero-based message index, when available
      * @param partIndex zero-based part index, when available
      */
-    public UnsupportedModelCapabilityException(String modelName, String providerName,
-        String providerType, String capabilityPath, Object expectedValue, Object actualValue,
-        Integer messageIndex, Integer partIndex) {
-        super("AI model '" + modelName + "' does not support required capability '"
-            + capabilityPath + "'");
+    public UnsupportedModelCapabilityException(
+            String modelName,
+            String providerName,
+            String providerType,
+            String capabilityPath,
+            Object expectedValue,
+            Object actualValue,
+            Integer messageIndex,
+            Integer partIndex) {
+        super("AI model '" + modelName + "' does not support required capability '" + capabilityPath + "'");
         this.modelName = modelName;
         this.providerName = providerName;
         this.providerType = providerType;

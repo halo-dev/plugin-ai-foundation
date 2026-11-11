@@ -12,19 +12,18 @@ class ProviderHttpResponseSupportTest {
     @Test
     void readsErrorBodyBeforeRaisingTypedException() {
         var response = ClientResponse.create(HttpStatus.BAD_REQUEST)
-            .header("Content-Type", "application/json")
-            .body("{\"error\":{\"message\":\"invalid model\"}}")
-            .build();
+                .header("Content-Type", "application/json")
+                .body("{\"error\":{\"message\":\"invalid model\"}}")
+                .build();
         var diagnostics = ProviderDiagnostics.create("openai", "responses");
 
-        StepVerifier.create(ProviderHttpResponseSupport.errorMono(response, "openai",
-                "responses", diagnostics))
-            .expectErrorSatisfies(error -> {
-                assertThat(error).isInstanceOf(ProviderHttpException.class);
-                var httpError = (ProviderHttpException) error;
-                assertThat(httpError.getStatusCode()).isEqualTo(400);
-                assertThat(httpError.getResponseBody()).contains("invalid model");
-            })
-            .verify();
+        StepVerifier.create(ProviderHttpResponseSupport.errorMono(response, "openai", "responses", diagnostics))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(ProviderHttpException.class);
+                    var httpError = (ProviderHttpException) error;
+                    assertThat(httpError.getStatusCode()).isEqualTo(400);
+                    assertThat(httpError.getResponseBody()).contains("invalid model");
+                })
+                .verify();
     }
 }

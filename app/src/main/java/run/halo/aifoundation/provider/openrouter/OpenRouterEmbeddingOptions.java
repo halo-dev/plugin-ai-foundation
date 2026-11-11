@@ -30,8 +30,7 @@ final class OpenRouterEmbeddingOptions implements EmbeddingOptions {
         this.inputType = builder.inputType;
         this.user = builder.user;
         this.provider = builder.provider != null ? Map.copyOf(builder.provider) : Map.of();
-        this.customHeaders = builder.customHeaders != null
-            ? Map.copyOf(builder.customHeaders) : Map.of();
+        this.customHeaders = builder.customHeaders != null ? Map.copyOf(builder.customHeaders) : Map.of();
         this.timeout = builder.timeout != null ? builder.timeout : DEFAULT_TIMEOUT;
     }
 
@@ -82,9 +81,17 @@ final class OpenRouterEmbeddingOptions implements EmbeddingOptions {
     }
 
     Builder mutate() {
-        return builder().baseUrl(baseUrl).apiKey(apiKey).model(model).dimensions(dimensions)
-            .encodingFormat(encodingFormat).inputType(inputType).user(user).provider(provider)
-            .customHeaders(customHeaders).timeout(timeout);
+        return builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
+                .model(model)
+                .dimensions(dimensions)
+                .encodingFormat(encodingFormat)
+                .inputType(inputType)
+                .user(user)
+                .provider(provider)
+                .customHeaders(customHeaders)
+                .timeout(timeout);
     }
 
     static final class Builder {
@@ -99,22 +106,58 @@ final class OpenRouterEmbeddingOptions implements EmbeddingOptions {
         private Map<String, String> customHeaders;
         private Duration timeout;
 
-        Builder baseUrl(String value) { this.baseUrl = value; return this; }
-        Builder apiKey(String value) { this.apiKey = value; return this; }
-        Builder model(String value) { this.model = value; return this; }
-        Builder dimensions(Integer value) { this.dimensions = value; return this; }
-        Builder encodingFormat(String value) { this.encodingFormat = value; return this; }
-        Builder inputType(String value) { this.inputType = value; return this; }
-        Builder user(String value) { this.user = value; return this; }
+        Builder baseUrl(String value) {
+            this.baseUrl = value;
+            return this;
+        }
+
+        Builder apiKey(String value) {
+            this.apiKey = value;
+            return this;
+        }
+
+        Builder model(String value) {
+            this.model = value;
+            return this;
+        }
+
+        Builder dimensions(Integer value) {
+            this.dimensions = value;
+            return this;
+        }
+
+        Builder encodingFormat(String value) {
+            this.encodingFormat = value;
+            return this;
+        }
+
+        Builder inputType(String value) {
+            this.inputType = value;
+            return this;
+        }
+
+        Builder user(String value) {
+            this.user = value;
+            return this;
+        }
+
         Builder provider(Map<String, Object> value) {
             this.provider = value != null ? new LinkedHashMap<>(value) : null;
             return this;
         }
+
         Builder customHeaders(Map<String, String> value) {
             this.customHeaders = value != null ? new LinkedHashMap<>(value) : null;
             return this;
         }
-        Builder timeout(Duration value) { this.timeout = value; return this; }
-        OpenRouterEmbeddingOptions build() { return new OpenRouterEmbeddingOptions(this); }
+
+        Builder timeout(Duration value) {
+            this.timeout = value;
+            return this;
+        }
+
+        OpenRouterEmbeddingOptions build() {
+            return new OpenRouterEmbeddingOptions(this);
+        }
     }
 }

@@ -18,6 +18,7 @@ import run.halo.aifoundation.provider.openai.OpenAiProvider;
 import run.halo.aifoundation.provider.openailike.OpenAiLikeProvider;
 import run.halo.aifoundation.provider.openrouter.OpenRouterProvider;
 import run.halo.aifoundation.provider.siliconflow.SiliconFlowProvider;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
 import run.halo.aifoundation.provider.zhipu.ZhiPuProvider;
 
 class ReasoningProviderOptionsTest {
@@ -26,28 +27,35 @@ class ReasoningProviderOptionsTest {
     void everyProviderRequiresExplicitModelReasoningMappings() {
         providers().forEach(provider -> {
             var controls = provider.languageModelProviderOptions().reasoningControlOptions();
-            assertThat(controls.enabledSupported()).as(provider.getProviderType()).isFalse();
-            assertThat(controls.disabledSupported()).as(provider.getProviderType()).isFalse();
-            assertThat(controls.supportedEfforts()).as(provider.getProviderType()).isEmpty();
+            assertThat(controls.enabledSupported())
+                    .as(provider.getProviderType())
+                    .isFalse();
+            assertThat(controls.disabledSupported())
+                    .as(provider.getProviderType())
+                    .isFalse();
+            assertThat(controls.supportedEfforts())
+                    .as(provider.getProviderType())
+                    .isEmpty();
         });
     }
 
     private List<AiProviderType> providers() {
         return List.of(
-            new AiHubMixProvider(),
-            new DashScopeProvider(),
-            new DeepSeekProvider(),
-            new DouBaoProvider(),
-            new ErnieProvider(),
-            new GiteeProvider(),
-            new KimiProvider(),
-            new MiMoProvider(),
-            new MiniMaxProvider(),
-            new OllamaProvider(),
-            new OpenAiProvider(),
-            new OpenAiLikeProvider(),
-            new OpenRouterProvider(),
-            new SiliconFlowProvider(),
-            new ZhiPuProvider());
+                new AiHubMixProvider(),
+                new DashScopeProvider(),
+                new DeepSeekProvider(),
+                new DouBaoProvider(),
+                new ErnieProvider(),
+                new GiteeProvider(),
+                new KimiProvider(),
+                new MiMoProvider(),
+                new MiniMaxProvider(),
+                new OllamaProvider(),
+                new OpenAiProvider(),
+                new OpenAiLikeProvider(),
+                new OpenRouterProvider(),
+                new SiliconFlowProvider(),
+                new TokenHubProvider(),
+                new ZhiPuProvider());
     }
 }

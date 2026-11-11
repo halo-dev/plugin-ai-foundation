@@ -5,9 +5,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
-/**
- * Adapts a normal Spring AI chat model without fabricating incremental tool input.
- */
+/** Adapts a normal Spring AI chat model without fabricating incremental tool input. */
 public final class FinalOnlyProviderStreamingChatModel implements ProviderStreamingChatModel {
 
     private final ChatModel delegate;
@@ -18,7 +16,6 @@ public final class FinalOnlyProviderStreamingChatModel implements ProviderStream
 
     @Override
     public Flux<ProviderStreamPart> streamParts(Prompt prompt) {
-        return delegate.stream(prompt)
-            .map(ProviderStreamPart.ChatResponsePart::new);
+        return delegate.stream(prompt).map(ProviderStreamPart.ChatResponsePart::new);
     }
 }

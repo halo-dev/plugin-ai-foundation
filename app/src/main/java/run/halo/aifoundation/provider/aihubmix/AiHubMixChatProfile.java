@@ -34,11 +34,11 @@ final class AiHubMixChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         if (body.remove("builtinTools") != null) {
             throw new IllegalArgumentException(
-                "AIHubMix builtinTools are available only through the Responses adapter");
+                    "AIHubMix builtinTools are available only through the Responses adapter");
         }
         var maxTokens = body.remove("max_tokens");
         if (maxTokens != null && !body.containsKey("max_completion_tokens")) {
@@ -52,18 +52,20 @@ final class AiHubMixChatProfile implements ChatCompletionsProfile {
     @Override
     public Map<String, Object> mediaContentPart(Media media) {
         var mime = media.getMimeType() != null
-            ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
-            : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
+                ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
+                : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
         if (mime.startsWith("image/")) {
-            return Map.of("type", "image_url", "image_url", Map.of(
-                "url", mediaReference(media, mime)));
+            return Map.of("type", "image_url", "image_url", Map.of("url", mediaReference(media, mime)));
         }
         if (mime.startsWith("audio/")) {
-            return Map.of("type", "input_audio", "input_audio", Map.of(
-                "data", rawBase64(media), "format", audioFormat(mime)));
+            return Map.of(
+                    "type",
+                    "input_audio",
+                    "input_audio",
+                    Map.of("data", rawBase64(media), "format", audioFormat(mime)));
         }
         throw new IllegalArgumentException(
-            "AIHubMix Chat supports image and audio media only; use Responses for files");
+                "AIHubMix Chat supports image and audio media only; use Responses for files");
     }
 
     @Override
@@ -100,8 +102,7 @@ final class AiHubMixChatProfile implements ChatCompletionsProfile {
                 continuation.put(field, OBJECT_MAPPER.convertValue(value, Object.class));
             }
         }
-        return continuation.isEmpty() ? Map.of()
-            : Map.of("aiHubMixContinuation", Map.copyOf(continuation));
+        return continuation.isEmpty() ? Map.of() : Map.of("aiHubMixContinuation", Map.copyOf(continuation));
     }
 
     @Override
@@ -115,8 +116,7 @@ final class AiHubMixChatProfile implements ChatCompletionsProfile {
     }
 
     private Map<?, ?> continuationMetadata(Map<String, Object> metadata) {
-        var value = ReasoningProviderMetadata.values(metadata, "aihubmix")
-            .get("aiHubMixContinuation");
+        var value = ReasoningProviderMetadata.values(metadata, "aihubmix").get("aiHubMixContinuation");
         return value instanceof Map<?, ?> continuation ? continuation : null;
     }
 

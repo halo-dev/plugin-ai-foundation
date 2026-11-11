@@ -12,11 +12,10 @@ final class AiHubMixEmbeddingOptionsFactory {
 
     private static final Set<String> FIELDS = Set.of("embedding_format", "user");
 
-    private AiHubMixEmbeddingOptionsFactory() {
-    }
+    private AiHubMixEmbeddingOptionsFactory() {}
 
-    static AiHubMixEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    static AiHubMixEmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
@@ -24,32 +23,28 @@ final class AiHubMixEmbeddingOptionsFactory {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(FIELDS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported AIHubMix embedding option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException(
+                    "Unsupported AIHubMix embedding option(s): " + String.join(", ", unknown));
         }
         if (hasInstructions(request)) {
-            throw new IllegalArgumentException(
-                "AIHubMix embeddings do not document an instructions field");
+            throw new IllegalArgumentException("AIHubMix embeddings do not document an instructions field");
         }
         if (Boolean.TRUE.equals(request.getIncludeSparseEmbedding())) {
-            throw new IllegalArgumentException(
-                "AIHubMix embeddings return dense vectors only");
+            throw new IllegalArgumentException("AIHubMix embeddings return dense vectors only");
         }
         if (Boolean.TRUE.equals(request.getIncludeModalityEmbeddings())) {
-            throw new IllegalArgumentException(
-                "AIHubMix embeddings return dense vectors only");
+            throw new IllegalArgumentException("AIHubMix embeddings return dense vectors only");
         }
         var format = string(values.get("embedding_format"), "embedding_format");
         if (format != null && !Set.of("float", "base64").contains(format)) {
-            throw new IllegalArgumentException(
-                "AIHubMix embedding_format must be 'float' or 'base64'");
+            throw new IllegalArgumentException("AIHubMix embedding_format must be 'float' or 'base64'");
         }
         return AiHubMixEmbeddingOptions.builder()
-            .dimensions(request.getDimensions())
-            .embeddingFormat(format)
-            .user(string(values.get("user"), "user"))
-            .customHeaders(request.getHeaders())
-            .build();
+                .dimensions(request.getDimensions())
+                .embeddingFormat(format)
+                .user(string(values.get("user"), "user"))
+                .customHeaders(request.getHeaders())
+                .build();
     }
 
     private static boolean hasInstructions(EmbeddingRequest request) {
@@ -66,7 +61,6 @@ final class AiHubMixEmbeddingOptionsFactory {
         if (value instanceof String text && !text.isBlank()) {
             return text;
         }
-        throw new IllegalArgumentException("AIHubMix embedding " + field
-            + " must be a non-blank string");
+        throw new IllegalArgumentException("AIHubMix embedding " + field + " must be a non-blank string");
     }
 }

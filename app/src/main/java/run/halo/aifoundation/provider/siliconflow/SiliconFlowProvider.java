@@ -27,11 +27,10 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
-import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -40,6 +39,7 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 public class SiliconFlowProvider extends AbstractAiProviderType {
 
     private static final String DEFAULT_BASE_URL = "https://api.siliconflow.cn/v1";
+
     @Override
     public String getProviderType() {
         return "siliconflow";
@@ -87,9 +87,12 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.SILICONFLOW_CHAT, AdapterType.SILICONFLOW_MESSAGES,
-            AdapterType.SILICONFLOW_EMBEDDING, AdapterType.RERANK,
-            AdapterType.SILICONFLOW_IMAGE);
+        return List.of(
+                AdapterType.SILICONFLOW_CHAT,
+                AdapterType.SILICONFLOW_MESSAGES,
+                AdapterType.SILICONFLOW_EMBEDDING,
+                AdapterType.RERANK,
+                AdapterType.SILICONFLOW_IMAGE);
     }
 
     @Override
@@ -131,8 +134,8 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new SiliconFlowChatModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new SiliconFlowChatModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     @Override
@@ -140,38 +143,35 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
         var resolved = resolveModel(model);
         var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of());
         return switch (resolved.adapterType()) {
-            case SILICONFLOW_CHAT -> new SiliconFlowChatModel(options,
-                webClientBuilder(provider));
-            case SILICONFLOW_MESSAGES -> new SiliconFlowMessagesModel(options,
-                webClientBuilder(provider));
-            default -> throw new IllegalArgumentException(
-                "Unsupported SiliconFlow language adapter: " + resolved.adapterType());
+            case SILICONFLOW_CHAT -> new SiliconFlowChatModel(options, webClientBuilder(provider));
+            case SILICONFLOW_MESSAGES -> new SiliconFlowMessagesModel(options, webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException(
+                        "Unsupported SiliconFlow language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = SiliconFlowEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .build();
         return new SiliconFlowEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
-        return new SiliconFlowRerankingClient(resolveBaseUrl(provider), modelId, apiKey,
-            webClientBuilder(provider));
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
+        return new SiliconFlowRerankingClient(resolveBaseUrl(provider), modelId, apiKey, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new SiliconFlowImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new SiliconFlowImageGenerationClient(
+                new ImageGenerationClientOptions(getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+                imageWebClientBuilder(provider));
     }
 
     @Override
@@ -188,22 +188,21 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
     }
 
     private LanguageModelProviderOptions languageModelProviderOptions(
-        StructuredOutputSupport structuredOutput, boolean nativeStrictToolSchemas) {
+            StructuredOutputSupport structuredOutput, boolean nativeStrictToolSchemas) {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, nativeStrictToolSchemas, structuredOutput);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, nativeStrictToolSchemas, structuredOutput);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .nativeStrictToolSchemas(nativeStrictToolSchemas)
-            .structuredOutputSupport(structuredOutput)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .nativeStrictToolSchemas(nativeStrictToolSchemas)
+                .structuredOutputSupport(structuredOutput)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
@@ -214,62 +213,88 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         return Mono.zip(
-            discoverTypedModels(provider, apiKey, "chat", ModelType.LANGUAGE,
-                AdapterType.SILICONFLOW_CHAT, Set.of(ModelFeature.STREAMING)),
-            discoverTypedModels(provider, apiKey, "embedding", ModelType.EMBEDDING,
-                AdapterType.SILICONFLOW_EMBEDDING, Set.of()),
-            discoverTypedModels(provider, apiKey, "reranker", ModelType.RERANK,
-                AdapterType.RERANK, Set.of()),
-            discoverImageIds(provider, apiKey, "text-to-image"),
-            discoverImageIds(provider, apiKey, "image-to-image")
-        ).map(tuple -> combine(tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4(),
-            tuple.getT5()));
+                        discoverTypedModels(
+                                provider,
+                                apiKey,
+                                "chat",
+                                ModelType.LANGUAGE,
+                                AdapterType.SILICONFLOW_CHAT,
+                                Set.of(ModelFeature.STREAMING)),
+                        discoverTypedModels(
+                                provider,
+                                apiKey,
+                                "embedding",
+                                ModelType.EMBEDDING,
+                                AdapterType.SILICONFLOW_EMBEDDING,
+                                Set.of()),
+                        discoverTypedModels(
+                                provider, apiKey, "reranker", ModelType.RERANK, AdapterType.RERANK, Set.of()),
+                        discoverImageIds(provider, apiKey, "text-to-image"),
+                        discoverImageIds(provider, apiKey, "image-to-image"))
+                .map(tuple -> combine(tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4(), tuple.getT5()));
     }
 
     @Override
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        for (var parameter : List.of(ModelParameter.PRESENCE_PENALTY,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.SEED, ModelParameter.LOGPROBS,
-            ModelParameter.TOP_LOGPROBS, ModelParameter.PARALLEL_TOOL_CALLS)) {
+        for (var parameter : List.of(
+                ModelParameter.PRESENCE_PENALTY,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.SEED,
+                ModelParameter.LOGPROBS,
+                ModelParameter.TOP_LOGPROBS,
+                ModelParameter.PARALLEL_TOOL_CALLS)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);
     }
 
-    private Mono<List<DiscoveredModel>> discoverTypedModels(AiProvider provider, String apiKey,
-        String subType, ModelType modelType, AdapterType adapterType, Set<ModelFeature> features) {
+    private Mono<List<DiscoveredModel>> discoverTypedModels(
+            AiProvider provider,
+            String apiKey,
+            String subType,
+            ModelType modelType,
+            AdapterType adapterType,
+            Set<ModelFeature> features) {
         return discoveryData(provider, apiKey, subType)
-            .map(nodes -> discoveredModelsFromNodes(nodes, "id",
-                node -> remoteDiscoveredModel(stringValue(node, "id"), modelType, features,
-                    adapterType)));
+                .map(nodes -> discoveredModelsFromNodes(
+                        nodes,
+                        "id",
+                        node -> remoteDiscoveredModel(stringValue(node, "id"), modelType, features, adapterType)));
     }
 
-    private Mono<Set<String>> discoverImageIds(AiProvider provider, String apiKey,
-        String subType) {
+    private Mono<Set<String>> discoverImageIds(AiProvider provider, String apiKey, String subType) {
         return discoveryData(provider, apiKey, subType)
-            .map(nodes -> nodes.stream()
-                .filter(Map.class::isInstance)
-                .map(Map.class::cast)
-                .map(node -> stringValue(node, "id"))
-                .filter(id -> id != null && !id.isBlank())
-                .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+                .map(nodes -> nodes.stream()
+                        .filter(Map.class::isInstance)
+                        .map(Map.class::cast)
+                        .map(node -> stringValue(node, "id"))
+                        .filter(id -> id != null && !id.isBlank())
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
     private Mono<List<?>> discoveryData(AiProvider provider, String apiKey, String subType) {
-        return getDiscoveryJson(provider, apiKey,
-            uriBuilder -> uriBuilder.path("/models").queryParam("sub_type", subType).build(),
-            this::customizeDiscoveryRequest)
-            .map(root -> {
-                var data = listValue(root, "data");
-                return data != null ? data : List.of();
-            });
+        return getDiscoveryJson(
+                        provider,
+                        apiKey,
+                        uriBuilder -> uriBuilder
+                                .path("/models")
+                                .queryParam("sub_type", subType)
+                                .build(),
+                        this::customizeDiscoveryRequest)
+                .map(root -> {
+                    var data = listValue(root, "data");
+                    return data != null ? data : List.of();
+                });
     }
 
-    private List<DiscoveredModel> combine(List<DiscoveredModel> chat,
-        List<DiscoveredModel> embeddings, List<DiscoveredModel> rerank, Set<String> textToImage,
-        Set<String> imageToImage) {
+    private List<DiscoveredModel> combine(
+            List<DiscoveredModel> chat,
+            List<DiscoveredModel> embeddings,
+            List<DiscoveredModel> rerank,
+            Set<String> textToImage,
+            Set<String> imageToImage) {
         var models = new LinkedHashMap<String, DiscoveredModel>();
         chat.forEach(model -> models.put(key(model), model));
         embeddings.forEach(model -> models.put(key(model), model));
@@ -288,24 +313,24 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
         return model.modelType() + ":" + model.modelId();
     }
 
-    private DiscoveredModel imageModel(String modelId, boolean textToImage,
-        boolean imageToImage) {
+    private DiscoveredModel imageModel(String modelId, boolean textToImage, boolean imageToImage) {
         var capability = ImageGenerationCapability.builder()
-            .textToImage(textToImage)
-            .imageToImage(imageToImage)
-            .build();
+                .textToImage(textToImage)
+                .imageToImage(imageToImage)
+                .build();
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(ModelType.IMAGE_GENERATION)
-            .adapterType(AdapterType.SILICONFLOW_IMAGE)
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .capabilities(ModelCapabilities.builder().imageGeneration(capability).build())
-            .capabilitySources(ModelCapabilitySources.builder()
-                .imageGeneration(CapabilitySource.REMOTE)
-                .build())
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(ModelType.IMAGE_GENERATION)
+                .adapterType(AdapterType.SILICONFLOW_IMAGE)
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .capabilities(
+                        ModelCapabilities.builder().imageGeneration(capability).build())
+                .capabilitySources(ModelCapabilitySources.builder()
+                        .imageGeneration(CapabilitySource.REMOTE)
+                        .build())
+                .build();
     }
 
     private String reasoningContent(AssistantMessage message) {

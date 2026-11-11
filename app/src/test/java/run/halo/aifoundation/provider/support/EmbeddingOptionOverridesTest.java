@@ -13,10 +13,8 @@ class EmbeddingOptionOverridesTest {
 
         assertThat(overrides.modelOr("default-model")).isEqualTo("default-model");
         assertThat(overrides.dimensionsOr(1024)).isEqualTo(1024);
-        assertThat(overrides.textOr(TestOptions::apiKey, "default-key"))
-            .isEqualTo("default-key");
-        assertThat(overrides.valueOr(TestOptions::format, "float"))
-            .isEqualTo("float");
+        assertThat(overrides.textOr(TestOptions::apiKey, "default-key")).isEqualTo("default-key");
+        assertThat(overrides.valueOr(TestOptions::format, "float")).isEqualTo("float");
         assertThat(overrides.booleanOr(TestOptions::enabled, true)).isTrue();
         assertThat(overrides.providerValue(TestOptions::format)).isNull();
     }
@@ -28,8 +26,7 @@ class EmbeddingOptionOverridesTest {
 
         assertThat(overrides.modelOr("default-model")).isEqualTo("request-model");
         assertThat(overrides.dimensionsOr(1024)).isEqualTo(512);
-        assertThat(overrides.textOr(TestOptions::apiKey, "default-key"))
-            .isEqualTo("default-key");
+        assertThat(overrides.textOr(TestOptions::apiKey, "default-key")).isEqualTo("default-key");
     }
 
     @Test
@@ -39,10 +36,8 @@ class EmbeddingOptionOverridesTest {
 
         assertThat(overrides.modelOr("default-model")).isEqualTo("default-model");
         assertThat(overrides.dimensionsOr(1024)).isEqualTo(1024);
-        assertThat(overrides.textOr(TestOptions::apiKey, "default-key"))
-            .isEqualTo("request-key");
-        assertThat(overrides.valueOr(TestOptions::format, "float"))
-            .isEqualTo("base64");
+        assertThat(overrides.textOr(TestOptions::apiKey, "default-key")).isEqualTo("request-key");
+        assertThat(overrides.valueOr(TestOptions::format, "float")).isEqualTo("base64");
         assertThat(overrides.booleanOr(TestOptions::enabled, true)).isFalse();
     }
 
@@ -59,8 +54,8 @@ class EmbeddingOptionOverridesTest {
         }
     }
 
-    private record TestOptions(String model, Integer dimensions, String apiKey, String format,
-                               boolean enabled) implements EmbeddingOptions {
+    private record TestOptions(String model, Integer dimensions, String apiKey, String format, boolean enabled)
+            implements EmbeddingOptions {
 
         @Override
         public String getModel() {

@@ -1,17 +1,11 @@
 package run.halo.aifoundation.exception;
 
-/**
- * Raised when a provider HTTP API returns a failed response.
- */
+/** Raised when a provider HTTP API returns a failed response. */
 public class ProviderApiException extends AiFoundationException {
 
-    /**
-     * HTTP status code returned by the provider, or {@code 0} when unavailable.
-     */
+    /** HTTP status code returned by the provider, or {@code 0} when unavailable. */
     private final int statusCode;
-    /**
-     * Provider type id associated with the failed request.
-     */
+    /** Provider type id associated with the failed request. */
     private final String providerType;
 
     public ProviderApiException(String providerType, int statusCode, String message) {
@@ -20,10 +14,8 @@ public class ProviderApiException extends AiFoundationException {
         this.providerType = providerType;
     }
 
-    public ProviderApiException(String providerType, int statusCode, String message,
-        Throwable cause) {
-        super("Provider API error [" + providerType + "] HTTP " + statusCode + ": " + message,
-            cause);
+    public ProviderApiException(String providerType, int statusCode, String message, Throwable cause) {
+        super("Provider API error [" + providerType + "] HTTP " + statusCode + ": " + message, cause);
         this.statusCode = statusCode;
         this.providerType = providerType;
     }

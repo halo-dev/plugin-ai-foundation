@@ -1,6 +1,7 @@
 package run.halo.aifoundation.provider.mapping;
 
 import java.util.function.Function;
+
 /** Applies a value through a code-owned template with an optional constrained field override. */
 @FunctionalInterface
 public interface ParameterMappingApplicator {
@@ -12,30 +13,26 @@ public interface ParameterMappingApplicator {
     }
 
     static ParameterMappingApplicator root(String field) {
-        return (value, fieldOverride, target) ->
-            putPath(target.root(), resolvedField(field, fieldOverride), value);
+        return (value, fieldOverride, target) -> putPath(target.root(), resolvedField(field, fieldOverride), value);
     }
 
     static ParameterMappingApplicator root(String field, Function<Object, Object> mapper) {
-        return (value, fieldOverride, target) -> putPath(target.root(),
-            resolvedField(field, fieldOverride),
-            value == null ? null : mapper.apply(value));
+        return (value, fieldOverride, target) ->
+                putPath(target.root(), resolvedField(field, fieldOverride), value == null ? null : mapper.apply(value));
     }
 
     static ParameterMappingApplicator parameters(String field) {
         return (value, fieldOverride, target) ->
-            putPath(target.parameters(), resolvedField(field, fieldOverride), value);
+                putPath(target.parameters(), resolvedField(field, fieldOverride), value);
     }
 
     static ParameterMappingApplicator parameters(String field, Function<Object, Object> mapper) {
-        return (value, fieldOverride, target) -> putPath(target.parameters(),
-            resolvedField(field, fieldOverride),
-            value == null ? null : mapper.apply(value));
+        return (value, fieldOverride, target) -> putPath(
+                target.parameters(), resolvedField(field, fieldOverride), value == null ? null : mapper.apply(value));
     }
 
     static ParameterMappingApplicator options(String field) {
-        return (value, fieldOverride, target) ->
-            putPath(target.options(), resolvedField(field, fieldOverride), value);
+        return (value, fieldOverride, target) -> putPath(target.options(), resolvedField(field, fieldOverride), value);
     }
 
     static ParameterMappingApplicator rootObject(String objectField, String field) {
@@ -48,8 +45,8 @@ public interface ParameterMappingApplicator {
                 return;
             }
             @SuppressWarnings("unchecked")
-            var nested = (java.util.Map<String, Object>) target.root().computeIfAbsent(objectField,
-                ignored -> new java.util.LinkedHashMap<String, Object>());
+            var nested = (java.util.Map<String, Object>) target.root()
+                    .computeIfAbsent(objectField, ignored -> new java.util.LinkedHashMap<String, Object>());
             nested.put(field, value);
         };
     }
@@ -66,10 +63,9 @@ public interface ParameterMappingApplicator {
         var segments = path.split("\\.");
         var target = values;
         for (int index = 0; index < segments.length - 1; index++) {
-            target = (java.util.Map<String, Object>) target.computeIfAbsent(segments[index],
-                ignored -> new java.util.LinkedHashMap<String, Object>());
+            target = (java.util.Map<String, Object>)
+                    target.computeIfAbsent(segments[index], ignored -> new java.util.LinkedHashMap<String, Object>());
         }
         target.put(segments[segments.length - 1], value);
     }
-
 }

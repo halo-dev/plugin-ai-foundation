@@ -19,6 +19,12 @@ import type { ModelCapabilities } from './model-capabilities';
 // May contain unused imports in some cases
 // @ts-ignore
 import type { ModelCapabilitySources } from './model-capability-sources';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelCatalogMatch } from './model-catalog-match';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelParameterProfile } from './model-parameter-profile';
 
 /**
  * 
@@ -44,6 +50,18 @@ export interface DiscoveredModelItem {
      * @memberof DiscoveredModelItem
      */
     'capabilitySources'?: ModelCapabilitySources;
+    /**
+     * 
+     * @type {ModelCatalogMatch}
+     * @memberof DiscoveredModelItem
+     */
+    'catalogMatch'?: ModelCatalogMatch;
+    /**
+     * 
+     * @type {ModelParameterProfile}
+     * @memberof DiscoveredModelItem
+     */
+    'catalogParameters'?: ModelParameterProfile;
     /**
      * 
      * @type {string}
@@ -113,6 +131,8 @@ export const DiscoveredModelItemAdapterTypeEnum = {
     GiteeChat: 'gitee-chat',
     GiteeMessages: 'gitee-messages',
     GiteeEmbedding: 'gitee-embedding',
+    TokenhubChat: 'tokenhub-chat',
+    TokenhubEmbedding: 'tokenhub-embedding',
     KimiChat: 'kimi-chat',
     MinimaxMessages: 'minimax-messages',
     MinimaxChat: 'minimax-chat',
@@ -152,7 +172,9 @@ export const DiscoveredModelItemAdapterTypeEnum = {
     OllamaResponses: 'ollama-responses',
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
-    OllamaImage: 'ollama-image'
+    OllamaImage: 'ollama-image',
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type DiscoveredModelItemAdapterTypeEnum = typeof DiscoveredModelItemAdapterTypeEnum[keyof typeof DiscoveredModelItemAdapterTypeEnum];
@@ -177,7 +199,8 @@ export const DiscoveredModelItemModelTypeEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type DiscoveredModelItemModelTypeEnum = typeof DiscoveredModelItemModelTypeEnum[keyof typeof DiscoveredModelItemModelTypeEnum];

@@ -1,13 +1,12 @@
 package run.halo.aifoundation.service.usage;
 
-import run.halo.aifoundation.service.observation.UsageCallStart;
-import run.halo.aifoundation.service.observation.UsageCallTerminal;
-import run.halo.aifoundation.service.observation.UsageExecutionRecord;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
 
 public interface UsageStatisticsStore extends AutoCloseable {
 
@@ -33,14 +32,16 @@ public interface UsageStatisticsStore extends AutoCloseable {
 
     UsageSummary summary(UsageQuery query, boolean complete);
 
-    List<UsageTrendPoint> trends(UsageQuery query, boolean complete,
-        UsageBreakdownDimension dimension);
+    List<UsageTrendPoint> trends(UsageQuery query, boolean complete, UsageBreakdownDimension dimension);
 
     UsageBreakdown breakdown(UsageQuery query, UsageBreakdownDimension dimension);
 
     UsageCallPage listCalls(UsageQuery query, int size, String cursor);
 
     Optional<UsageCallDetail> getCall(String id);
+
+    /** Distinct caller plugins across all retained calls, ordered by plugin name. */
+    List<UsageCallerPlugin> callerPlugins();
 
     long reset();
 
@@ -50,9 +51,7 @@ public interface UsageStatisticsStore extends AutoCloseable {
     /** Recover lost terminals without recounting failures already recorded by the service. */
     void reconcileAbandoned(Instant now, java.util.Set<String> activeCallIds);
 
-    /**
-     * Perform bounded maintenance work; return true to yield and continue in another task.
-     */
+    /** Perform bounded maintenance work; return true to yield and continue in another task. */
     boolean retainBatch(Clock clock);
 
     @Override

@@ -10,13 +10,14 @@ ecosystem.
 
 ## Features
 
+- **Decision models**: Provider-neutral probability, choice, and score APIs with a decision workbench.
 - **Multiple AI providers**: Built-in support for OpenAI, OpenRouter, DeepSeek, Moonshot Kimi,
   SiliconFlow, Alibaba Cloud Model Studio, Doubao, ERNIE, Zhipu AI, Ollama, OpenAI-compatible
-  providers, AIHubMix, Gitee AI, MiniMax, and Xiaomi MiMo
+  providers, AIHubMix, Gitee AI, MiniMax, Tencent Cloud TokenHub, and Xiaomi MiMo
 - **Unified model management**: Manage providers, API key secrets, language, embedding, reranking,
   and image models, adapters, and model capabilities from the Halo Console
-- **Model discovery**: Fetch available models from providers while retaining the source of remote
-  declarations, built-in capabilities, and administrator overrides
+- **Model discovery**: Discover available models from providers and use models.dev to fill in
+  model capabilities and parameter settings
 - **Parameter mapping**: Configure provider- or model-level mappings for sampling, retries,
   reasoning, embedding, reranking, and image parameters
 - **Text and multimodal generation**: Generate text with streaming or non-streaming responses,

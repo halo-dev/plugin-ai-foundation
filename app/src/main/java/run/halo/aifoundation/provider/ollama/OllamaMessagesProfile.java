@@ -14,13 +14,10 @@ import run.halo.aifoundation.provider.support.UriReferencePolicy;
 /** Ollama policy for its documented Anthropic Messages compatibility endpoint. */
 final class OllamaMessagesProfile implements AnthropicMessagesProfile {
 
-    private static final UriReferencePolicy DATA_REFERENCES =
-        UriReferencePolicy.allowing("data:");
+    private static final UriReferencePolicy DATA_REFERENCES = UriReferencePolicy.allowing("data:");
 
-    private static final StandardAnthropicMessagesProfile STANDARD =
-        new StandardAnthropicMessagesProfile(
-            "ollama", "ollama-messages", "/v1/messages",
-            StandardAnthropicMessagesProfile.Authentication.X_API_KEY);
+    private static final StandardAnthropicMessagesProfile STANDARD = new StandardAnthropicMessagesProfile(
+            "ollama", "ollama-messages", "/v1/messages", StandardAnthropicMessagesProfile.Authentication.X_API_KEY);
 
     @Override
     public String providerType() {
@@ -43,8 +40,8 @@ final class OllamaMessagesProfile implements AnthropicMessagesProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         STANDARD.customizeRequest(body, prompt, options, stream);
         normalizeAutomaticToolChoice(body);
         rejectMetadata(body);
@@ -56,10 +53,8 @@ final class OllamaMessagesProfile implements AnthropicMessagesProfile {
         if (!mime.startsWith("image/")) {
             return null;
         }
-        return Map.of("type", "image", "source", Map.of(
-            "type", "base64",
-            "media_type", mime,
-            "data", imageBase64(media)));
+        return Map.of(
+                "type", "image", "source", Map.of("type", "base64", "media_type", mime, "data", imageBase64(media)));
     }
 
     private void normalizeAutomaticToolChoice(Map<String, Object> body) {
@@ -71,8 +66,7 @@ final class OllamaMessagesProfile implements AnthropicMessagesProfile {
             body.remove("tool_choice");
             return;
         }
-        throw new IllegalArgumentException(
-            "Ollama Messages does not support forcing or disabling tool use");
+        throw new IllegalArgumentException("Ollama Messages does not support forcing or disabling tool use");
     }
 
     private boolean isAutomaticToolChoice(Object value) {
@@ -113,7 +107,6 @@ final class OllamaMessagesProfile implements AnthropicMessagesProfile {
     }
 
     private IllegalArgumentException unsupportedImageReference() {
-        return new IllegalArgumentException(
-            "Ollama Messages accepts base64 image data but not image URLs");
+        return new IllegalArgumentException("Ollama Messages accepts base64 image data but not image URLs");
     }
 }

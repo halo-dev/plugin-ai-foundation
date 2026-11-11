@@ -30,29 +30,35 @@ public class DefaultAiModelResolver implements AiModelResolver {
 
     @Override
     public Mono<ModelResolution> resolve(String modelName, ModelType expectedType) {
-        return fetchAiModel(modelName)
-            .flatMap(aiModel -> {
-                if (!aiModel.getSpec().isEnabled()) {
-                    return Mono.error(new ModelDisabledException(modelName));
-                }
-                var typeError = validateModelType(aiModel, expectedType, modelName);
-                if (typeError != null) {
-                    return Mono.error(typeError);
-                }
-                var providerName = aiModel.getSpec().getProviderName();
-                return fetchProvider(providerName)
-                    .flatMap(provider -> resolveProvider(aiModel, provider, providerName));
-            });
+        return fetchAiModel(modelName).flatMap(aiModel -> {
+            if (!aiModel.getSpec().isEnabled()) {
+                return Mono.error(new ModelDisabledException(modelName));
+            }
+            var typeError = validateModelType(aiModel, expectedType, modelName);
+            if (typeError != null) {
+                return Mono.error(typeError);
+            }
+            var providerName = aiModel.getSpec().getProviderName();
+            return fetchProvider(providerName).flatMap(provider -> resolveProvider(aiModel, provider, providerName));
+        });
     }
 
-    private Mono<ModelResolution> resolveProvider(AiModel model, AiProvider provider,
-        String providerName) {
+    private Mono<ModelResolution> resolveProvider(AiModel model, AiProvider provider, String providerName) {
         if (!provider.getSpec().isEnabled()) {
             return Mono.error(new ProviderDisabledException(providerName));
         }
-        return secretResolver.resolveApiKey(provider.getSpec().getApiKeySecretName())
-            .map(apiKey -> new ModelResolution(model, provider,
-                providerClientCache.getProviderType(provider.getSpec().getProviderType()), apiKey));
+        return secretResolver
+                .resolveApiKey(provider.getSpec().getApiKeySecretName())
+                .map(apiKey -> new ModelResolution(
+                        model,
+                        provider,
+                        providerClientCache.getProviderType(provider.getSpec().getProviderType()),
+                        apiKey));
+    }
+
+    @Override
+    public Mono<String> defaultDecisionModelName() {
+        return defaultSlotName("decision", DefaultModelSlots::getDecisionModelName);
     }
 
     @Override
@@ -76,14 +82,12 @@ public class DefaultAiModelResolver implements AiModelResolver {
     }
 
     private Mono<AiModel> fetchAiModel(String modelName) {
-        return client.fetch(AiModel.class, modelName)
-            .switchIfEmpty(Mono.error(new ModelNotFoundException(modelName)));
+        return client.fetch(AiModel.class, modelName).switchIfEmpty(Mono.error(new ModelNotFoundException(modelName)));
     }
 
     private Mono<AiProvider> fetchProvider(String providerName) {
         return client.fetch(AiProvider.class, providerName)
-            .switchIfEmpty(Mono.error(new ModelNotFoundException(
-                "Provider not found: " + providerName)));
+                .switchIfEmpty(Mono.error(new ModelNotFoundException("Provider not found: " + providerName)));
     }
 
     private Throwable validateModelType(AiModel model, ModelType expectedType, String modelName) {
@@ -95,15 +99,13 @@ public class DefaultAiModelResolver implements AiModelResolver {
         return new IncompatibleModelTypeException(modelName, expectedType.getValue(), actualValue);
     }
 
-    private Mono<String> defaultSlotName(String slotName,
-        Function<DefaultModelSlots, String> extractor) {
-        return defaultModelSlotStore.get()
-            .flatMap(slots -> {
-                var modelName = extractor.apply(slots);
-                if (modelName == null || modelName.isBlank()) {
-                    return Mono.error(new DefaultModelNotConfiguredException(slotName));
-                }
-                return Mono.just(modelName);
-            });
+    private Mono<String> defaultSlotName(String slotName, Function<DefaultModelSlots, String> extractor) {
+        return defaultModelSlotStore.get().flatMap(slots -> {
+            var modelName = extractor.apply(slots);
+            if (modelName == null || modelName.isBlank()) {
+                return Mono.error(new DefaultModelNotConfiguredException(slotName));
+            }
+            return Mono.just(modelName);
+        });
     }
 }

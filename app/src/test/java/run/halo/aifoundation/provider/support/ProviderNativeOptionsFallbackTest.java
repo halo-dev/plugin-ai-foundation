@@ -17,37 +17,38 @@ class ProviderNativeOptionsFallbackTest {
 
     @Test
     void imageClientRejectsNativeOptionsInsteadOfDiscardingThem() {
-        ProviderImageGenerationClient client = request -> Mono.just(
-            GenerateImageResult.builder().build());
+        ProviderImageGenerationClient client =
+                request -> Mono.just(GenerateImageResult.builder().build());
 
         StepVerifier.create(client.generateImage(
-                GenerateImageRequest.builder().prompt("Halo").build(), null,
-                Map.of("provider_extension", true)))
-            .expectErrorMatches(error -> error instanceof IllegalStateException
-                && error.getMessage().contains("does not support configured native options"))
-            .verify();
+                        GenerateImageRequest.builder().prompt("Halo").build(),
+                        null,
+                        Map.of("provider_extension", true)))
+                .expectErrorMatches(error -> error instanceof IllegalStateException
+                        && error.getMessage().contains("does not support configured native options"))
+                .verify();
     }
 
     @Test
     void rerankingClientRejectsNativeOptionsInsteadOfDiscardingThem() {
-        ProviderRerankingClient client = request -> Mono.just(RerankResponse.builder().build());
+        ProviderRerankingClient client =
+                request -> Mono.just(RerankResponse.builder().build());
 
         StepVerifier.create(client.rerank(
-                RerankRequest.builder().query("Halo").build(), null,
-                Map.of("provider_extension", true)))
-            .expectErrorMatches(error -> error instanceof IllegalStateException
-                && error.getMessage().contains("does not support configured native options"))
-            .verify();
+                        RerankRequest.builder().query("Halo").build(), null, Map.of("provider_extension", true)))
+                .expectErrorMatches(error -> error instanceof IllegalStateException
+                        && error.getMessage().contains("does not support configured native options"))
+                .verify();
     }
 
     @Test
     void embeddingOptionsRejectNativeOptionsInsteadOfDiscardingThem() {
-        var options = EmbeddingModelProviderOptions.defaults()
-            .withNativeOptions(Map.of("provider_extension", true));
-        var request = EmbeddingRequest.builder().inputs(java.util.List.of("Halo")).build();
+        var options = EmbeddingModelProviderOptions.defaults().withNativeOptions(Map.of("provider_extension", true));
+        var request =
+                EmbeddingRequest.builder().inputs(java.util.List.of("Halo")).build();
 
         assertThatThrownBy(() -> options.buildOptions(request, new ArrayList<>()))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("does not support configured native options");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("does not support configured native options");
     }
 }

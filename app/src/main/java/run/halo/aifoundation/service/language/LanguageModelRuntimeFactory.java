@@ -16,10 +16,12 @@ public class LanguageModelRuntimeFactory {
     private final LanguageModelRuntimeProperties runtimeProperties;
     private final UsageExecutionObserver usageExecutionObserver;
 
-    public LanguageModelRuntimeFactory(LanguageModelRuntimeSupport runtimeSupport,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
-        LanguageModelRuntimeProperties runtimeProperties,
-        UsageExecutionObserver usageExecutionObserver) {
+    public LanguageModelRuntimeFactory(
+            LanguageModelRuntimeSupport runtimeSupport,
+            MediaResourcePolicy mediaResourcePolicy,
+            ModelCapabilityMatcher capabilityMatcher,
+            LanguageModelRuntimeProperties runtimeProperties,
+            UsageExecutionObserver usageExecutionObserver) {
         this.runtimeSupport = runtimeSupport;
         this.mediaResourcePolicy = mediaResourcePolicy;
         this.capabilityMatcher = capabilityMatcher;
@@ -27,11 +29,14 @@ public class LanguageModelRuntimeFactory {
         this.usageExecutionObserver = usageExecutionObserver;
     }
 
-    public LanguageModel create(ChatModel chatModel,
-        LanguageModelRuntimeConfiguration configuration) {
-        var composition = LanguageModelRuntimeComposition.create(configuration, runtimeSupport,
-            mediaResourcePolicy, capabilityMatcher);
-        return new LanguageModelImpl(chatModel, composition, configuration.context(),
-            runtimeProperties.getMaxSteps(), usageExecutionObserver);
+    public LanguageModel create(ChatModel chatModel, LanguageModelRuntimeConfiguration configuration) {
+        var composition = LanguageModelRuntimeComposition.create(
+                configuration, runtimeSupport, mediaResourcePolicy, capabilityMatcher);
+        return new LanguageModelImpl(
+                chatModel,
+                composition,
+                configuration.context(),
+                runtimeProperties.getMaxSteps(),
+                usageExecutionObserver);
     }
 }

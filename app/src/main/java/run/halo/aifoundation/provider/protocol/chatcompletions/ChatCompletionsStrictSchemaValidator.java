@@ -13,12 +13,18 @@ import run.halo.aifoundation.schema.OutputType;
 final class ChatCompletionsStrictSchemaValidator {
 
     private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of(
-        "allOf", "oneOf", "not", "if", "then", "else", "dependentRequired",
-        "dependentSchemas", "patternProperties", "unevaluatedProperties"
-    );
+            "allOf",
+            "oneOf",
+            "not",
+            "if",
+            "then",
+            "else",
+            "dependentRequired",
+            "dependentSchemas",
+            "patternProperties",
+            "unevaluatedProperties");
 
-    private ChatCompletionsStrictSchemaValidator() {
-    }
+    private ChatCompletionsStrictSchemaValidator() {}
 
     static Map<String, Object> validateAndBuildSchema(OutputSpec output) {
         var schema = buildSchema(output);
@@ -53,8 +59,7 @@ final class ChatCompletionsStrictSchemaValidator {
             throw failure(outputType, "$", "Strict structured output requires a JSON Schema");
         }
         if (outputType != OutputType.OBJECT || !hasType(schema.get("type"), "object")) {
-            throw failure(outputType, "$.type",
-                "Native strict structured output requires an object root schema");
+            throw failure(outputType, "$.type", "Native strict structured output requires an object root schema");
         }
     }
 
@@ -65,21 +70,21 @@ final class ChatCompletionsStrictSchemaValidator {
 
         for (var keyword : UNSUPPORTED_KEYWORDS) {
             if (schema.containsKey(keyword)) {
-                throw failure(outputType, path + "." + keyword,
-                    "Strict structured output does not support '" + keyword + "'");
+                throw failure(
+                        outputType,
+                        path + "." + keyword,
+                        "Strict structured output does not support '" + keyword + "'");
             }
         }
 
-        var objectSchema = hasType(schema.get("type"), "object")
-            || schema.containsKey("properties");
+        var objectSchema = hasType(schema.get("type"), "object") || schema.containsKey("properties");
         if (objectSchema) {
             validateObject(schema, path, outputType);
         }
 
         if (hasType(schema.get("type"), "array")) {
             if (!schema.containsKey("items")) {
-                throw failure(outputType, path + ".items",
-                    "Strict array schemas require 'items'");
+                throw failure(outputType, path + ".items", "Strict array schemas require 'items'");
             }
             validateSchema(schema.get("items"), path + ".items", outputType);
         }
@@ -92,26 +97,30 @@ final class ChatCompletionsStrictSchemaValidator {
 
     private static void validateObject(Map<?, ?> schema, String path, OutputType outputType) {
         if (!Boolean.FALSE.equals(schema.get("additionalProperties"))) {
-            throw failure(outputType, path + ".additionalProperties",
-                "Strict object schemas require additionalProperties to be false");
+            throw failure(
+                    outputType,
+                    path + ".additionalProperties",
+                    "Strict object schemas require additionalProperties to be false");
         }
         var propertiesValue = schema.get("properties");
         if (!(propertiesValue instanceof Map<?, ?> properties)) {
-            throw failure(outputType, path + ".properties",
-                "Strict object schemas require a properties object");
+            throw failure(outputType, path + ".properties", "Strict object schemas require a properties object");
         }
         var requiredValue = schema.get("required");
         if (!(requiredValue instanceof Collection<?> required)) {
-            throw failure(outputType, path + ".required",
-                "Strict object schemas require every property to be listed in required");
+            throw failure(
+                    outputType,
+                    path + ".required",
+                    "Strict object schemas require every property to be listed in required");
         }
-        var requiredNames = required.stream().map(String::valueOf)
-            .collect(java.util.stream.Collectors.toSet());
-        var propertyNames = properties.keySet().stream().map(String::valueOf)
-            .collect(java.util.stream.Collectors.toSet());
+        var requiredNames = required.stream().map(String::valueOf).collect(java.util.stream.Collectors.toSet());
+        var propertyNames =
+                properties.keySet().stream().map(String::valueOf).collect(java.util.stream.Collectors.toSet());
         if (!requiredNames.equals(propertyNames)) {
-            throw failure(outputType, path + ".required",
-                "Strict object schemas require required to contain exactly every property name");
+            throw failure(
+                    outputType,
+                    path + ".required",
+                    "Strict object schemas require required to contain exactly every property name");
         }
         for (var entry : properties.entrySet()) {
             validateSchema(entry.getValue(), path + ".properties." + entry.getKey(), outputType);
@@ -149,8 +158,7 @@ final class ChatCompletionsStrictSchemaValidator {
         return type instanceof Collection<?> types && types.contains(expected);
     }
 
-    private static StructuredOutputSchemaException failure(OutputType outputType, String path,
-        String message) {
+    private static StructuredOutputSchemaException failure(OutputType outputType, String path, String message) {
         return new StructuredOutputSchemaException(message + " at " + path, outputType, path);
     }
 }

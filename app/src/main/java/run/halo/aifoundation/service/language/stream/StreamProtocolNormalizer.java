@@ -9,14 +9,13 @@ import run.halo.aifoundation.part.TextStreamPart;
 
 public final class StreamProtocolNormalizer {
 
-    private StreamProtocolNormalizer() {
-    }
+    private StreamProtocolNormalizer() {}
 
     public static Flux<TextStreamPart> normalize(Flux<TextStreamPart> source) {
         return Flux.defer(() -> {
             var state = new State();
             return source.concatMap(part -> Flux.fromIterable(state.accept(part)))
-                .concatWith(Flux.defer(() -> Flux.fromIterable(state.closeOpenBlocks())));
+                    .concatWith(Flux.defer(() -> Flux.fromIterable(state.closeOpenBlocks())));
         });
     }
 
@@ -40,8 +39,7 @@ public final class StreamProtocolNormalizer {
                 case PartType.TOOL_INPUT_START -> acceptToolInputStart(part, parts);
                 case PartType.TOOL_INPUT_DELTA -> acceptToolInputDelta(part, parts);
                 case PartType.TOOL_INPUT_END -> acceptToolInputEnd(part, parts);
-                case PartType.TOOL_CALL, PartType.TOOL_INPUT_ERROR,
-                    PartType.TOOL_APPROVAL_REQUEST -> {
+                case PartType.TOOL_CALL, PartType.TOOL_INPUT_ERROR, PartType.TOOL_APPROVAL_REQUEST -> {
                     closeText(parts);
                     closeReasoning(parts);
                     closeToolInputs(parts);
@@ -117,8 +115,7 @@ public final class StreamProtocolNormalizer {
             closeText(parts);
             closeReasoning(parts);
             if (!toolInputs.containsKey(part.getId())) {
-                var start = TextStreamPart.toolInputStart(part.getId(), part.getToolCallId(),
-                    part.getToolName());
+                var start = TextStreamPart.toolInputStart(part.getId(), part.getToolCallId(), part.getToolName());
                 toolInputs.put(part.getId(), start);
                 parts.add(start);
             }
@@ -154,8 +151,10 @@ public final class StreamProtocolNormalizer {
         }
 
         private void closeToolInputs(List<TextStreamPart> parts) {
-            toolInputs.values().forEach(start -> parts.add(TextStreamPart.toolInputEnd(
-                start.getId(), start.getToolCallId(), start.getToolName())));
+            toolInputs
+                    .values()
+                    .forEach(start -> parts.add(
+                            TextStreamPart.toolInputEnd(start.getId(), start.getToolCallId(), start.getToolName())));
             toolInputs.clear();
         }
     }

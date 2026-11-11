@@ -1,6 +1,5 @@
 package run.halo.aifoundation.provider.mimo;
 
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -24,8 +23,7 @@ final class MiMoResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         validateExtraFields(options.getExtraBody());
         // MiMo documents the stream flag and event schema, but not OpenAI's obfuscation option.
         body.remove("stream_options");
@@ -44,16 +42,14 @@ final class MiMoResponsesProfile implements ResponsesProfile {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(EXTRA_FIELDS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported MiMo Responses option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported MiMo Responses option(s): " + String.join(", ", unknown));
         }
     }
 
     private void validateLimits(Map<String, Object> body) {
         var max = integer(body.get("max_output_tokens"), "max_output_tokens");
         if (max != null && (max < 1 || max > 131072)) {
-            throw new IllegalArgumentException(
-                "MiMo Responses max_output_tokens must be between 1 and 131072");
+            throw new IllegalArgumentException("MiMo Responses max_output_tokens must be between 1 and 131072");
         }
         range(body.get("temperature"), "temperature", 0d, 1.5d);
         range(body.get("top_p"), "top_p", 0.01d, 1d);
@@ -71,14 +67,12 @@ final class MiMoResponsesProfile implements ResponsesProfile {
     }
 
     private void validateStructuredOutput(Object value) {
-        if (!(value instanceof Map<?, ?> text)
-            || !(text.get("format") instanceof Map<?, ?> format)) {
+        if (!(value instanceof Map<?, ?> text) || !(text.get("format") instanceof Map<?, ?> format)) {
             return;
         }
         var type = text(format.get("type"));
         if (!"text".equals(type) && !"json_object".equals(type)) {
-            throw new IllegalArgumentException(
-                "MiMo Responses supports text or JSON object output, not " + type);
+            throw new IllegalArgumentException("MiMo Responses supports text or JSON object output, not " + type);
         }
     }
 
@@ -95,8 +89,7 @@ final class MiMoResponsesProfile implements ResponsesProfile {
                 var part = map(partValue);
                 var type = part != null ? text(part.get("type")) : null;
                 if ("input_file".equals(type)) {
-                    throw new IllegalArgumentException(
-                        "MiMo Responses documents text and image inputs only");
+                    throw new IllegalArgumentException("MiMo Responses documents text and image inputs only");
                 }
             }
         }
@@ -121,8 +114,7 @@ final class MiMoResponsesProfile implements ResponsesProfile {
     private void rejectUndocumentedFields(Map<String, Object> body) {
         for (var field : List.of("parallel_tool_calls", "store", "metadata", "service_tier")) {
             if (body.containsKey(field)) {
-                throw new IllegalArgumentException(
-                    "MiMo Responses does not document request field: " + field);
+                throw new IllegalArgumentException("MiMo Responses does not document request field: " + field);
             }
         }
     }
@@ -141,10 +133,9 @@ final class MiMoResponsesProfile implements ResponsesProfile {
         if (value == null) {
             return;
         }
-        if (!(value instanceof Number number) || number.doubleValue() < minimum
-            || number.doubleValue() > maximum) {
-            throw new IllegalArgumentException("MiMo Responses " + field + " must be between "
-                + minimum + " and " + maximum);
+        if (!(value instanceof Number number) || number.doubleValue() < minimum || number.doubleValue() > maximum) {
+            throw new IllegalArgumentException(
+                    "MiMo Responses " + field + " must be between " + minimum + " and " + maximum);
         }
     }
 
@@ -156,5 +147,4 @@ final class MiMoResponsesProfile implements ResponsesProfile {
     private String text(Object value) {
         return value != null && !value.toString().isBlank() ? value.toString() : null;
     }
-
 }

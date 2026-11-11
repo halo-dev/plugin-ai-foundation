@@ -1,7 +1,9 @@
 package run.halo.aifoundation.service.media;
 
 import java.net.URI;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.exception.InvalidMediaContentException;
@@ -24,18 +26,38 @@ public class MediaResourcePolicy {
     private final Set<String> allowedUrlSchemes;
 
     public MediaResourcePolicy() {
-        this(DEFAULT_MAX_PART_BYTES, DEFAULT_MAX_TOTAL_BYTES, DEFAULT_MAX_URL_COUNT,
-            DEFAULT_MAX_URL_LENGTH, DEFAULT_ALLOWED_URL_SCHEMES);
+        this(
+                DEFAULT_MAX_PART_BYTES,
+                DEFAULT_MAX_TOTAL_BYTES,
+                DEFAULT_MAX_URL_COUNT,
+                DEFAULT_MAX_URL_LENGTH,
+                DEFAULT_ALLOWED_URL_SCHEMES);
     }
 
-    public MediaResourcePolicy(long maxPartBytes, long maxTotalBytes, int maxUrlCount,
-        int maxUrlLength, Set<String> allowedUrlSchemes) {
+    public MediaResourcePolicy(
+            long maxPartBytes, long maxTotalBytes, int maxUrlCount, int maxUrlLength, Set<String> allowedUrlSchemes) {
         this.maxPartBytes = maxPartBytes;
         this.maxTotalBytes = maxTotalBytes;
         this.maxUrlCount = maxUrlCount;
         this.maxUrlLength = maxUrlLength;
-        this.allowedUrlSchemes = allowedUrlSchemes == null ? DEFAULT_ALLOWED_URL_SCHEMES
-            : Set.copyOf(allowedUrlSchemes);
+        this.allowedUrlSchemes =
+                allowedUrlSchemes == null ? DEFAULT_ALLOWED_URL_SCHEMES : Set.copyOf(allowedUrlSchemes);
+    }
+
+    /**
+     * Returns a policy with the same limits that also accepts the given provider-specific URL schemes, such as an
+     * uploaded-file reference scheme.
+     */
+    public MediaResourcePolicy withAdditionalSchemes(Set<String> schemes) {
+        if (schemes == null || schemes.isEmpty()) {
+            return this;
+        }
+        var combined = new LinkedHashSet<>(allowedUrlSchemes);
+        schemes.stream()
+                .filter(scheme -> scheme != null && !scheme.isBlank())
+                .map(scheme -> scheme.toLowerCase(Locale.ROOT))
+                .forEach(combined::add);
+        return new MediaResourcePolicy(maxPartBytes, maxTotalBytes, maxUrlCount, maxUrlLength, combined);
     }
 
     public void validate(List<DataContent> media) {
@@ -47,14 +69,13 @@ public class MediaResourcePolicy {
         for (int index = 0; index < media.size(); index++) {
             var item = media.get(index);
             if (item == null) {
-                throw new InvalidMediaContentException("media content must not be null",
-                    null, null, null, index);
+                throw new InvalidMediaContentException("media content must not be null", null, null, null, index);
             }
             if (item.isData()) {
                 var bytes = item.decodedData().length;
                 if (bytes > maxPartBytes) {
-                    throw new MediaContentTooLargeException("part", maxPartBytes, bytes,
-                        item.getMediaType(), item.getFilename(), null, index);
+                    throw new MediaContentTooLargeException(
+                            "part", maxPartBytes, bytes, item.getMediaType(), item.getFilename(), null, index);
                 }
                 totalBytes += bytes;
                 continue;
@@ -75,20 +96,20 @@ public class MediaResourcePolicy {
     private void validateUrl(DataContent item, int partIndex) {
         var url = item.getUrl();
         if (url.length() > maxUrlLength) {
-            throw new InvalidMediaContentException("media URL exceeds maximum length",
-                item.getMediaType(), item.getFilename(), null, partIndex);
+            throw new InvalidMediaContentException(
+                    "media URL exceeds maximum length", item.getMediaType(), item.getFilename(), null, partIndex);
         }
         URI uri;
         try {
             uri = URI.create(url);
         } catch (IllegalArgumentException e) {
-            throw new InvalidMediaContentException("media URL must be a valid URI",
-                item.getMediaType(), item.getFilename(), null, partIndex, e);
+            throw new InvalidMediaContentException(
+                    "media URL must be a valid URI", item.getMediaType(), item.getFilename(), null, partIndex, e);
         }
         var scheme = uri.getScheme();
         if (scheme == null || !allowedUrlSchemes.contains(scheme.toLowerCase())) {
-            throw new InvalidMediaContentException("media URL scheme is not supported",
-                item.getMediaType(), item.getFilename(), null, partIndex);
+            throw new InvalidMediaContentException(
+                    "media URL scheme is not supported", item.getMediaType(), item.getFilename(), null, partIndex);
         }
     }
 }

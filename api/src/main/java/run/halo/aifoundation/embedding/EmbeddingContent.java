@@ -9,9 +9,9 @@ import run.halo.aifoundation.media.DataContent;
 /**
  * One typed part of a provider-neutral multimodal embedding input.
  *
- * <p>Unlike {@link EmbeddingRequest#getInputs() text inputs}, these parts retain their media type
- * for a provider-native multimodal request. A provider may produce one joint vector or one vector
- * per content item; the returned embedding list preserves the provider's documented semantics.
+ * <p>Unlike {@link EmbeddingRequest#getInputs() text inputs}, these parts retain their media type for a provider-native
+ * multimodal request. A provider may produce one joint vector or one vector per content item; the returned embedding
+ * list preserves the provider's documented semantics.
  */
 @Data
 @Builder(buildMethodName = "uncheckedBuild")
@@ -54,11 +54,11 @@ public class EmbeddingContent {
         }
         if (media == null) {
             throw new IllegalArgumentException(
-                "Embedding " + type.name().toLowerCase() + " content must include media");
+                    "Embedding " + type.name().toLowerCase() + " content must include media");
         }
         if (text != null) {
             throw new IllegalArgumentException(
-                "Embedding " + type.name().toLowerCase() + " content must not include text");
+                    "Embedding " + type.name().toLowerCase() + " content must not include text");
         }
         return this;
     }

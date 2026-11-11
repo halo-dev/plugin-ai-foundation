@@ -10,6 +10,5 @@ package run.halo.aifoundation.ui;
  * @param code stable validation code
  * @param message human-readable validation message
  */
-public record UIMessageValidationIssue(String messageId, String role, String partType,
-                                       String partId, String code, String message) {
-}
+public record UIMessageValidationIssue(
+        String messageId, String role, String partType, String partId, String code, String message) {}

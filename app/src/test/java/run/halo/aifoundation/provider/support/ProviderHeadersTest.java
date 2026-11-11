@@ -28,16 +28,15 @@ class ProviderHeadersTest {
         requestHeaders.put("X-Missing", null);
 
         var merged = ProviderHeaders.merge(
-            Map.of("X-Shared", "default", "X-Default", "default"),
-            Map.of("X-Shared", "provider", "X-Provider", "provider"),
-            requestHeaders
-        );
+                Map.of("X-Shared", "default", "X-Default", "default"),
+                Map.of("X-Shared", "provider", "X-Provider", "provider"),
+                requestHeaders);
 
-        assertThat(merged).containsExactlyInAnyOrderEntriesOf(Map.of(
-            "X-Shared", "provider",
-            "X-Default", "default",
-            "X-Provider", "provider",
-            "X-Request", "request"
-        ));
+        assertThat(merged)
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "X-Shared", "provider",
+                        "X-Default", "default",
+                        "X-Provider", "provider",
+                        "X-Request", "request"));
     }
 }

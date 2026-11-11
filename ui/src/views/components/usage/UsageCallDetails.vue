@@ -11,7 +11,7 @@ import {
 import { VStatusDot } from '@halo-dev/components'
 import { computed } from 'vue'
 import UsageCallExecutions from './UsageCallExecutions.vue'
-const props = defineProps<{ call: UsageCallItem }>()
+const props = defineProps<{ call: UsageCallItem; callerName?: string }>()
 const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.call.id || '')
 const call = computed(() => data.value?.call ?? props.call)
 const responseModel = computed(() => {
@@ -31,10 +31,6 @@ const showUnknownUsage = computed(() => {
   if (call.value.usage.quality === 'MISSING') return true
   return call.value.usage.quality === 'PARTIAL'
 })
-const showIncompleteCall = computed(() => {
-  if (call.value.complete === false) return true
-  return Boolean(call.value.missingExecutionCount)
-})
 const fields = computed(() => [
   { label: '模型标识', value: call.value.modelName || '未知' },
   { label: '供应商标识', value: call.value.providerName || '未知' },
@@ -42,7 +38,7 @@ const fields = computed(() => [
     label: '请求 → 响应模型',
     value: responseModel.value,
   },
-  { label: '调用插件', value: call.value.callerPluginName || '未知插件' },
+  { label: '调用插件', value: props.callerName || call.value.callerPluginName || '未知插件' },
   { label: '插件版本', value: call.value.callerPluginVersion || '未知' },
   {
     label: '响应方式',
@@ -104,12 +100,8 @@ const breakdown = computed(() => [
           ><span>总耗时 {{ formatDuration(call.durationMillis) }}</span>
           <span v-if="call.streaming">流式响应</span>
         </div>
-        <p v-if="showIncompleteCall" class=":uno: usage-process-warning">
-          {{ call.complete === false ? '统计数据不完整。' : ''
-          }}<template v-if="call.missingExecutionCount"
-            >{{ call.missingExecutionCount }} 条执行记录缺少用量，Token
-            统计可能低于实际消耗。</template
-          >
+        <p v-if="call.missingExecutionCount" class=":uno: usage-process-warning">
+          {{ call.missingExecutionCount }} 条执行记录缺少用量，Token 统计可能低于实际消耗。
         </p>
         <UsageCallExecutions
           v-if="call.id"

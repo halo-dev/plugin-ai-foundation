@@ -69,8 +69,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         } catch (Exception | LinkageError error) {
             closeSilently();
             deregisterPluginDrivers();
-            throw new IllegalStateException(
-                "Failed to initialize AI usage statistics at " + paths.database(), error);
+            throw new IllegalStateException("Failed to initialize AI usage statistics at " + paths.database(), error);
         }
     }
 
@@ -87,16 +86,18 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     @Override
     public synchronized UsageHealthState readHealth() {
         requireInitialized();
-        try (var statement = writer.prepareStatement(
-            "SELECT * FROM ai_statistics_health WHERE id = 1");
-            var row = statement.executeQuery()) {
+        try (var statement = writer.prepareStatement("SELECT * FROM ai_statistics_health WHERE id = 1");
+                var row = statement.executeQuery()) {
             row.next();
-            return new UsageHealthState(row.getLong("dropped_events"),
-                row.getLong("incomplete_calls"), row.getLong("write_failures"),
-                UsageSqliteJdbc.instant(row, "last_write_error_at_ms"),
-                UsageSqliteJdbc.instant(row, "affected_since_ms"),
-                UsageSqliteJdbc.instant(row, "affected_until_ms"),
-                row.getString("initialization_error"), row.getString("integrity_error"));
+            return new UsageHealthState(
+                    row.getLong("dropped_events"),
+                    row.getLong("incomplete_calls"),
+                    row.getLong("write_failures"),
+                    UsageSqliteJdbc.instant(row, "last_write_error_at_ms"),
+                    UsageSqliteJdbc.instant(row, "affected_since_ms"),
+                    UsageSqliteJdbc.instant(row, "affected_until_ms"),
+                    row.getString("initialization_error"),
+                    row.getString("integrity_error"));
         } catch (SQLException error) {
             throw databaseError("read statistics health", error);
         }
@@ -126,11 +127,10 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     }
 
     @Override
-    public synchronized void writeHealth(UsageHealthState health,
-        List<UsageCallStart> incompleteCalls) {
+    public synchronized void writeHealth(UsageHealthState health, List<UsageCallStart> incompleteCalls) {
         writeBatch(List.of(() -> {
-            try (var statement = writer.prepareStatement(
-                "UPDATE ai_calls SET complete = 0 WHERE id = ? AND epoch = ?")) {
+            try (var statement =
+                    writer.prepareStatement("UPDATE ai_calls SET complete = 0 WHERE id = ? AND epoch = ?")) {
                 var currentEpoch = currentEpoch();
                 for (var start : incompleteCalls) {
                     if (start.epoch() != currentEpoch) {
@@ -250,7 +250,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             var index = 1;
             statement.setLong(index++, terminal.completedAt().toEpochMilli());
             var duration = terminal.completedAt().toEpochMilli()
-                - terminal.start().startedAt().toEpochMilli();
+                    - terminal.start().startedAt().toEpochMilli();
             statement.setLong(index++, Math.max(0, duration));
             statement.setString(index++, terminal.status().name());
             statement.setString(index++, value(terminal.error(), UsageError::type));
@@ -265,8 +265,8 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             statement.executeUpdate();
             if (terminal.status() == run.halo.aifoundation.service.observation.UsageStatus.TIMED_OUT) {
                 try (var cancelled = writer.prepareStatement(
-                    "UPDATE ai_model_executions SET status = 'TIMED_OUT', error_type = 'TIMEOUT'"
-                        + " WHERE call_id = ? AND status = 'CANCELLED'")) {
+                        "UPDATE ai_model_executions SET status = 'TIMED_OUT', error_type = 'TIMEOUT'"
+                                + " WHERE call_id = ? AND status = 'CANCELLED'")) {
                     cancelled.setString(1, terminal.callId());
                     cancelled.executeUpdate();
                 }
@@ -283,8 +283,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     }
 
     @Override
-    public List<UsageTrendPoint> trends(UsageQuery query, boolean complete,
-        UsageBreakdownDimension dimension) {
+    public List<UsageTrendPoint> trends(UsageQuery query, boolean complete, UsageBreakdownDimension dimension) {
         requireInitialized();
         return withReader(connection -> queries.trends(connection, query, complete, dimension));
     }
@@ -308,6 +307,12 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     }
 
     @Override
+    public List<UsageCallerPlugin> callerPlugins() {
+        requireInitialized();
+        return withReader(queries::callerPlugins);
+    }
+
+    @Override
     public synchronized long reset() {
         requireInitialized();
         var restoreAutoCommit = true;
@@ -325,7 +330,8 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                     """);
             }
             try (var statement = writer.createStatement()) {
-                statement.executeUpdate("DELETE FROM ai_statistics_meta WHERE key NOT IN ('statistics_epoch', 'schema_version')");
+                statement.executeUpdate(
+                        "DELETE FROM ai_statistics_meta WHERE key NOT IN ('statistics_epoch', 'schema_version')");
             }
             var nextEpoch = currentEpoch() + 1;
             UsageSqliteJdbc.putMeta(writer, "statistics_epoch", Long.toString(nextEpoch));
@@ -357,12 +363,12 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         reconcileAbandoned(now, activeCallIds, false);
     }
 
-    private void reconcileAbandoned(Instant now, java.util.Set<String> activeCallIds,
-        boolean updateHealth) {
+    private void reconcileAbandoned(Instant now, java.util.Set<String> activeCallIds, boolean updateHealth) {
         requireInitialized();
         var active = List.copyOf(activeCallIds);
-        var excluded = active.isEmpty() ? "" : " AND id NOT IN ("
-            + String.join(",", java.util.Collections.nCopies(active.size(), "?")) + ")";
+        var excluded = active.isEmpty()
+                ? ""
+                : " AND id NOT IN (" + String.join(",", java.util.Collections.nCopies(active.size(), "?")) + ")";
         var sql = """
             WITH recovered AS MATERIALIZED (
               SELECT call_id, COUNT(*) attempts,
@@ -414,7 +420,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                 WHERE id = 1 AND EXISTS (SELECT 1 FROM ai_calls WHERE status = 'IN_PROGRESS')
                 """;
             try (var health = writer.prepareStatement(healthSql);
-                var statement = writer.prepareStatement(sql)) {
+                    var statement = writer.prepareStatement(sql)) {
                 if (updateHealth) {
                     health.setLong(1, now.toEpochMilli());
                     health.setLong(2, now.toEpochMilli());
@@ -460,8 +466,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         readers.forEach(SqliteUsageStatisticsStore::close);
         boolean acquired = false;
         try {
-            acquired = readerPermits.tryAcquire(MAX_CONCURRENT_READERS, BUSY_TIMEOUT_MILLIS,
-                TimeUnit.MILLISECONDS);
+            acquired = readerPermits.tryAcquire(MAX_CONCURRENT_READERS, BUSY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
         }
@@ -494,7 +499,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
 
     private void configureWriter(Connection connection) throws SQLException {
         try (var statement = connection.createStatement();
-            var rows = statement.executeQuery("PRAGMA journal_mode = WAL")) {
+                var rows = statement.executeQuery("PRAGMA journal_mode = WAL")) {
             if (!rows.next()) {
                 throw new SQLException("SQLite did not return a journal mode");
             }
@@ -537,22 +542,20 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
 
     private boolean validateExistingDatabase() throws java.io.IOException, SQLException {
         var database = paths.database();
-        var files = List.of(database,
-            database.resolveSibling(database.getFileName() + "-wal"),
-            database.resolveSibling(database.getFileName() + "-shm"));
+        var files = List.of(
+                database,
+                database.resolveSibling(database.getFileName() + "-wal"),
+                database.resolveSibling(database.getFileName() + "-shm"));
         if (files.stream().allMatch(path -> Files.notExists(path, LinkOption.NOFOLLOW_LINKS))) {
             return true;
         }
-        if (!Files.isRegularFile(database, LinkOption.NOFOLLOW_LINKS)
-            || Files.size(database) == 0) {
-            throw new UsageDatabaseIntegrityException(
-                "SQLite statistics files exist without a non-empty database; "
+        if (!Files.isRegularFile(database, LinkOption.NOFOLLOW_LINKS) || Files.size(database) == 0) {
+            throw new UsageDatabaseIntegrityException("SQLite statistics files exist without a non-empty database; "
                     + "manual intervention is required: " + database);
         }
         // This gate currently accepts only the current version. When adding migrations, adapt
         // it before opening the writer; see UsageSqliteSchema's schema evolution contract.
-        try (var connection = DriverManager.getConnection(
-            "jdbc:sqlite:" + database.toUri() + "?mode=ro")) {
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.toUri() + "?mode=ro")) {
             UsageSqliteSchema.validateRecognized(connection);
         }
         return false;
@@ -597,8 +600,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             return operation.apply(connection);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException(
-                "Interrupted while waiting for a statistics reader", error);
+            throw new IllegalStateException("Interrupted while waiting for a statistics reader", error);
         } catch (SQLException error) {
             throw databaseError("read statistics", error);
         } finally {
@@ -640,8 +642,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         return connection.getAutoCommit();
     }
 
-    private static int bindUsage(PreparedStatement statement, int index, NormalizedUsage usage)
-        throws SQLException {
+    private static int bindUsage(PreparedStatement statement, int index, NormalizedUsage usage) throws SQLException {
         var value = usage == null ? NormalizedUsage.missing() : usage;
         UsageSqliteJdbc.setLong(statement, index++, value.inputTokens());
         UsageSqliteJdbc.setLong(statement, index++, value.outputTokens());
@@ -654,8 +655,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         return index;
     }
 
-    private static void setInstant(PreparedStatement statement, int index, Instant value)
-        throws SQLException {
+    private static void setInstant(PreparedStatement statement, int index, Instant value) throws SQLException {
         UsageSqliteJdbc.setLong(statement, index, value == null ? null : value.toEpochMilli());
     }
 
@@ -690,7 +690,8 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             try {
                 DriverManager.deregisterDriver(driver);
             } catch (SQLException error) {
-                log.warn("Failed to deregister JDBC driver {}", driver.getClass().getName(), error);
+                log.warn(
+                        "Failed to deregister JDBC driver {}", driver.getClass().getName(), error);
             }
         }
     }

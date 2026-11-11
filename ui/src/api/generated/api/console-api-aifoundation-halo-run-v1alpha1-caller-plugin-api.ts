@@ -30,7 +30,7 @@ import type { CallerPluginInfo } from '../models';
 export const ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * List caller plugins observed by AI Foundation since startup.
+         * List caller plugins recorded in usage statistics, enriched with plugin metadata.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -77,7 +77,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApiFp = function(c
     const localVarAxiosParamCreator = ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApiAxiosParamCreator(configuration)
     return {
         /**
-         * List caller plugins observed by AI Foundation since startup.
+         * List caller plugins recorded in usage statistics, enriched with plugin metadata.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -98,7 +98,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApiFactory = funct
     const localVarFp = ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApiFp(configuration)
     return {
         /**
-         * List caller plugins observed by AI Foundation since startup.
+         * List caller plugins recorded in usage statistics, enriched with plugin metadata.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -116,7 +116,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApiFactory = funct
  */
 export class ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApi extends BaseAPI {
     /**
-     * List caller plugins observed by AI Foundation since startup.
+     * List caller plugins recorded in usage statistics, enriched with plugin metadata.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApi

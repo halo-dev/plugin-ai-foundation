@@ -31,63 +31,65 @@ import run.halo.aifoundation.tool.ToolDefinition;
 
 class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
 
-    private final LanguageModelRuntimeFactory factory =
-        new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport(),
-            new MediaResourcePolicy(), new ModelCapabilityMatcher(),
-            new LanguageModelRuntimeProperties(), new UsageExecutionObserver());
+    private final LanguageModelRuntimeFactory factory = new LanguageModelRuntimeFactory(
+            new LanguageModelRuntimeSupport(),
+            new MediaResourcePolicy(),
+            new ModelCapabilityMatcher(),
+            new LanguageModelRuntimeProperties(),
+            new UsageExecutionObserver());
 
     @Test
     void create_passesProviderTypeIntoRuntimeMetadata() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
 
-        var model = factory.create(chatModel, configuration("openai",
-            LanguageModelProviderOptions.defaults()));
+        var model = factory.create(chatModel, configuration("openai", LanguageModelProviderOptions.defaults()));
 
         StepVerifier.create(model.generateText("Hello"))
-            .assertNext(result -> assertThat(result.getRequest().getMetadata())
-                .containsEntry("providerType", "openai"))
-            .verifyComplete();
+                .assertNext(
+                        result -> assertThat(result.getRequest().getMetadata()).containsEntry("providerType", "openai"))
+                .verifyComplete();
     }
 
     @Test
     void create_appliesProviderOptionsAtCompositionBoundary() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
-        var model = factory.create(chatModel, configuration("deepseek",
-            reasoningHistoryProviderOptions()));
+        var model = factory.create(chatModel, configuration("deepseek", reasoningHistoryProviderOptions()));
 
         var request = GenerateTextRequest.builder()
-            .messages(List.of(ModelMessage.assistant(List.of(
-                ModelMessagePart.reasoning("thinking")
-            ))))
-            .build();
+                .messages(List.of(ModelMessage.assistant(List.of(ModelMessagePart.reasoning("thinking")))))
+                .build();
 
         StepVerifier.create(model.generateText(request))
-            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
-            .verifyComplete();
+                .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+                .verifyComplete();
     }
 
     @Test
     void create_appliesAdministratorNativeOptionsFromModelContext() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
-        var context = new ModelRuntimeContext("model-a", "gpt-a", "provider-a", "openai",
-            AdapterType.OPENAI_CHAT, null, RuntimeParameterMappings.empty(),
-            Map.of("reasoning_effort", "high"));
-        var configuration = new LanguageModelRuntimeConfiguration(context,
-            new OpenAiProvider().languageModelProviderOptions(), null);
+        var context = new ModelRuntimeContext(
+                "model-a",
+                "gpt-a",
+                "provider-a",
+                "openai",
+                AdapterType.OPENAI_CHAT,
+                null,
+                RuntimeParameterMappings.empty(),
+                Map.of("reasoning_effort", "high"));
+        var configuration = new LanguageModelRuntimeConfiguration(
+                context, new OpenAiProvider().languageModelProviderOptions(), null);
         var model = factory.create(chatModel, configuration);
 
-        StepVerifier.create(model.generateText("Hello"))
-            .expectNextCount(1)
-            .verifyComplete();
+        StepVerifier.create(model.generateText("Hello")).expectNextCount(1).verifyComplete();
 
         var prompt = ArgumentCaptor.forClass(Prompt.class);
         org.mockito.Mockito.verify(chatModel).call(prompt.capture());
         assertThat((ChatCompletionsOptions) prompt.getValue().getOptions())
-            .extracting(ChatCompletionsOptions::getExtraBody)
-            .isEqualTo(Map.of("reasoning_effort", "high"));
+                .extracting(ChatCompletionsOptions::getExtraBody)
+                .isEqualTo(Map.of("reasoning_effort", "high"));
     }
 
     @Test
@@ -95,38 +97,35 @@ class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
         var properties = new LanguageModelRuntimeProperties();
         properties.setMaxSteps(2);
         var configuredFactory = new LanguageModelRuntimeFactory(
-            new LanguageModelRuntimeSupport(),
-            new MediaResourcePolicy(),
-            new ModelCapabilityMatcher(),
-            properties,
-            new UsageExecutionObserver()
-        );
+                new LanguageModelRuntimeSupport(),
+                new MediaResourcePolicy(),
+                new ModelCapabilityMatcher(),
+                properties,
+                new UsageExecutionObserver());
         var chatModel = mock(ChatModel.class);
-        when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "research", "{}", 1, 1),
-            toolCallResponse("call_2", "research", "{}", 1, 1)
-        );
-        var model = configuredFactory.create(chatModel, configuration("openai",
-            LanguageModelProviderOptions.defaults()));
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(
+                        toolCallResponse("call_1", "research", "{}", 1, 1),
+                        toolCallResponse("call_2", "research", "{}", 1, 1));
+        var model =
+                configuredFactory.create(chatModel, configuration("openai", LanguageModelProviderOptions.defaults()));
 
         var request = GenerateTextRequest.builder()
-            .prompt("Research")
-            .tools(List.of(ToolDefinition.builder()
-                .name("research")
-                .executor(context -> Mono.just(Map.of("ok", true)))
-                .build()))
-            .stopWhen(StopCondition.stepCountIs(3))
-            .build();
+                .prompt("Research")
+                .tools(List.of(ToolDefinition.builder()
+                        .name("research")
+                        .executor(context -> Mono.just(Map.of("ok", true)))
+                        .build()))
+                .stopWhen(StopCondition.stepCountIs(3))
+                .build();
 
         StepVerifier.create(model.generateText(request))
-            .assertNext(result -> {
-                assertThat(result.getSteps()).hasSize(2);
-                assertThat(result.getToolResults()).hasSize(1);
-                assertThat(result.getWarnings())
-                    .extracting("code")
-                    .contains("stop-condition-reached");
-            })
-            .verifyComplete();
+                .assertNext(result -> {
+                    assertThat(result.getSteps()).hasSize(2);
+                    assertThat(result.getToolResults()).hasSize(1);
+                    assertThat(result.getWarnings()).extracting("code").contains("stop-condition-reached");
+                })
+                .verifyComplete();
     }
 
     @Test
@@ -137,16 +136,16 @@ class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
         properties.setMaxSteps(16);
         assertThat(properties.getMaxSteps()).isEqualTo(16);
         assertThatThrownBy(() -> properties.setMaxSteps(0))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("between 1 and 64");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("between 1 and 64");
         assertThatThrownBy(() -> properties.setMaxSteps(65))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("between 1 and 64");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("between 1 and 64");
     }
 
-    private LanguageModelRuntimeConfiguration configuration(String providerType,
-        LanguageModelProviderOptions providerOptions) {
+    private LanguageModelRuntimeConfiguration configuration(
+            String providerType, LanguageModelProviderOptions providerOptions) {
         return new LanguageModelRuntimeConfiguration(
-            ModelRuntimeContext.unresolved(providerType), providerOptions, null);
+                ModelRuntimeContext.unresolved(providerType), providerOptions, null);
     }
 }

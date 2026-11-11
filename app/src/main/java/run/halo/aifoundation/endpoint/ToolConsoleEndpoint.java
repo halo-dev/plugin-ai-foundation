@@ -28,40 +28,68 @@ public class ToolConsoleEndpoint implements CustomEndpoint {
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.aifoundation.halo.run/v1alpha1/Tool";
-        return route()
-            .GET("tools", this::listTools,
-                builder -> builder.operationId("ListTools")
-                    .description("List tools contributed by enabled plugins without executors.")
-                    .tag(tag)
-                    .response(responseBuilder().implementationArray(ToolDescriptor.class)))
-            .PUT("tools/{pluginName}/{localName}/state", this::updateToolState,
-                builder -> builder.operationId("UpdateToolState").tag(tag)
-                    .description("Enable or disable a shared tool for all consumers.")
-                    .parameter(parameterBuilder().name("pluginName").in(ParameterIn.PATH)
-                        .implementation(String.class).required(true))
-                    .parameter(parameterBuilder().name("localName").in(ParameterIn.PATH)
-                        .implementation(String.class).required(true))
-                    .requestBody(requestBodyBuilder().required(true)
-                        .implementation(ToolEnabledRequest.class))
-                    .response(responseBuilder().implementation(ToolDescriptor.class)))
-            .GET("tools/{pluginName}/{localName}/configuration", this::getToolConfiguration,
-                builder -> builder.operationId("GetToolConfiguration").tag(tag)
-                    .description("Get provider-owned configuration values without credentials.")
-                    .parameter(parameterBuilder().name("pluginName").in(ParameterIn.PATH)
-                        .implementation(String.class).required(true))
-                    .parameter(parameterBuilder().name("localName").in(ParameterIn.PATH)
-                        .implementation(String.class).required(true))
-                    .response(responseBuilder().implementation(ToolConfig.class)))
-            .PUT("tools/{pluginName}/{localName}/configuration", this::updateToolConfiguration,
-                builder -> builder.operationId("UpdateToolConfiguration").tag(tag)
-                    .description("Validate and save provider-owned tool configuration.")
-                    .parameter(parameterBuilder().name("pluginName").in(ParameterIn.PATH)
-                        .implementation(String.class).required(true))
-                    .parameter(parameterBuilder().name("localName").in(ParameterIn.PATH)
-                        .implementation(String.class).required(true))
-                    .requestBody(requestBodyBuilder().required(true).implementation(ToolConfig.class))
-                    .response(responseBuilder().implementation(ToolConfig.class)))
-            .build();
+        return route().GET(
+                        "tools",
+                        this::listTools,
+                        builder -> builder.operationId("ListTools")
+                                .description("List tools contributed by enabled plugins without executors.")
+                                .tag(tag)
+                                .response(responseBuilder().implementationArray(ToolDescriptor.class)))
+                .PUT(
+                        "tools/{pluginName}/{localName}/state",
+                        this::updateToolState,
+                        builder -> builder.operationId("UpdateToolState")
+                                .tag(tag)
+                                .description("Enable or disable a shared tool for all consumers.")
+                                .parameter(parameterBuilder()
+                                        .name("pluginName")
+                                        .in(ParameterIn.PATH)
+                                        .implementation(String.class)
+                                        .required(true))
+                                .parameter(parameterBuilder()
+                                        .name("localName")
+                                        .in(ParameterIn.PATH)
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(
+                                        requestBodyBuilder().required(true).implementation(ToolEnabledRequest.class))
+                                .response(responseBuilder().implementation(ToolDescriptor.class)))
+                .GET(
+                        "tools/{pluginName}/{localName}/configuration",
+                        this::getToolConfiguration,
+                        builder -> builder.operationId("GetToolConfiguration")
+                                .tag(tag)
+                                .description("Get provider-owned configuration values without credentials.")
+                                .parameter(parameterBuilder()
+                                        .name("pluginName")
+                                        .in(ParameterIn.PATH)
+                                        .implementation(String.class)
+                                        .required(true))
+                                .parameter(parameterBuilder()
+                                        .name("localName")
+                                        .in(ParameterIn.PATH)
+                                        .implementation(String.class)
+                                        .required(true))
+                                .response(responseBuilder().implementation(ToolConfig.class)))
+                .PUT(
+                        "tools/{pluginName}/{localName}/configuration",
+                        this::updateToolConfiguration,
+                        builder -> builder.operationId("UpdateToolConfiguration")
+                                .tag(tag)
+                                .description("Validate and save provider-owned tool configuration.")
+                                .parameter(parameterBuilder()
+                                        .name("pluginName")
+                                        .in(ParameterIn.PATH)
+                                        .implementation(String.class)
+                                        .required(true))
+                                .parameter(parameterBuilder()
+                                        .name("localName")
+                                        .in(ParameterIn.PATH)
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder().required(true).implementation(ToolConfig.class))
+                                .response(responseBuilder().implementation(ToolConfig.class)))
+                .build();
     }
 
     @Override
@@ -75,30 +103,32 @@ public class ToolConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> updateToolState(ServerRequest request) {
         return request.bodyToMono(ToolEnabledRequest.class)
-            .switchIfEmpty(Mono.error(badRequest("Tool enabled state is required")))
-            .flatMap(body -> {
-                if (body.enabled() == null) {
-                    return Mono.error(badRequest("Tool enabled state is required"));
-                }
-                return toolService.updateEnabled(id(request), body.enabled());
-            })
-            .onErrorMap(IllegalArgumentException.class, error -> badRequest(error.getMessage()))
-            .flatMap(ServerResponse.ok()::bodyValue);
+                .switchIfEmpty(Mono.error(badRequest("Tool enabled state is required")))
+                .flatMap(body -> {
+                    if (body.enabled() == null) {
+                        return Mono.error(badRequest("Tool enabled state is required"));
+                    }
+                    return toolService.updateEnabled(id(request), body.enabled());
+                })
+                .onErrorMap(IllegalArgumentException.class, error -> badRequest(error.getMessage()))
+                .flatMap(ServerResponse.ok()::bodyValue);
     }
 
     private Mono<ServerResponse> getToolConfiguration(ServerRequest request) {
-        return toolService.getConfiguration(id(request)).map(ToolConfig::new)
-            .onErrorMap(IllegalArgumentException.class, error -> badRequest(error.getMessage()))
-            .flatMap(ServerResponse.ok()::bodyValue);
+        return toolService
+                .getConfiguration(id(request))
+                .map(ToolConfig::new)
+                .onErrorMap(IllegalArgumentException.class, error -> badRequest(error.getMessage()))
+                .flatMap(ServerResponse.ok()::bodyValue);
     }
 
     private Mono<ServerResponse> updateToolConfiguration(ServerRequest request) {
         return request.bodyToMono(ToolConfig.class)
-            .switchIfEmpty(Mono.error(badRequest("Tool configuration is required")))
-            .flatMap(body -> toolService.updateConfiguration(id(request), body.values()))
-            .map(ToolConfig::new)
-            .onErrorMap(IllegalArgumentException.class, error -> badRequest(error.getMessage()))
-            .flatMap(ServerResponse.ok()::bodyValue);
+                .switchIfEmpty(Mono.error(badRequest("Tool configuration is required")))
+                .flatMap(body -> toolService.updateConfiguration(id(request), body.values()))
+                .map(ToolConfig::new)
+                .onErrorMap(IllegalArgumentException.class, error -> badRequest(error.getMessage()))
+                .flatMap(ServerResponse.ok()::bodyValue);
     }
 
     private static String id(ServerRequest request) {
@@ -109,7 +139,7 @@ public class ToolConsoleEndpoint implements CustomEndpoint {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
-    public record ToolEnabledRequest(Boolean enabled) { }
+    public record ToolEnabledRequest(Boolean enabled) {}
 
-    public record ToolConfig(Map<String, Object> values) { }
+    public record ToolConfig(Map<String, Object> values) {}
 }

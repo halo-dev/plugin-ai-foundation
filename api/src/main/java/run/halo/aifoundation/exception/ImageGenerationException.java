@@ -3,25 +3,19 @@ package run.halo.aifoundation.exception;
 /**
  * Raised when an image generation provider response cannot be treated as a successful result.
  *
- * <p>This exception is used for failed image-generation semantics after a provider call, for
- * example when the provider returned no usable image. Capability and media validation failures use
- * more specific exception types before the provider is invoked.
+ * <p>This exception is used for failed image-generation semantics after a provider call, for example when the provider
+ * returned no usable image. Capability and media validation failures use more specific exception types before the
+ * provider is invoked.
  */
 public class ImageGenerationException extends AiFoundationException {
 
-    /**
-     * Halo model resource name involved in the failed generation.
-     */
+    /** Halo model resource name involved in the failed generation. */
     private final String modelName;
 
-    /**
-     * Halo provider resource name involved in the failed generation.
-     */
+    /** Halo provider resource name involved in the failed generation. */
     private final String providerName;
 
-    /**
-     * Provider type identifier involved in the failed generation.
-     */
+    /** Provider type identifier involved in the failed generation. */
     private final String providerType;
 
     /**
@@ -32,8 +26,7 @@ public class ImageGenerationException extends AiFoundationException {
      * @param providerName Halo provider resource name
      * @param providerType provider type identifier
      */
-    public ImageGenerationException(String message, String modelName, String providerName,
-        String providerType) {
+    public ImageGenerationException(String message, String modelName, String providerName, String providerType) {
         super(message);
         this.modelName = modelName;
         this.providerName = providerName;

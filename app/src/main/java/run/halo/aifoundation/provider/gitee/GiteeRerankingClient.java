@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
-import run.halo.aifoundation.provider.support.rerank.AbstractHttpRerankingClient;
 import run.halo.aifoundation.provider.support.MediaContentSources;
 import run.halo.aifoundation.provider.support.ProviderUris;
+import run.halo.aifoundation.provider.support.rerank.AbstractHttpRerankingClient;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 
@@ -19,8 +19,7 @@ public final class GiteeRerankingClient extends AbstractHttpRerankingClient {
     private final String baseUrl;
     private final String modelId;
 
-    public GiteeRerankingClient(String baseUrl, String modelId, String apiKey,
-        WebClient.Builder webClientBuilder) {
+    public GiteeRerankingClient(String baseUrl, String modelId, String apiKey, WebClient.Builder webClientBuilder) {
         super("gitee-moark", modelId, apiKey, webClientBuilder);
         this.baseUrl = ProviderUris.withoutTrailingSlashes(baseUrl);
         this.modelId = modelId;
@@ -34,8 +33,7 @@ public final class GiteeRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(RerankRequest request, Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
         applyOptions(body, nativeOptions, "model", "query", "documents", "top_n");
         body.put("model", modelId);
@@ -76,8 +74,7 @@ public final class GiteeRerankingClient extends AbstractHttpRerankingClient {
             return;
         }
         if (request.getDocuments().size() > 25) {
-            throw new IllegalArgumentException(
-                "Gitee AI multimodal rerank accepts at most 25 documents");
+            throw new IllegalArgumentException("Gitee AI multimodal rerank accepts at most 25 documents");
         }
         validateDocuments(request.getDocuments());
     }
@@ -98,8 +95,7 @@ public final class GiteeRerankingClient extends AbstractHttpRerankingClient {
         if (hasText(document.getText())) {
             return;
         }
-        throw new IllegalArgumentException(
-            "Gitee AI rerank document must contain text or an image");
+        throw new IllegalArgumentException("Gitee AI rerank document must contain text or an image");
     }
 
     private boolean isMultimodal(RerankRequest request) {
@@ -129,8 +125,7 @@ public final class GiteeRerankingClient extends AbstractHttpRerankingClient {
                 value.put("text", document.getText());
             }
             if (document.getImage() != null) {
-                value.put("image", MediaContentSources.urlOrDataUrl(document.getImage(),
-                    "Gitee AI rerank image"));
+                value.put("image", MediaContentSources.urlOrDataUrl(document.getImage(), "Gitee AI rerank image"));
             }
             values.add(Map.copyOf(value));
         }
@@ -143,5 +138,4 @@ public final class GiteeRerankingClient extends AbstractHttpRerankingClient {
         }
         return !value.isBlank();
     }
-
 }

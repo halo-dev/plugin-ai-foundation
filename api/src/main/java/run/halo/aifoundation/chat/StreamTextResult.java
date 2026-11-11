@@ -2,6 +2,7 @@ package run.halo.aifoundation.chat;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.message.ModelMessage;
@@ -17,14 +18,12 @@ import run.halo.aifoundation.ui.UIMessageChunk;
 import run.halo.aifoundation.ui.UIMessageStream;
 import run.halo.aifoundation.ui.UIMessageStreamMapper;
 import run.halo.aifoundation.ui.UIMessageStreamResponse;
-import java.util.function.Function;
 
 /**
  * Result returned by {@link LanguageModel#streamText(GenerateTextRequest)}.
  *
- * <p>The views exposed by this class are different projections of one streaming generation. A
- * provider implementation must not start a second model request when callers consume more than one
- * view.
+ * <p>The views exposed by this class are different projections of one streaming generation. A provider implementation
+ * must not start a second model request when callers consume more than one view.
  *
  * <pre>{@code
  * StreamTextResult result = model.streamText(request);
@@ -37,39 +36,31 @@ import java.util.function.Function;
  */
 public class StreamTextResult {
 
-    /**
-     * Full provider-neutral stream event view for the generation.
-     */
+    /** Full provider-neutral stream event view for the generation. */
     private final Flux<TextStreamPart> fullStream;
 
-    /**
-     * Convenience stream containing only generated answer text deltas.
-     */
+    /** Convenience stream containing only generated answer text deltas. */
     private final Flux<String> textStream;
 
-    /**
-     * Progressive structured-output snapshots when the output text is parseable.
-     */
+    /** Progressive structured-output snapshots when the output text is parseable. */
     private final Flux<Object> partialOutputStream;
 
-    /**
-     * Completed structured array elements when array output is configured.
-     */
+    /** Completed structured array elements when array output is configured. */
     private final Flux<Object> elementStream;
 
-    /**
-     * Final parsed structured output, when structured output is configured.
-     */
+    /** Final parsed structured output, when structured output is configured. */
     private final Mono<Object> output;
 
-    /**
-     * Final normalized generation result.
-     */
+    /** Final normalized generation result. */
     private final Mono<GenerateTextResult> result;
 
-    public StreamTextResult(Flux<TextStreamPart> fullStream, Flux<String> textStream,
-        Flux<Object> partialOutputStream, Flux<Object> elementStream, Mono<Object> output,
-        Mono<GenerateTextResult> result) {
+    public StreamTextResult(
+            Flux<TextStreamPart> fullStream,
+            Flux<String> textStream,
+            Flux<Object> partialOutputStream,
+            Flux<Object> elementStream,
+            Mono<Object> output,
+            Mono<GenerateTextResult> result) {
         this.fullStream = fullStream;
         this.textStream = textStream;
         this.partialOutputStream = partialOutputStream;
@@ -78,25 +69,17 @@ public class StreamTextResult {
         this.result = result;
     }
 
-    /**
-     * Full Halo stream protocol with lifecycle, text, reasoning, tool, raw, finish, and error
-     * parts.
-     */
+    /** Full Halo stream protocol with lifecycle, text, reasoning, tool, raw, finish, and error parts. */
     public Flux<TextStreamPart> fullStream() {
         return fullStream;
     }
 
-    /**
-     * Generated answer text deltas only.
-     */
+    /** Generated answer text deltas only. */
     public Flux<String> textStream() {
         return textStream;
     }
 
-    /**
-     * Best-effort partial structured outputs. Partial values are not final schema validation
-     * success.
-     */
+    /** Best-effort partial structured outputs. Partial values are not final schema validation success. */
     public Flux<Object> partialOutputStream() {
         return partialOutputStream;
     }
@@ -109,16 +92,12 @@ public class StreamTextResult {
         return elementStream;
     }
 
-    /**
-     * Complete parsed structured output after final validation succeeds.
-     */
+    /** Complete parsed structured output after final validation succeeds. */
     public Mono<Object> output() {
         return output;
     }
 
-    /**
-     * Final accumulated generation result.
-     */
+    /** Final accumulated generation result. */
     public Mono<GenerateTextResult> result() {
         return result;
     }
@@ -195,25 +174,18 @@ public class StreamTextResult {
         return result.flatMap(value -> Mono.justOrEmpty(value.getProviderMetadata()));
     }
 
-    /**
-     * Converts the full model stream into a frontend-facing Halo UI message stream.
-     */
+    /** Converts the full model stream into a frontend-facing Halo UI message stream. */
     public UIMessageStream toUIMessageStream() {
         return UIMessageStreamMapper.toUIMessageStream(fullStream);
     }
 
-    /**
-     * Creates an HTTP-friendly response descriptor for the UI message stream.
-     */
+    /** Creates an HTTP-friendly response descriptor for the UI message stream. */
     public UIMessageStreamResponse toUIMessageStreamResponse() {
         return UIMessageStreamMapper.toResponse(fullStream);
     }
 
-    /**
-     * Creates an HTTP-friendly response descriptor with serializer-backed SSE body frames.
-     */
-    public UIMessageStreamResponse toUIMessageStreamResponse(
-        Function<UIMessageChunk, String> serializer) {
+    /** Creates an HTTP-friendly response descriptor with serializer-backed SSE body frames. */
+    public UIMessageStreamResponse toUIMessageStreamResponse(Function<UIMessageChunk, String> serializer) {
         return UIMessageStreamMapper.toResponse(fullStream, serializer);
     }
 }

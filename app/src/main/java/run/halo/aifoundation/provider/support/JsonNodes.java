@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 /** Shared presence semantics for Jackson tree values returned by provider APIs. */
 public final class JsonNodes {
 
-    private JsonNodes() {
-    }
+    private JsonNodes() {}
 
     public static boolean isAbsent(JsonNode node) {
         if (node == null) {

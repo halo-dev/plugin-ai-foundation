@@ -38,8 +38,8 @@ final class MiMoMessagesProfile implements AnthropicMessagesProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         body.putIfAbsent("max_tokens", 4096);
         range(body.get("temperature"), "temperature", 0d, 1.5d);
         range(body.get("top_p"), "top_p", 0.01d, 1d);
@@ -86,6 +86,6 @@ final class MiMoMessagesProfile implements AnthropicMessagesProfile {
 
     private IllegalArgumentException rangeError(String field, double minimum, double maximum) {
         return new IllegalArgumentException(
-            "MiMo Messages " + field + " must be between " + minimum + " and " + maximum);
+                "MiMo Messages " + field + " must be between " + minimum + " and " + maximum);
     }
 }

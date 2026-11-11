@@ -20,6 +20,9 @@ import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.catalog.ModelCatalogEnricher;
+import run.halo.aifoundation.catalog.ModelCatalogStatus;
+import run.halo.aifoundation.catalog.ModelsDevCatalogService;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -40,99 +43,117 @@ import run.halo.app.extension.router.selector.SelectorUtil;
 public class ProviderConsoleEndpoint implements CustomEndpoint {
 
     private static final UriReferencePolicy ABSOLUTE_ENDPOINT_REFERENCES =
-        UriReferencePolicy.allowing("http://", "https://", "//");
+            UriReferencePolicy.allowing("http://", "https://", "//");
 
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
     private final SecretResolver secretResolver;
     private final ParameterMappingValidator parameterMappingValidator;
+    private final ModelCatalogEnricher catalogEnricher;
+    private final ModelsDevCatalogService catalogService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.aifoundation.halo.run/v1alpha1/Provider";
-        return route()
-            .GET("providers", this::listProviders,
-                builder -> builder.operationId("ListProviders")
-                    .description("List all AI providers.")
-                    .tag(tag)
-                    .response(responseBuilder()
-                        .implementationArray(AiProvider.class))
-            )
-            .GET("providers/{name}", this::getProvider,
-                builder -> builder.operationId("GetProvider")
-                    .description("Get an AI provider by name.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
-                    .response(responseBuilder().implementation(AiProvider.class))
-            )
-            .POST("providers", this::createProvider,
-                builder -> builder.operationId("CreateProvider")
-                    .description("Create a new AI provider.")
-                    .tag(tag)
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(AiProvider.class))
-                    .response(responseBuilder().implementation(AiProvider.class))
-            )
-            .PUT("providers/{name}", this::updateProvider,
-                builder -> builder.operationId("UpdateProvider")
-                    .description("Update an AI provider.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(AiProvider.class))
-                    .response(responseBuilder().implementation(AiProvider.class))
-            )
-            .DELETE("providers/{name}", this::deleteProvider,
-                builder -> builder.operationId("DeleteProvider")
-                    .description("Delete an AI provider.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
-                    .response(responseBuilder().implementation(Void.class))
-            )
-            .GET("providers/{name}/discover-models", this::discoverModels,
-                builder -> builder.operationId("DiscoverProviderModels")
-                    .description("Discover remote models for a provider.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
-                    .response(responseBuilder()
-                        .implementation(ProviderModelDiscoveryResponse.class))
-            )
-            .POST("providers/{name}/connectivity", this::testConnectivity,
-                builder -> builder.operationId("TestProviderConnectivity")
-                    .description("Test provider connectivity.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
-                    .response(responseBuilder()
-                        .implementation(Map.class))
-            )
-            .build();
+        return route().GET(
+                        "model-catalog",
+                        request -> ServerResponse.ok().bodyValue(catalogService.status()),
+                        builder -> builder.operationId("GetModelCatalogStatus")
+                                .description("Read the locally cached models.dev catalog status.")
+                                .tag(tag)
+                                .response(responseBuilder().implementation(ModelCatalogStatus.class)))
+                .POST(
+                        "model-catalog/refresh",
+                        request -> catalogService
+                                .refresh()
+                                .flatMap(status -> ServerResponse.ok().bodyValue(status)),
+                        builder -> builder.operationId("RefreshModelCatalog")
+                                .description(
+                                        "Refresh third-party capability metadata; " + "never updates saved models.")
+                                .tag(tag)
+                                .response(responseBuilder().implementation(ModelCatalogStatus.class)))
+                .GET(
+                        "providers",
+                        this::listProviders,
+                        builder -> builder.operationId("ListProviders")
+                                .description("List all AI providers.")
+                                .tag(tag)
+                                .response(responseBuilder().implementationArray(AiProvider.class)))
+                .GET(
+                        "providers/{name}",
+                        this::getProvider,
+                        builder -> builder.operationId("GetProvider")
+                                .description("Get an AI provider by name.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Provider name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .response(responseBuilder().implementation(AiProvider.class)))
+                .POST(
+                        "providers",
+                        this::createProvider,
+                        builder -> builder.operationId("CreateProvider")
+                                .description("Create a new AI provider.")
+                                .tag(tag)
+                                .requestBody(requestBodyBuilder().required(true).implementation(AiProvider.class))
+                                .response(responseBuilder().implementation(AiProvider.class)))
+                .PUT(
+                        "providers/{name}",
+                        this::updateProvider,
+                        builder -> builder.operationId("UpdateProvider")
+                                .description("Update an AI provider.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Provider name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder().required(true).implementation(AiProvider.class))
+                                .response(responseBuilder().implementation(AiProvider.class)))
+                .DELETE(
+                        "providers/{name}",
+                        this::deleteProvider,
+                        builder -> builder.operationId("DeleteProvider")
+                                .description("Delete an AI provider.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Provider name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .response(responseBuilder().implementation(Void.class)))
+                .GET(
+                        "providers/{name}/discover-models",
+                        this::discoverModels,
+                        builder -> builder.operationId("DiscoverProviderModels")
+                                .description("Discover remote models for a provider.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Provider name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .response(responseBuilder().implementation(ProviderModelDiscoveryResponse.class)))
+                .POST(
+                        "providers/{name}/connectivity",
+                        this::testConnectivity,
+                        builder -> builder.operationId("TestProviderConnectivity")
+                                .description("Test provider connectivity.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Provider name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .response(responseBuilder().implementation(Map.class)))
+                .build();
     }
 
     @Override
@@ -141,59 +162,57 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> listProviders(ServerRequest request) {
-        return client.listAll(AiProvider.class, new ListOptions(),
-            Sort.by("metadata.creationTimestamp").descending())
-            .collectList()
-            .flatMap(providers -> ServerResponse.ok().bodyValue(providers));
+        return client.listAll(
+                        AiProvider.class,
+                        new ListOptions(),
+                        Sort.by("metadata.creationTimestamp").descending())
+                .collectList()
+                .flatMap(providers -> ServerResponse.ok().bodyValue(providers));
     }
 
     private Mono<ServerResponse> getProvider(ServerRequest request) {
         var name = request.pathVariable("name");
         return client.fetch(AiProvider.class, name)
-            .switchIfEmpty(Mono.error(
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
-            .flatMap(provider -> ServerResponse.ok().bodyValue(provider));
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+                .flatMap(provider -> ServerResponse.ok().bodyValue(provider));
     }
 
     private Mono<ServerResponse> createProvider(ServerRequest request) {
         return request.bodyToMono(AiProvider.class)
-            .flatMap(provider -> validateAndSaveProvider(provider, null))
-            .flatMap(created -> ServerResponse.ok().bodyValue(created));
+                .flatMap(provider -> validateAndSaveProvider(provider, null))
+                .flatMap(created -> ServerResponse.ok().bodyValue(created));
     }
 
     private Mono<ServerResponse> updateProvider(ServerRequest request) {
         var name = request.pathVariable("name");
         return request.bodyToMono(AiProvider.class)
-            .flatMap(provider -> validateAndSaveProvider(provider, name))
-            .flatMap(updated -> ServerResponse.ok().bodyValue(updated));
+                .flatMap(provider -> validateAndSaveProvider(provider, name))
+                .flatMap(updated -> ServerResponse.ok().bodyValue(updated));
     }
 
     private Mono<AiProvider> validateAndSaveProvider(AiProvider provider, String existingName) {
-        var providerType = provider.getSpec() != null
-            ? provider.getSpec().getProviderType() : null;
-        if (providerType == null
-            || !providerClientCache.getProviderTypeMap().containsKey(providerType)) {
+        var providerType = provider.getSpec() != null ? provider.getSpec().getProviderType() : null;
+        if (providerType == null || !providerClientCache.getProviderTypeMap().containsKey(providerType)) {
             return Mono.error(new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Unsupported provider type: " + providerType
-                    + ". Supported types: "
-                    + providerClientCache.getProviderTypeMap().keySet()));
+                    HttpStatus.BAD_REQUEST,
+                    "Unsupported provider type: " + providerType
+                            + ". Supported types: "
+                            + providerClientCache.getProviderTypeMap().keySet()));
         }
         var type = providerClientCache.getProviderType(providerType);
         if (type.requiresBaseUrl()) {
             var baseUrl = provider.getSpec().getBaseUrl();
             if (baseUrl == null || baseUrl.isBlank()) {
                 return Mono.error(new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Provider type '" + providerType + "' requires baseUrl"));
+                        HttpStatus.BAD_REQUEST, "Provider type '" + providerType + "' requires baseUrl"));
             }
         }
         try {
             validateProxyConfig(provider.getSpec());
             validateMaxInMemorySize(provider.getSpec());
             normalizeEndpointPaths(provider.getSpec());
-            parameterMappingValidator.validateProvider(
-                provider.getSpec().getParameterMappings(), type);
+            parameterMappingValidator.validateProvider(provider.getSpec().getParameterMappings(), type);
         } catch (IllegalArgumentException e) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
         }
@@ -207,14 +226,13 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             return client.create(provider);
         }
         return client.fetch(AiProvider.class, existingName)
-            .switchIfEmpty(Mono.error(
-                new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Provider not found: " + existingName)))
-            .flatMap(existing -> {
-                existing.setSpec(provider.getSpec());
-                providerClientCache.invalidate(existingName);
-                return client.update(existing);
-            });
+                .switchIfEmpty(Mono.error(
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + existingName)))
+                .flatMap(existing -> {
+                    existing.setSpec(provider.getSpec());
+                    providerClientCache.invalidate(existingName);
+                    return client.update(existing);
+                });
     }
 
     private void validateProxyConfig(AiProvider.AiProviderSpec spec) {
@@ -243,20 +261,15 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             return;
         }
         if (maxInMemorySize < 1024 || maxInMemorySize > 1024 * 1024 * 1024) {
-            throw new IllegalArgumentException(
-                "maxInMemorySize must be between 1024 and 1073741824 bytes");
+            throw new IllegalArgumentException("maxInMemorySize must be between 1024 and 1073741824 bytes");
         }
     }
 
     private void normalizeEndpointPaths(AiProvider.AiProviderSpec spec) {
-        spec.setChatEndpointPath(normalizeEndpointPath("chatEndpointPath",
-            spec.getChatEndpointPath()));
-        spec.setEmbeddingEndpointPath(normalizeEndpointPath("embeddingEndpointPath",
-            spec.getEmbeddingEndpointPath()));
-        spec.setRerankEndpointPath(normalizeEndpointPath("rerankEndpointPath",
-            spec.getRerankEndpointPath()));
-        spec.setImageEndpointPath(normalizeEndpointPath("imageEndpointPath",
-            spec.getImageEndpointPath()));
+        spec.setChatEndpointPath(normalizeEndpointPath("chatEndpointPath", spec.getChatEndpointPath()));
+        spec.setEmbeddingEndpointPath(normalizeEndpointPath("embeddingEndpointPath", spec.getEmbeddingEndpointPath()));
+        spec.setRerankEndpointPath(normalizeEndpointPath("rerankEndpointPath", spec.getRerankEndpointPath()));
+        spec.setImageEndpointPath(normalizeEndpointPath("imageEndpointPath", spec.getImageEndpointPath()));
     }
 
     private String normalizeEndpointPath(String fieldName, String value) {
@@ -273,100 +286,110 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     private Mono<ServerResponse> deleteProvider(ServerRequest request) {
         var name = request.pathVariable("name");
         return client.fetch(AiProvider.class, name)
-            .switchIfEmpty(Mono.error(
-                new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Provider not found: " + name)))
-            .flatMap(provider -> deleteProviderModels(name)
-                .then(client.delete(provider)))
-            .then(ServerResponse.noContent().build());
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+                .flatMap(provider -> deleteProviderModels(name).then(client.delete(provider)))
+                .then(ServerResponse.noContent().build());
     }
 
     private Mono<Void> deleteProviderModels(String providerName) {
-        var listOptions = SelectorUtil.labelAndFieldSelectorToListOptions(List.of(),
-            List.of("spec.providerName=" + providerName));
+        var listOptions = SelectorUtil.labelAndFieldSelectorToListOptions(
+                List.of(), List.of("spec.providerName=" + providerName));
         return client.listAll(AiModel.class, listOptions, null)
-            .flatMap(client::delete)
-            .then();
+                .flatMap(client::delete)
+                .then();
     }
 
     private Mono<ServerResponse> discoverModels(ServerRequest request) {
         var name = request.pathVariable("name");
         log.info("Discovering models for provider: {}", name);
         return client.fetch(AiProvider.class, name)
-            .switchIfEmpty(Mono.error(
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
-            .flatMap(provider -> {
-                var secretName = provider.getSpec().getApiKeySecretName();
-                return secretResolver.resolveApiKey(secretName)
-                    .flatMap(apiKey -> discoverModelsViaProviderType(provider, apiKey));
-            });
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+                .flatMap(provider -> {
+                    var secretName = provider.getSpec().getApiKeySecretName();
+                    return secretResolver
+                            .resolveApiKey(secretName)
+                            .flatMap(apiKey -> discoverModelsViaProviderType(provider, apiKey));
+                });
     }
 
     private Mono<ServerResponse> discoverModelsViaProviderType(AiProvider provider, String apiKey) {
         var providerName = provider.getMetadata().getName();
         AiProviderType providerType;
         try {
-            providerType = providerClientCache.getProviderType(provider.getSpec().getProviderType());
+            providerType =
+                    providerClientCache.getProviderType(provider.getSpec().getProviderType());
         } catch (IllegalArgumentException e) {
-            return Mono.error(new ResponseStatusException(
-                HttpStatus.BAD_REQUEST, e.getMessage()));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
         }
-        return providerType.discoverModels(provider, apiKey)
-            .map(models -> models.stream()
-                .map(dm -> new DiscoveredModelItem(
-                    dm.modelId(),
-                    dm.displayName(),
-                    "",
-                    dm.modelType(),
-                    dm.features().stream().toList(),
-                    dm.source(),
-                    dm.confidence(),
-                    dm.adapterType() != null
-                        ? dm.adapterType()
-                        : providerType.recommendAdapterType(dm).orElse(null),
-                    dm.capabilities(),
-                    dm.capabilitySources()
-                ))
-                .toList()
-            )
-            .flatMap(models -> {
-                log.info("Discovered {} models for provider {}", models.size(), providerName);
-                return ServerResponse.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(new ProviderModelDiscoveryResponse(providerName, models));
-            });
+        return providerType
+                .discoverModels(provider, apiKey)
+                .map(models -> catalogEnricher.enrich(provider, providerType, models))
+                .map(models -> models.stream()
+                        .map(dm -> new DiscoveredModelItem(
+                                dm.modelId(),
+                                dm.displayName(),
+                                "",
+                                dm.modelType(),
+                                dm.features().stream().toList(),
+                                dm.source(),
+                                dm.confidence(),
+                                dm.adapterType() != null
+                                        ? dm.adapterType()
+                                        : providerType.recommendAdapterType(dm).orElse(null),
+                                dm.capabilities(),
+                                dm.capabilitySources(),
+                                dm.catalogMatch(),
+                                dm.catalogParameters()))
+                        .toList())
+                .flatMap(models -> {
+                    log.info("Discovered {} models for provider {}", models.size(), providerName);
+                    return ServerResponse.ok()
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(
+                                    new ProviderModelDiscoveryResponse(providerName, models, catalogService.status()));
+                });
     }
 
     private Mono<ServerResponse> testConnectivity(ServerRequest request) {
         var name = request.pathVariable("name");
         return client.fetch(AiProvider.class, name)
-            .switchIfEmpty(Mono.error(
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
-            .flatMap(provider -> {
-                var secretName = provider.getSpec().getApiKeySecretName();
-                return secretResolver.resolveApiKey(secretName)
-                    .flatMap(apiKey -> performConnectivityCheck(provider, apiKey))
-                    .flatMap(result -> updateConnectivityStatus(provider, result))
-                    .flatMap(updated -> ServerResponse.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(Map.of(
-                            "phase", updated.getStatus().getPhase().name(),
-                            "message", updated.getStatus().getMessage() != null
-                                ? updated.getStatus().getMessage() : "",
-                            "lastCheckedAt", updated.getStatus().getLastCheckedAt().toString()
-                        )));
-            });
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+                .flatMap(provider -> {
+                    var secretName = provider.getSpec().getApiKeySecretName();
+                    return secretResolver
+                            .resolveApiKey(secretName)
+                            .flatMap(apiKey -> performConnectivityCheck(provider, apiKey))
+                            .flatMap(result -> updateConnectivityStatus(provider, result))
+                            .flatMap(updated -> ServerResponse.ok()
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .bodyValue(Map.of(
+                                            "phase",
+                                                    updated.getStatus()
+                                                            .getPhase()
+                                                            .name(),
+                                            "message",
+                                                    updated.getStatus().getMessage() != null
+                                                            ? updated.getStatus()
+                                                                    .getMessage()
+                                                            : "",
+                                            "lastCheckedAt",
+                                                    updated.getStatus()
+                                                            .getLastCheckedAt()
+                                                            .toString())));
+                });
     }
 
-    private Mono<AiProvider> updateConnectivityStatus(AiProvider provider,
-        ConnectivityResult result) {
+    private Mono<AiProvider> updateConnectivityStatus(AiProvider provider, ConnectivityResult result) {
         if (provider.getStatus() == null) {
             provider.setStatus(new AiProvider.AiProviderStatus());
         }
         var status = provider.getStatus();
         status.setLastCheckedAt(Instant.now());
-        status.setPhase(result.isSuccess()
-            ? AiProvider.AiProviderStatus.Phase.OK : AiProvider.AiProviderStatus.Phase.ERROR);
+        status.setPhase(
+                result.isSuccess() ? AiProvider.AiProviderStatus.Phase.OK : AiProvider.AiProviderStatus.Phase.ERROR);
         status.setMessage(result.isSuccess() ? "Connectivity check passed" : result.getMessage());
         return client.update(provider);
     }
@@ -375,12 +398,14 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
         providerClientCache.invalidate(provider.getMetadata().getName());
         var type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
         return type.discoverModels(provider, apiKey)
-            .map(models -> new ConnectivityResult(true, "Connectivity check passed"))
-            .onErrorResume(e -> {
-                log.warn("Connectivity check failed for provider: {}",
-                    provider.getMetadata().getName(), e);
-                return Mono.just(new ConnectivityResult(false, e.getMessage()));
-            });
+                .map(models -> new ConnectivityResult(true, "Connectivity check passed"))
+                .onErrorResume(e -> {
+                    log.warn(
+                            "Connectivity check failed for provider: {}",
+                            provider.getMetadata().getName(),
+                            e);
+                    return Mono.just(new ConnectivityResult(false, e.getMessage()));
+                });
     }
 
     record ConnectivityResult(boolean success, String message) {

@@ -12,14 +12,12 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 /** Validates the documented request options accepted by OpenRouter's embeddings router. */
 final class OpenRouterEmbeddingOptionsFactory {
 
-    private static final Set<String> FIELDS = Set.of(
-        "provider", "user", "encoding_format", "input_type");
+    private static final Set<String> FIELDS = Set.of("provider", "user", "encoding_format", "input_type");
 
-    private OpenRouterEmbeddingOptionsFactory() {
-    }
+    private OpenRouterEmbeddingOptionsFactory() {}
 
-    static EmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    static EmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
@@ -27,30 +25,28 @@ final class OpenRouterEmbeddingOptionsFactory {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(FIELDS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported OpenRouter embedding option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException(
+                    "Unsupported OpenRouter embedding option(s): " + String.join(", ", unknown));
         }
         if (!hasRuntimeOverrides(request, values)) {
             return null;
         }
         var format = string(values.get("encoding_format"), "encoding_format");
         if (format != null && !Set.of("float", "base64").contains(format)) {
-            throw new IllegalArgumentException(
-                "OpenRouter encoding_format must be 'float' or 'base64'");
+            throw new IllegalArgumentException("OpenRouter encoding_format must be 'float' or 'base64'");
         }
         OpenRouterRoutingOptions.validate(values.get("provider"), "embedding");
         return OpenRouterEmbeddingOptions.builder()
-            .dimensions(request.getDimensions())
-            .encodingFormat(format)
-            .inputType(string(values.get("input_type"), "input_type"))
-            .user(string(values.get("user"), "user"))
-            .provider(object(values.get("provider"), "provider"))
-            .customHeaders(request.getHeaders())
-            .build();
+                .dimensions(request.getDimensions())
+                .encodingFormat(format)
+                .inputType(string(values.get("input_type"), "input_type"))
+                .user(string(values.get("user"), "user"))
+                .provider(object(values.get("provider"), "provider"))
+                .customHeaders(request.getHeaders())
+                .build();
     }
 
-    private static boolean hasRuntimeOverrides(EmbeddingRequest request,
-        Map<String, Object> values) {
+    private static boolean hasRuntimeOverrides(EmbeddingRequest request, Map<String, Object> values) {
         if (request.getDimensions() != null) {
             return true;
         }

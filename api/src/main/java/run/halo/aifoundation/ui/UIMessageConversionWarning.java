@@ -10,6 +10,5 @@ package run.halo.aifoundation.ui;
  * @param code stable diagnostic code
  * @param message human-readable diagnostic text
  */
-public record UIMessageConversionWarning(String messageId, String role, String partType,
-                                         String partId, String code, String message) {
-}
+public record UIMessageConversionWarning(
+        String messageId, String role, String partType, String partId, String code, String message) {}

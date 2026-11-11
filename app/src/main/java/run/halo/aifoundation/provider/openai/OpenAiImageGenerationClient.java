@@ -10,14 +10,14 @@ import java.util.Set;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationWarning;
-import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.media.DataContent;
+import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
@@ -29,32 +29,27 @@ import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 /** OpenAI image generation and multipart editing adapter. */
 public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerationClient {
 
-    private static final Set<String> GENERATION_OPTIONS = Set.of(
-        "quality", "background", "output_format", "output_compression", "moderation",
-        "style", "user");
-    private static final Set<String> EDIT_OPTIONS = Set.of(
-        "quality", "background", "output_format", "output_compression", "input_fidelity",
-        "user");
-    private static final Set<String> EDIT_IMAGE_TYPES = Set.of(
-        "image/png", "image/jpeg", "image/webp");
+    private static final Set<String> GENERATION_OPTIONS =
+            Set.of("quality", "background", "output_format", "output_compression", "moderation", "style", "user");
+    private static final Set<String> EDIT_OPTIONS =
+            Set.of("quality", "background", "output_format", "output_compression", "input_fidelity", "user");
+    private static final Set<String> EDIT_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp");
 
     private final WebClient editWebClient;
 
-    public OpenAiImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public OpenAiImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
         this.editWebClient = webClientBuilder.build();
     }
 
     @Override
-    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target) {
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request, ParameterMappingTarget target) {
         return generateImage(request, target, Map.of());
     }
 
     @Override
-    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+    public Mono<GenerateImageResult> generateImage(
+            GenerateImageRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         if (!isEditRequest(request)) {
             return super.generateImage(request, target, nativeOptions);
         }
@@ -67,20 +62,18 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         validateCommon(request);
         return requestFields(request, nativeOptions, GENERATION_OPTIONS);
     }
 
-    private Map<String, Object> requestFields(GenerateImageRequest request,
-        Map<String, Object> nativeOptions, Set<String> allowedOptions) {
+    private Map<String, Object> requestFields(
+            GenerateImageRequest request, Map<String, Object> nativeOptions, Set<String> allowedOptions) {
         var body = new LinkedHashMap<String, Object>();
         var unknown = new LinkedHashSet<>(nativeOptions.keySet());
         unknown.removeAll(allowedOptions);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported OpenAI image option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported OpenAI image option(s): " + String.join(", ", unknown));
         }
         nativeOptions.forEach((key, value) -> {
             if (value == null) {
@@ -93,57 +86,58 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
         putIfNotNull(body, "n", request.getN());
         putIfHasText(body, "size", request.getSize());
         if (request.getResponseFormat() != null) {
-            body.put("response_format", switch (request.getResponseFormat()) {
-                case URL -> "url";
-                case BASE64 -> "b64_json";
-            });
+            body.put(
+                    "response_format",
+                    switch (request.getResponseFormat()) {
+                        case URL -> "url";
+                        case BASE64 -> "b64_json";
+                    });
         }
         return body;
     }
 
-    private Mono<GenerateImageResult> editImage(GenerateImageRequest request,
-        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+    private Mono<GenerateImageResult> editImage(
+            GenerateImageRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         validateEdit(request);
         var fields = mappedEditFields(request, target, nativeOptions);
         var multipart = multipartBody(fields, request);
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + "/images/edits";
         var diagnostics = ProviderDiagnostics.create(options.providerType(), "image-edit");
         diagnostics.request(url, editDiagnostics(fields, request), false);
-        return editWebClient.post()
-            .uri(url)
-            .headers(headers -> {
-                if (hasText(options.apiKey())) {
-                    headers.setBearerAuth(options.apiKey());
-                }
-                options.customHeaders().forEach(headers::set);
-                if (request.getHeaders() != null) {
-                    request.getHeaders().forEach(headers::set);
-                }
-            })
-            .body(BodyInserters.fromMultipartData(multipart.build()))
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response,
-                        options.providerType(), "image-edit", diagnostics);
-                }
-                return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> imageResponse(data, request, nativeOptions));
-            });
+        return editWebClient
+                .post()
+                .uri(url)
+                .headers(headers -> {
+                    if (hasText(options.apiKey())) {
+                        headers.setBearerAuth(options.apiKey());
+                    }
+                    options.customHeaders().forEach(headers::set);
+                    if (request.getHeaders() != null) {
+                        request.getHeaders().forEach(headers::set);
+                    }
+                })
+                .body(BodyInserters.fromMultipartData(multipart.build()))
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(
+                                response, options.providerType(), "image-edit", diagnostics);
+                    }
+                    return ProviderHttpResponseSupport.body(response, diagnostics)
+                            .map(data -> imageResponse(data, request, nativeOptions));
+                });
     }
 
-    private Map<String, Object> mappedEditFields(GenerateImageRequest request,
-        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+    private Map<String, Object> mappedEditFields(
+            GenerateImageRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         var fields = requestFields(request, nativeOptions, EDIT_OPTIONS);
         var merged = ImageParameterMappingMerger.merge(fields, target);
         if (target != null && !target.parameters().isEmpty()) {
-            throw new IllegalArgumentException(
-                "OpenAI image edit parameter mappings must target root fields");
+            throw new IllegalArgumentException("OpenAI image edit parameter mappings must target root fields");
         }
         return merged;
     }
 
-    private MultipartBodyBuilder multipartBody(Map<String, Object> fields,
-        GenerateImageRequest request) {
+    private MultipartBodyBuilder multipartBody(Map<String, Object> fields, GenerateImageRequest request) {
         var multipart = new MultipartBodyBuilder();
         fields.forEach((name, value) -> multipart.part(name, value.toString()));
         var images = request.getImages();
@@ -156,17 +150,15 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
         return multipart;
     }
 
-    private void addFilePart(MultipartBodyBuilder multipart, String name, DataContent content,
-        String fallbackName) {
+    private void addFilePart(MultipartBodyBuilder multipart, String name, DataContent content, String fallbackName) {
         var filename = hasText(content.getFilename())
-            ? content.getFilename() : fallbackName + extension(content.getMediaType());
+                ? content.getFilename()
+                : fallbackName + extension(content.getMediaType());
         var resource = new NamedByteArrayResource(content.decodedData(), filename);
-        multipart.part(name, resource)
-            .contentType(MediaType.parseMediaType(content.getMediaType()));
+        multipart.part(name, resource).contentType(MediaType.parseMediaType(content.getMediaType()));
     }
 
-    private Map<String, Object> editDiagnostics(Map<String, Object> fields,
-        GenerateImageRequest request) {
+    private Map<String, Object> editDiagnostics(Map<String, Object> fields, GenerateImageRequest request) {
         var summary = new LinkedHashMap<>(fields);
         summary.put("imageCount", request.getImages().size());
         summary.put("mask", request.getMask() != null);
@@ -174,8 +166,8 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "OpenAI");
         var images = new ArrayList<GeneratedFile>();
         var warnings = new ArrayList<ImageGenerationWarning>();
@@ -185,25 +177,36 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
             var revised = textOrNull(item.path("revised_prompt"));
             if (hasText(revised)) {
                 metadata.put("revisedPrompt", revised);
-                warnings.add(ImageGenerationWarning.builder().code("prompt-revised")
-                    .message("OpenAI revised the image generation prompt.")
-                    .providerMetadata(Map.of("revisedPrompt", revised)).build());
+                warnings.add(ImageGenerationWarning.builder()
+                        .code("prompt-revised")
+                        .message("OpenAI revised the image generation prompt.")
+                        .providerMetadata(Map.of("revisedPrompt", revised))
+                        .build());
             }
             var base64 = textOrNull(item.path("b64_json"));
             var url = textOrNull(item.path("url"));
             if (hasText(base64)) {
-                images.add(GeneratedFile.builder().base64(base64).mediaType(mediaType)
-                    .metadata(Map.copyOf(metadata)).build());
+                images.add(GeneratedFile.builder()
+                        .base64(base64)
+                        .mediaType(mediaType)
+                        .metadata(Map.copyOf(metadata))
+                        .build());
             } else if (hasText(url)) {
-                images.add(GeneratedFile.builder().url(url).mediaType(mediaType)
-                    .metadata(Map.copyOf(metadata)).build());
+                images.add(GeneratedFile.builder()
+                        .url(url)
+                        .mediaType(mediaType)
+                        .metadata(Map.copyOf(metadata))
+                        .build());
             }
         }
-        return result(data, root, List.copyOf(images),
-            tokenUsage(root.path("usage"), images.size()), List.copyOf(warnings),
-            textOrNull(root.path("id")),
-            hasText(textOrNull(root.path("model")))
-                ? textOrNull(root.path("model")) : options.model());
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                tokenUsage(root.path("usage"), images.size()),
+                List.copyOf(warnings),
+                textOrNull(root.path("id")),
+                hasText(textOrNull(root.path("model"))) ? textOrNull(root.path("model")) : options.model());
     }
 
     private void validateCommon(GenerateImageRequest request) {
@@ -222,12 +225,10 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     private void validateEdit(GenerateImageRequest request) {
         validateCommon(request);
         if (request.getImages() == null) {
-            throw new IllegalArgumentException(
-                "OpenAI image editing requires at least one input image");
+            throw new IllegalArgumentException("OpenAI image editing requires at least one input image");
         }
         if (request.getImages().isEmpty()) {
-            throw new IllegalArgumentException(
-                "OpenAI image editing requires at least one input image");
+            throw new IllegalArgumentException("OpenAI image editing requires at least one input image");
         }
         for (var image : request.getImages()) {
             validateEditFile(image, "OpenAI edit image");

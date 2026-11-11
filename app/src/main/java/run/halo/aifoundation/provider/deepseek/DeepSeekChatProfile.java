@@ -20,12 +20,11 @@ final class DeepSeekChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         validateReasoningEffort(body.get("reasoning_effort"));
         validateStrictTools(body.get("tools"), options);
-        var thinking = body.get("thinking") instanceof Map<?, ?> value
-            ? value.get("type") : null;
+        var thinking = body.get("thinking") instanceof Map<?, ?> value ? value.get("type") : null;
         if ("disabled".equals(thinking)) {
             return;
         }
@@ -47,8 +46,7 @@ final class DeepSeekChatProfile implements ChatCompletionsProfile {
         if (List.of("low", "medium", "high", "xhigh", "max").contains(value)) {
             return;
         }
-        throw new IllegalArgumentException(
-            "DeepSeek reasoning_effort must be low, medium, high, xhigh, or max");
+        throw new IllegalArgumentException("DeepSeek reasoning_effort must be low, medium, high, xhigh, or max");
     }
 
     private void validateStrictTools(Object value, ChatCompletionsOptions options) {
@@ -59,8 +57,7 @@ final class DeepSeekChatProfile implements ChatCompletionsProfile {
         if (baseUrl != null && baseUrl.matches(".*/beta/?$")) {
             return;
         }
-        throw new IllegalArgumentException(
-            "DeepSeek strict tools require a provider base URL ending in /beta");
+        throw new IllegalArgumentException("DeepSeek strict tools require a provider base URL ending in /beta");
     }
 
     private boolean containsStrictTool(Object value) {

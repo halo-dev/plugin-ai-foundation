@@ -9,32 +9,28 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 /** Rejects options that the current BigModel text embedding contract does not define. */
 final class ZhiPuEmbeddingOptionsFactory {
 
-    private ZhiPuEmbeddingOptionsFactory() {
-    }
+    private ZhiPuEmbeddingOptionsFactory() {}
 
-    static ZhiPuEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    static ZhiPuEmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
         var nativeOptions = providerOptions.nativeOptions();
         if (!nativeOptions.isEmpty()) {
-            throw new IllegalArgumentException(
-                "Zhipu embedding does not document provider-specific request fields: "
+            throw new IllegalArgumentException("Zhipu embedding does not document provider-specific request fields: "
                     + String.join(", ", new ArrayList<>(nativeOptions.keySet())));
         }
         if (hasInstructions(request)) {
-            throw new IllegalArgumentException(
-                "Zhipu text embeddings do not document an instructions field");
+            throw new IllegalArgumentException("Zhipu text embeddings do not document an instructions field");
         }
         if (hasNonDenseOutput(request)) {
-            throw new IllegalArgumentException(
-                "Zhipu text embeddings do not return sparse or modality embeddings");
+            throw new IllegalArgumentException("Zhipu text embeddings do not return sparse or modality embeddings");
         }
         return ZhiPuEmbeddingOptions.builder()
-            .dimensions(request.getDimensions())
-            .customHeaders(request.getHeaders())
-            .build();
+                .dimensions(request.getDimensions())
+                .customHeaders(request.getHeaders())
+                .build();
     }
 
     private static boolean hasInstructions(EmbeddingRequest request) {

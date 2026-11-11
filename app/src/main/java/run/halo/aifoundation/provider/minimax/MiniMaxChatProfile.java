@@ -28,8 +28,8 @@ final class MiniMaxChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         var maxTokens = body.remove("max_tokens");
         if (maxTokens != null && !body.containsKey("max_completion_tokens")) {
             body.put("max_completion_tokens", maxTokens);
@@ -43,15 +43,20 @@ final class MiniMaxChatProfile implements ChatCompletionsProfile {
     public Map<String, Object> mediaContentPart(Media media) {
         var mime = MediaContentSources.mimeType(media);
         if (mime.startsWith("image/")) {
-            return Map.of("type", "image_url", "image_url", Map.of(
-                "url", MediaContentSources.urlOrDataUrl(media, "MiniMax image")));
+            return Map.of(
+                    "type",
+                    "image_url",
+                    "image_url",
+                    Map.of("url", MediaContentSources.urlOrDataUrl(media, "MiniMax image")));
         }
         if (mime.startsWith("video/")) {
-            return Map.of("type", "video_url", "video_url", Map.of(
-                "url", MediaContentSources.urlOrDataUrl(media, "MiniMax video")));
+            return Map.of(
+                    "type",
+                    "video_url",
+                    "video_url",
+                    Map.of("url", MediaContentSources.urlOrDataUrl(media, "MiniMax video")));
         }
-        throw new IllegalArgumentException(
-            "MiniMax Chat supports image and video media, received: " + mime);
+        throw new IllegalArgumentException("MiniMax Chat supports image and video media, received: " + mime);
     }
 
     @Override
@@ -76,8 +81,8 @@ final class MiniMaxChatProfile implements ChatCompletionsProfile {
     public Map<String, Object> additionalMessageMetadata(JsonNode message) {
         var details = message.path("reasoning_details");
         return details.isArray()
-            ? Map.of("reasoningDetails", OBJECT_MAPPER.convertValue(details, Object.class))
-            : Map.of();
+                ? Map.of("reasoningDetails", OBJECT_MAPPER.convertValue(details, Object.class))
+                : Map.of();
     }
 
     @Override
@@ -92,8 +97,7 @@ final class MiniMaxChatProfile implements ChatCompletionsProfile {
         var reasoning = metadata != null ? metadata.get("reasoningContent") : null;
         if (reasoning != null && !reasoning.toString().isBlank()) {
             body.remove("reasoning_content");
-            body.put("reasoning_details", List.of(Map.of(
-                "type", "reasoning.text", "text", reasoning.toString())));
+            body.put("reasoning_details", List.of(Map.of("type", "reasoning.text", "text", reasoning.toString())));
         }
     }
 
@@ -106,5 +110,4 @@ final class MiniMaxChatProfile implements ChatCompletionsProfile {
             body.remove(field);
         }
     }
-
 }

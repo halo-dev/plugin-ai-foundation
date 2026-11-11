@@ -5,9 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Usage reported by a reranking provider.
- */
+/** Usage reported by a reranking provider. */
 @Data
 @Builder
 @NoArgsConstructor

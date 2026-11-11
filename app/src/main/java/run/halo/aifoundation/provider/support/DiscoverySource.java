@@ -24,8 +24,7 @@ public enum DiscoverySource {
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static DiscoverySource fromValue(String value) {
-        return find(value)
-            .orElseThrow(() -> new IllegalArgumentException("Unsupported discovery source: " + value));
+        return find(value).orElseThrow(() -> new IllegalArgumentException("Unsupported discovery source: " + value));
     }
 
     public static Optional<DiscoverySource> find(String value) {
@@ -33,7 +32,7 @@ public enum DiscoverySource {
             return Optional.empty();
         }
         return Arrays.stream(values())
-            .filter(source -> source.value.equals(value))
-            .findFirst();
+                .filter(source -> source.value.equals(value))
+                .findFirst();
     }
 }

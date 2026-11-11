@@ -27,7 +27,7 @@ import type { LanguageMappings } from './language-mappings';
 import type { RerankMappings } from './rerank-mappings';
 
 /**
- * Administrator overrides for provider-neutral parameter mappings
+ * Automatically derived or resolved parameter mappings
  * @export
  * @interface ModelParameterMappings
  */

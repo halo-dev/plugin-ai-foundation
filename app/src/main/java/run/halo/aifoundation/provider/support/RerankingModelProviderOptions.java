@@ -3,9 +3,7 @@ package run.halo.aifoundation.provider.support;
 import java.util.Map;
 import lombok.Value;
 
-/**
- * Provider capability flags used by the reranking runtime.
- */
+/** Provider capability flags used by the reranking runtime. */
 @Value
 public class RerankingModelProviderOptions {
 

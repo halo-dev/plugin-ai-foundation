@@ -30,9 +30,7 @@ public class AiModelNameGenerator {
     }
 
     private static String normalizePart(String value) {
-        var normalized = value.toLowerCase()
-            .replaceAll("[^a-z0-9-]+", "-")
-            .replaceAll("-+", "-");
+        var normalized = value.toLowerCase().replaceAll("[^a-z0-9-]+", "-").replaceAll("-+", "-");
         normalized = trimDash(normalized);
         return normalized.isBlank() ? "model" : normalized;
     }
@@ -43,8 +41,7 @@ public class AiModelNameGenerator {
 
     private static String hash(String value) {
         try {
-            var digest = MessageDigest.getInstance("SHA-256")
-                .digest(value.getBytes(StandardCharsets.UTF_8));
+            var digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest).substring(0, HASH_LENGTH);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is not available", e);

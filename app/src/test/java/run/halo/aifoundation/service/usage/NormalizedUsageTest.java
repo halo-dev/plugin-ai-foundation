@@ -1,22 +1,20 @@
 package run.halo.aifoundation.service.usage;
 
-import run.halo.aifoundation.service.observation.NormalizedUsage;
-import run.halo.aifoundation.service.observation.UsageQuality;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.chat.LanguageModelUsage;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageQuality;
 
 class NormalizedUsageTest {
 
     @Test
     void retainsKnownSubsetsEvenWhenTopLevelCountersAreMissing() {
         var cacheOnly = new NormalizedUsage(null, null, 7L, null, null, null, null, null);
-        var reasoningOnly = NormalizedUsage.from(LanguageModelUsage.builder()
-            .reasoningTokens(3).build());
+        var reasoningOnly = NormalizedUsage.from(
+                LanguageModelUsage.builder().reasoningTokens(3).build());
         var sum = NormalizedUsage.sum(List.of(cacheOnly, reasoningOnly));
         assertThat(sum.cacheReadInputTokens()).isEqualTo(7L);
         assertThat(sum.reasoningOutputTokens()).isEqualTo(3L);
@@ -34,8 +32,8 @@ class NormalizedUsageTest {
 
     @Test
     void fallsBackToProviderTotalAndPreservesUnknown() {
-        assertThat(new NormalizedUsage(null, null, null, null, null, 12L, null, null)
-            .accountedTotalTokens()).isEqualTo(12L);
+        assertThat(new NormalizedUsage(null, null, null, null, null, 12L, null, null).accountedTotalTokens())
+                .isEqualTo(12L);
         assertThat(NormalizedUsage.missing().accountedTotalTokens()).isNull();
     }
 
@@ -43,8 +41,9 @@ class NormalizedUsageTest {
     void marksMixedExecutionEvidencePartial() {
         var known = new NormalizedUsage(3L, 2L, null, null, null, null, null, null);
 
-        assertThat(NormalizedUsage.sum(List.of(known, NormalizedUsage.missing())).quality())
-            .isEqualTo(UsageQuality.PARTIAL);
+        assertThat(NormalizedUsage.sum(List.of(known, NormalizedUsage.missing()))
+                        .quality())
+                .isEqualTo(UsageQuality.PARTIAL);
     }
 
     @Test
@@ -79,10 +78,8 @@ class NormalizedUsageTest {
         var outputOnly = new NormalizedUsage(null, 5L, null, null, null, null, null, null);
         var known = new NormalizedUsage(2L, 3L, null, null, null, null, null, null);
         var all = NormalizedUsage.sum(List.of(inputOnly, outputOnly, known));
-        var incremental = NormalizedUsage.sum(List.of(
-            NormalizedUsage.sum(List.of(inputOnly, outputOnly)), known));
-        var reordered = NormalizedUsage.sum(List.of(
-            NormalizedUsage.sum(List.of(known, outputOnly)), inputOnly));
+        var incremental = NormalizedUsage.sum(List.of(NormalizedUsage.sum(List.of(inputOnly, outputOnly)), known));
+        var reordered = NormalizedUsage.sum(List.of(NormalizedUsage.sum(List.of(known, outputOnly)), inputOnly));
 
         assertThat(all.accountedTotalTokens()).isEqualTo(5L);
         assertThat(incremental).isEqualTo(all);
@@ -91,12 +88,15 @@ class NormalizedUsageTest {
 
     @Test
     void doesNotInspectRawObjectsOrInvokeProviderAccessors() {
-        var usage = NormalizedUsage.from(LanguageModelUsage.builder().inputTokens(10)
-            .outputTokens(5).raw(new Object() {
-                public Object cacheReadInputTokens() {
-                    throw new AssertionError("raw usage must never be inspected");
-                }
-            }).build());
+        var usage = NormalizedUsage.from(LanguageModelUsage.builder()
+                .inputTokens(10)
+                .outputTokens(5)
+                .raw(new Object() {
+                    public Object cacheReadInputTokens() {
+                        throw new AssertionError("raw usage must never be inspected");
+                    }
+                })
+                .build());
         assertThat(usage.cacheReadInputTokens()).isNull();
         assertThat(usage.accountedTotalTokens()).isEqualTo(15);
     }

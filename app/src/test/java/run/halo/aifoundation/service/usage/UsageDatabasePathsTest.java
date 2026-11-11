@@ -11,7 +11,6 @@ class UsageDatabasePathsTest {
     void resolvesFixedRuntimeLocationFromPluginsRoot() {
         var paths = new UsageDatabasePaths(Path.of("/var/lib/halo/plugins"));
 
-        assertThat(paths.database())
-            .isEqualTo(Path.of("/var/lib/halo/plugins/ai-foundation/ai-foundation.sqlite"));
+        assertThat(paths.database()).isEqualTo(Path.of("/var/lib/halo/plugins/ai-foundation/ai-foundation.sqlite"));
     }
 }

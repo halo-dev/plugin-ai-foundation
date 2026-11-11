@@ -9,9 +9,8 @@ import run.halo.aifoundation.chat.StreamTextResult;
 /**
  * Provider-neutral middleware for language model calls.
  *
- * <p>Middleware can transform a request and wrap non-streaming or streaming execution. The default
- * implementation only applies {@link #transformRequest(LanguageModelRequestContext)} and then
- * delegates to the next step.
+ * <p>Middleware can transform a request and wrap non-streaming or streaming execution. The default implementation only
+ * applies {@link #transformRequest(LanguageModelRequestContext)} and then delegates to the next step.
  */
 public interface LanguageModelMiddleware {
 
@@ -32,8 +31,7 @@ public interface LanguageModelMiddleware {
      * @param next next generation step
      * @return generated result
      */
-    default Mono<GenerateTextResult> wrapGenerate(LanguageModelGenerateContext context,
-        GenerateTextNext next) {
+    default Mono<GenerateTextResult> wrapGenerate(LanguageModelGenerateContext context, GenerateTextNext next) {
         return transformRequest(context).flatMap(next::generate);
     }
 
@@ -45,9 +43,7 @@ public interface LanguageModelMiddleware {
      * @return streaming result
      */
     default StreamTextResult wrapStream(LanguageModelStreamContext context, StreamTextNext next) {
-        var transformed = transformRequest(context)
-            .map(next::stream)
-            .cache();
+        var transformed = transformRequest(context).map(next::stream).cache();
         return LanguageModelMiddlewares.defer(transformed);
     }
 }

@@ -17,8 +17,8 @@ import run.halo.aifoundation.provider.support.MediaContentSources;
 final class SiliconFlowChatProfile implements ChatCompletionsProfile {
 
     private static final int MAX_TOOLS = 128;
-    private static final Set<String> EXTRA_FIELDS = Set.of(
-        "enable_thinking", "thinking_budget", "min_p", "top_k", "prefix", "suffix");
+    private static final Set<String> EXTRA_FIELDS =
+            Set.of("enable_thinking", "thinking_budget", "min_p", "top_k", "prefix", "suffix");
 
     @Override
     public String providerType() {
@@ -31,8 +31,8 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         validateExtraFields(options.getExtraBody());
         validateThinking(body);
         validateFim(body);
@@ -53,7 +53,7 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
             return urlContentPart("audio_url", media);
         }
         throw new IllegalArgumentException(
-            "SiliconFlow Chat supports image, video, and audio media, received: " + mime);
+                "SiliconFlow Chat supports image, video, and audio media, received: " + mime);
     }
 
     @Override
@@ -63,8 +63,7 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeAssistantMessage(Map<String, Object> body,
-        AssistantMessage message) {
+    public void customizeAssistantMessage(Map<String, Object> body, AssistantMessage message) {
         // SiliconFlow requires exact reasoning_content replay for Interleaved Thinking models.
         // The common codec already copied the untouched metadata value into this field.
     }
@@ -76,8 +75,7 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(EXTRA_FIELDS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported SiliconFlow chat option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported SiliconFlow chat option(s): " + String.join(", ", unknown));
         }
     }
 
@@ -88,8 +86,7 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
         }
         var budget = integer(body.get("thinking_budget"), "thinking_budget");
         if (budget != null && (budget < 128 || budget > 32768)) {
-            throw new IllegalArgumentException(
-                "SiliconFlow thinking_budget must be between 128 and 32768");
+            throw new IllegalArgumentException("SiliconFlow thinking_budget must be between 128 and 32768");
         }
         var minP = decimal(body.get("min_p"), "min_p");
         if (minP != null && (minP < 0d || minP > 1d)) {
@@ -105,16 +102,13 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
             return;
         }
         if (prefix == null || suffix == null) {
-            throw new IllegalArgumentException(
-                "SiliconFlow Chat FIM requires both prefix and suffix");
+            throw new IllegalArgumentException("SiliconFlow Chat FIM requires both prefix and suffix");
         }
         if (body.get("tools") instanceof List<?> tools && !tools.isEmpty()) {
-            throw new IllegalArgumentException(
-                "SiliconFlow Chat FIM cannot be combined with tool calling");
+            throw new IllegalArgumentException("SiliconFlow Chat FIM cannot be combined with tool calling");
         }
         if (body.containsKey("response_format")) {
-            throw new IllegalArgumentException(
-                "SiliconFlow Chat FIM cannot be combined with structured output");
+            throw new IllegalArgumentException("SiliconFlow Chat FIM cannot be combined with structured output");
         }
     }
 
@@ -127,23 +121,19 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
         }
         var names = new HashSet<String>();
         for (var item : tools) {
-            if (item instanceof Map<?, ?> tool
-                && tool.get("function") instanceof Map<?, ?> function) {
+            if (item instanceof Map<?, ?> tool && tool.get("function") instanceof Map<?, ?> function) {
                 var name = text(function.get("name"));
                 if (name != null && !names.add(name)) {
-                    throw new IllegalArgumentException(
-                        "SiliconFlow tool function names must be unique: " + name);
+                    throw new IllegalArgumentException("SiliconFlow tool function names must be unique: " + name);
                 }
             }
         }
     }
 
     private void rejectUndocumentedPortableFields(Map<String, Object> body) {
-        for (var field : List.of("seed", "presence_penalty", "parallel_tool_calls",
-            "logprobs", "top_logprobs")) {
+        for (var field : List.of("seed", "presence_penalty", "parallel_tool_calls", "logprobs", "top_logprobs")) {
             if (body.containsKey(field)) {
-                throw new IllegalArgumentException(
-                    "SiliconFlow Chat does not document request field: " + field);
+                throw new IllegalArgumentException("SiliconFlow Chat does not document request field: " + field);
             }
         }
     }
@@ -176,5 +166,4 @@ final class SiliconFlowChatProfile implements ChatCompletionsProfile {
     private String text(Object value) {
         return value instanceof String text && !text.isBlank() ? text : null;
     }
-
 }

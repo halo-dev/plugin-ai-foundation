@@ -9,14 +9,13 @@ import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
 
 @ProviderContractSource(
-    provider = "openai-responses-wire",
-    officialDocumentation = "https://developers.openai.com/api/reference/resources/responses",
-    retrievedAt = "2026-08-24"
-)
+        provider = "openai-responses-wire",
+        officialDocumentation = "https://developers.openai.com/api/reference/resources/responses",
+        retrievedAt = "2026-08-24")
 class ResponsesWireCodecTest {
 
-    private final ResponsesWireCodec codec = new ResponsesWireCodec(
-        new StandardResponsesProfile("openai", "openai-responses"));
+    private final ResponsesWireCodec codec =
+            new ResponsesWireCodec(new StandardResponsesProfile("openai", "openai-responses"));
 
     @Test
     @SuppressWarnings("unchecked")
@@ -49,14 +48,13 @@ class ResponsesWireCodecTest {
         assertThat(result.id()).isEqualTo("resp_1");
         assertThat(result.text()).isEqualTo("Answer.");
         assertThat(result.reasoning()).isEqualTo("Think.");
-        assertThat(result.toolCalls()).containsExactly(new ResponsesResult.ToolCall(
-            "item_1", "call_1", "weather", "{}"));
+        assertThat(result.toolCalls())
+                .containsExactly(new ResponsesResult.ToolCall("item_1", "call_1", "weather", "{}"));
         assertThat(result.sources()).hasSize(2);
         assertThat(result.files()).hasSize(2);
-        assertThat((List<Map<String, Object>>) result.providerMetadata()
-            .get("providerOutputItems"))
-            .extracting(item -> item.get("type"))
-            .containsExactly("reasoning", "web_search_call");
+        assertThat((List<Map<String, Object>>) result.providerMetadata().get("providerOutputItems"))
+                .extracting(item -> item.get("type"))
+                .containsExactly("reasoning", "web_search_call");
         assertThat(result.usage().inputTokens()).isEqualTo(10);
         assertThat(result.usage().details()).containsKey("input_tokens_details");
     }
@@ -69,37 +67,35 @@ class ResponsesWireCodecTest {
             {"type":"response.output_item.added","output_index":1,
              "item":{"type":"function_call","id":"item_1","call_id":"call_1",
              "name":"weather","arguments":""}}
-            """)).containsExactly(new ResponsesStreamPart.ToolInputStart(
-                1, "item_1", "call_1", "weather"));
+            """))
+                .containsExactly(new ResponsesStreamPart.ToolInputStart(1, "item_1", "call_1", "weather"));
         assertThat(stream.accept("""
             {"type":"response.function_call_arguments.delta","output_index":1,
              "item_id":"item_1","delta":"{"}
-            """)).containsExactly(new ResponsesStreamPart.ToolInputDelta(
-                1, "item_1", "call_1", "{"));
+            """))
+                .containsExactly(new ResponsesStreamPart.ToolInputDelta(1, "item_1", "call_1", "{"));
         assertThat(stream.accept("""
             {"type":"response.function_call_arguments.delta","output_index":1,
              "item_id":"item_1","delta":"}"}
-            """)).containsExactly(new ResponsesStreamPart.ToolInputDelta(
-                1, "item_1", "call_1", "}"));
+            """))
+                .containsExactly(new ResponsesStreamPart.ToolInputDelta(1, "item_1", "call_1", "}"));
         assertThat(stream.accept("""
             {"type":"response.output_item.done","output_index":1,
              "item":{"type":"function_call","id":"item_1","call_id":"call_1",
              "name":"weather","arguments":"{}"}}
-            """)).containsExactly(new ResponsesStreamPart.ToolInputEnd(
-                1, "item_1", "call_1", "weather", "{}"));
+            """))
+                .containsExactly(new ResponsesStreamPart.ToolInputEnd(1, "item_1", "call_1", "weather", "{}"));
         assertThat(stream.accept("""
             {"type":"response.output_text.delta","item_id":"message_1","delta":"Hello"}
             """)).containsExactly(new ResponsesStreamPart.TextDelta("message_1", "Hello"));
         assertThat(stream.accept("""
             {"type":"response.reasoning_summary_text.delta","item_id":"reasoning_1",
              "delta":"Think"}
-            """)).containsExactly(new ResponsesStreamPart.ReasoningDelta(
-                "reasoning_1", "Think"));
+            """)).containsExactly(new ResponsesStreamPart.ReasoningDelta("reasoning_1", "Think"));
         assertThat(stream.accept("""
             {"type":"response.reasoning_text.delta","item_id":"reasoning_2",
              "delta":" again"}
-            """)).containsExactly(new ResponsesStreamPart.ReasoningDelta(
-                "reasoning_2", " again"));
+            """)).containsExactly(new ResponsesStreamPart.ReasoningDelta("reasoning_2", " again"));
 
         var completed = stream.accept("""
             {"type":"response.completed","response":{"id":"resp_1","model":"gpt-test",
@@ -120,8 +116,7 @@ class ResponsesWireCodecTest {
         assertThat(completed).singleElement().satisfies(part -> {
             assertThat(part).isInstanceOf(ResponsesStreamPart.Completed.class);
             var result = ((ResponsesStreamPart.Completed) part).result();
-            assertThat(result.providerMetadata())
-                .doesNotContainKeys("metadata", "error", "incomplete_details");
+            assertThat(result.providerMetadata()).doesNotContainKeys("metadata", "error", "incomplete_details");
             assertThat(result.usage().totalTokens()).isEqualTo(3);
         });
     }
@@ -132,9 +127,10 @@ class ResponsesWireCodecTest {
             {"type":"response.provider.future","api_key":"secret-value","value":1}
             """);
 
-        assertThat(event).containsExactly(new ResponsesStreamPart.Unknown(
-            "response.provider.future",
-            Map.of("type", "response.provider.future", "api_key", "[REDACTED]", "value", 1)));
+        assertThat(event)
+                .containsExactly(new ResponsesStreamPart.Unknown(
+                        "response.provider.future",
+                        Map.of("type", "response.provider.future", "api_key", "[REDACTED]", "value", 1)));
     }
 
     @Test
@@ -143,8 +139,8 @@ class ResponsesWireCodecTest {
             {"type":"response.failed","response":{"error":{
               "message":"bad request api_key: secret-value"}}}
             """))
-            .isInstanceOf(ResponsesProtocolException.class)
-            .hasMessageContaining("response.failed")
-            .hasMessageNotContaining("secret-value");
+                .isInstanceOf(ResponsesProtocolException.class)
+                .hasMessageContaining("response.failed")
+                .hasMessageNotContaining("secret-value");
     }
 }

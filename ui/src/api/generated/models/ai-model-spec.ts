@@ -21,7 +21,16 @@ import type { ModelCapabilities } from './model-capabilities';
 import type { ModelCapabilitySources } from './model-capability-sources';
 // May contain unused imports in some cases
 // @ts-ignore
+import type { ModelCatalogMatch } from './model-catalog-match';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelParameterConstraints } from './model-parameter-constraints';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { ModelParameterMappings } from './model-parameter-mappings';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelParameterProfile } from './model-parameter-profile';
 
 /**
  * 
@@ -47,6 +56,18 @@ export interface AiModelSpec {
      * @memberof AiModelSpec
      */
     'capabilitySources'?: ModelCapabilitySources;
+    /**
+     * 
+     * @type {ModelCatalogMatch}
+     * @memberof AiModelSpec
+     */
+    'catalogMatch'?: ModelCatalogMatch;
+    /**
+     * 
+     * @type {ModelParameterProfile}
+     * @memberof AiModelSpec
+     */
+    'catalogParameters'?: ModelParameterProfile;
     /**
      * How reliable the discovered model profile is
      * @type {string}
@@ -97,6 +118,12 @@ export interface AiModelSpec {
     'nativeOptions'?: { [key: string]: any; };
     /**
      * 
+     * @type {ModelParameterConstraints}
+     * @memberof AiModelSpec
+     */
+    'parameterConstraints'?: ModelParameterConstraints;
+    /**
+     * 
      * @type {ModelParameterMappings}
      * @memberof AiModelSpec
      */
@@ -134,6 +161,8 @@ export const AiModelSpecAdapterTypeEnum = {
     GiteeChat: 'gitee-chat',
     GiteeMessages: 'gitee-messages',
     GiteeEmbedding: 'gitee-embedding',
+    TokenhubChat: 'tokenhub-chat',
+    TokenhubEmbedding: 'tokenhub-embedding',
     KimiChat: 'kimi-chat',
     MinimaxMessages: 'minimax-messages',
     MinimaxChat: 'minimax-chat',
@@ -173,7 +202,9 @@ export const AiModelSpecAdapterTypeEnum = {
     OllamaResponses: 'ollama-responses',
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
-    OllamaImage: 'ollama-image'
+    OllamaImage: 'ollama-image',
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type AiModelSpecAdapterTypeEnum = typeof AiModelSpecAdapterTypeEnum[keyof typeof AiModelSpecAdapterTypeEnum];
@@ -206,7 +237,8 @@ export const AiModelSpecModelTypeEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type AiModelSpecModelTypeEnum = typeof AiModelSpecModelTypeEnum[keyof typeof AiModelSpecModelTypeEnum];

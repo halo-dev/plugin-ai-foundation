@@ -15,7 +15,6 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
-import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
@@ -26,9 +25,9 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 /**
  * MiniMax provider with the recommended Messages API as its default language transport.
  *
- * <p>The OpenAI-compatible Chat surface remains selectable per model, while image generation uses
- * MiniMax's native endpoint. The documented OpenAI-compatible model catalog is treated as a
- * language-model catalog; model identifiers are never inspected to infer a domain or capability.
+ * <p>The OpenAI-compatible Chat surface remains selectable per model, while image generation uses MiniMax's native
+ * endpoint. The documented OpenAI-compatible model catalog is treated as a language-model catalog; model identifiers
+ * are never inspected to infer a domain or capability.
  */
 @Component
 public class MiniMaxProvider extends AbstractAiProviderType {
@@ -82,8 +81,11 @@ public class MiniMaxProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.MINIMAX_MESSAGES, AdapterType.MINIMAX_CHAT,
-            AdapterType.MINIMAX_RESPONSES, AdapterType.MINIMAX_IMAGE);
+        return List.of(
+                AdapterType.MINIMAX_MESSAGES,
+                AdapterType.MINIMAX_CHAT,
+                AdapterType.MINIMAX_RESPONSES,
+                AdapterType.MINIMAX_IMAGE);
     }
 
     @Override
@@ -94,8 +96,7 @@ public class MiniMaxProvider extends AbstractAiProviderType {
     @Override
     public List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
         return switch (adapterType) {
-            case MINIMAX_RESPONSES, MINIMAX_MESSAGES, MINIMAX_CHAT ->
-                ProviderFeatureSets.VISION_REASONING;
+            case MINIMAX_RESPONSES, MINIMAX_MESSAGES, MINIMAX_CHAT -> ProviderFeatureSets.VISION_REASONING;
             default -> List.of();
         };
     }
@@ -126,8 +127,8 @@ public class MiniMaxProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new MiniMaxMessagesModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new MiniMaxMessagesModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     @Override
@@ -135,42 +136,39 @@ public class MiniMaxProvider extends AbstractAiProviderType {
         var resolved = resolveModel(model);
         var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of());
         return switch (resolved.adapterType()) {
-            case MINIMAX_MESSAGES -> new MiniMaxMessagesModel(options,
-                webClientBuilder(provider));
+            case MINIMAX_MESSAGES -> new MiniMaxMessagesModel(options, webClientBuilder(provider));
             case MINIMAX_CHAT -> new MiniMaxChatModel(options, webClientBuilder(provider));
-            case MINIMAX_RESPONSES -> new MiniMaxResponsesModel(options,
-                webClientBuilder(provider));
-            default -> throw new IllegalArgumentException(
-                "Unsupported MiniMax language adapter: " + resolved.adapterType());
+            case MINIMAX_RESPONSES -> new MiniMaxResponsesModel(options, webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException("Unsupported MiniMax language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new MiniMaxImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new MiniMaxImageGenerationClient(
+                new ImageGenerationClientOptions(getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+                imageWebClientBuilder(provider));
     }
 
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, StructuredOutputSupport.PROMPT_ONLY);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, StructuredOutputSupport.PROMPT_ONLY);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(false)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(StructuredOutputSupport.PROMPT_ONLY)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(false)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(StructuredOutputSupport.PROMPT_ONLY)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
@@ -182,13 +180,18 @@ public class MiniMaxProvider extends AbstractAiProviderType {
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        defaults.put(ModelParameter.MAX_OUTPUT_TOKENS,
-            DefaultParameterMapping.template("openai.max-tokens"));
-        for (var parameter : List.of(ModelParameter.TOP_K, ModelParameter.MIN_P,
-            ModelParameter.PRESENCE_PENALTY, ModelParameter.FREQUENCY_PENALTY,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.STOP_SEQUENCES,
-            ModelParameter.SEED, ModelParameter.LOGPROBS, ModelParameter.TOP_LOGPROBS,
-            ModelParameter.PARALLEL_TOOL_CALLS)) {
+        defaults.put(ModelParameter.MAX_OUTPUT_TOKENS, DefaultParameterMapping.template("openai.max-tokens"));
+        for (var parameter : List.of(
+                ModelParameter.TOP_K,
+                ModelParameter.MIN_P,
+                ModelParameter.PRESENCE_PENALTY,
+                ModelParameter.FREQUENCY_PENALTY,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.STOP_SEQUENCES,
+                ModelParameter.SEED,
+                ModelParameter.LOGPROBS,
+                ModelParameter.TOP_LOGPROBS,
+                ModelParameter.PARALLEL_TOOL_CALLS)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);
@@ -206,5 +209,4 @@ public class MiniMaxProvider extends AbstractAiProviderType {
         }
         return null;
     }
-
 }

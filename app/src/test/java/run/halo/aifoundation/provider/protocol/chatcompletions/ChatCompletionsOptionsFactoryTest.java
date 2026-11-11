@@ -13,29 +13,29 @@ class ChatCompletionsOptionsFactoryTest {
 
     @Test
     void appliesOneProviderConfigurationAcrossRequestKinds() {
-        var factory = ChatCompletionsOptionsFactory
-            .builder("example", ReasoningControlOptions.unsupported())
-            .extraBodyCustomizer((body, request) -> body.put("customized", true))
-            .structuredOutputSupport(StructuredOutputSupport.JSON_OBJECT)
-            .build();
+        var factory = ChatCompletionsOptionsFactory.builder("example", ReasoningControlOptions.unsupported())
+                .extraBodyCustomizer((body, request) -> body.put("customized", true))
+                .structuredOutputSupport(StructuredOutputSupport.JSON_OBJECT)
+                .build();
         var request = GenerateTextRequest.builder()
-            .temperature(0.5)
-            .topLogprobs(3)
-            .headers(Map.of("X-Request", "value"))
-            .build();
+                .temperature(0.5)
+                .topLogprobs(3)
+                .headers(Map.of("X-Request", "value"))
+                .build();
 
         var nativeOptions = Map.<String, Object>of("provider-field", "value");
         var basic = applyNativeOptions(factory.basic(request), nativeOptions);
         var structured = applyNativeOptions(factory.structured(request), nativeOptions);
         var toolCalling = applyNativeOptions(
-            factory.toolCalling(request, java.util.List.of(), java.util.Set.of()), nativeOptions);
+                factory.toolCalling(request, java.util.List.of(), java.util.Set.of()), nativeOptions);
 
         assertThat(basic.getTemperature()).isEqualTo(0.5);
         assertThat(basic.getLogprobs()).isTrue();
         assertThat(basic.getTopLogprobs()).isEqualTo(3);
         assertThat(basic.getCustomHeaders()).containsEntry("X-Request", "value");
-        assertThat(basic.getExtraBody()).containsEntry("provider-field", "value")
-            .containsEntry("customized", true);
+        assertThat(basic.getExtraBody())
+                .containsEntry("provider-field", "value")
+                .containsEntry("customized", true);
         assertThat(structured.getExtraBody()).isEqualTo(basic.getExtraBody());
         assertThat(toolCalling.getExtraBody()).isEqualTo(basic.getExtraBody());
     }
@@ -44,43 +44,38 @@ class ChatCompletionsOptionsFactoryTest {
     @SuppressWarnings("unchecked")
     void providerDefaultsOverrideOnlyConflictingNativeOptionLeaves() {
         var options = ChatCompletionsOptions.builder()
-            .extraBody(Map.of("reasoning", Map.of("effort", "high")))
-            .build();
+                .extraBody(Map.of("reasoning", Map.of("effort", "high")))
+                .build();
 
-        var merged = applyNativeOptions(options,
-            Map.of("reasoning", Map.of("summary", "auto", "effort", "low")));
+        var merged = applyNativeOptions(options, Map.of("reasoning", Map.of("summary", "auto", "effort", "low")));
 
         assertThat((Map<String, Object>) merged.getExtraBody().get("reasoning"))
-            .containsEntry("summary", "auto")
-            .containsEntry("effort", "high");
+                .containsEntry("summary", "auto")
+                .containsEntry("effort", "high");
     }
 
-    private ChatCompletionsOptions applyNativeOptions(ChatCompletionsOptions options,
-        Map<String, Object> nativeOptions) {
+    private ChatCompletionsOptions applyNativeOptions(
+            ChatCompletionsOptions options, Map<String, Object> nativeOptions) {
         return (ChatCompletionsOptions) ChatCompletionsNativeOptions.apply(options, nativeOptions);
     }
 
     @Test
     void keepsExplicitLogprobsValue() {
-        var factory = ChatCompletionsOptionsFactory
-            .builder("example", ReasoningControlOptions.unsupported())
-            .build();
-        var request = GenerateTextRequest.builder()
-            .logprobs(false)
-            .topLogprobs(3)
-            .build();
+        var factory = ChatCompletionsOptionsFactory.builder("example", ReasoningControlOptions.unsupported())
+                .build();
+        var request =
+                GenerateTextRequest.builder().logprobs(false).topLogprobs(3).build();
 
         assertThat(factory.basic(request).getLogprobs()).isFalse();
     }
 
     @Test
     void rejectsIncompleteProviderConfiguration() {
-        assertThatThrownBy(() -> ChatCompletionsOptionsFactory
-            .builder(" ", ReasoningControlOptions.unsupported()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Provider type must not be blank");
+        assertThatThrownBy(() -> ChatCompletionsOptionsFactory.builder(" ", ReasoningControlOptions.unsupported()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Provider type must not be blank");
         assertThatThrownBy(() -> ChatCompletionsOptionsFactory.builder("example", null))
-            .isInstanceOf(NullPointerException.class)
-            .hasMessage("Reasoning control options must not be null");
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Reasoning control options must not be null");
     }
 }

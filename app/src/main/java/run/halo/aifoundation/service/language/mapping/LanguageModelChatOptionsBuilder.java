@@ -22,19 +22,25 @@ public final class LanguageModelChatOptionsBuilder {
     private final Map<String, Object> nativeOptions;
     private final Function<Object, String> jsonWriter;
 
-    public LanguageModelChatOptionsBuilder(String providerType,
-        LanguageModelProviderOptions providerOptions, Function<Object, String> jsonWriter) {
+    public LanguageModelChatOptionsBuilder(
+            String providerType, LanguageModelProviderOptions providerOptions, Function<Object, String> jsonWriter) {
         this(providerType, null, providerOptions, Map.of(), jsonWriter);
     }
 
-    public LanguageModelChatOptionsBuilder(String providerType, String modelId,
-        LanguageModelProviderOptions providerOptions, Function<Object, String> jsonWriter) {
+    public LanguageModelChatOptionsBuilder(
+            String providerType,
+            String modelId,
+            LanguageModelProviderOptions providerOptions,
+            Function<Object, String> jsonWriter) {
         this(providerType, modelId, providerOptions, Map.of(), jsonWriter);
     }
 
-    public LanguageModelChatOptionsBuilder(String providerType, String modelId,
-        LanguageModelProviderOptions providerOptions, Map<String, Object> nativeOptions,
-        Function<Object, String> jsonWriter) {
+    public LanguageModelChatOptionsBuilder(
+            String providerType,
+            String modelId,
+            LanguageModelProviderOptions providerOptions,
+            Map<String, Object> nativeOptions,
+            Function<Object, String> jsonWriter) {
         this.providerType = providerType;
         this.modelId = modelId;
         this.providerOptions = providerOptions;
@@ -42,26 +48,24 @@ public final class LanguageModelChatOptionsBuilder {
         this.jsonWriter = jsonWriter;
     }
 
-    public void assertRequestSupported(GenerateTextRequest request, boolean supportsToolCalling,
-        String toolCallingUnsupportedMessage) {
+    public void assertRequestSupported(
+            GenerateTextRequest request, boolean supportsToolCalling, String toolCallingUnsupportedMessage) {
         if (!supportsToolCalling && hasTools(request)) {
             throw new IllegalArgumentException(toolCallingUnsupportedMessage);
         }
         if (requiresUnsupportedToolChoice(request)) {
-            throw new IllegalArgumentException("toolChoice REQUIRED is not supported by provider type: "
-                + providerType);
+            throw new IllegalArgumentException(
+                    "toolChoice REQUIRED is not supported by provider type: " + providerType);
         }
         if (hasHeaders(request) && !providerOptions.requestHeadersSupported()) {
-            throw new IllegalArgumentException("Request headers are not supported by provider type: "
-                + providerType);
+            throw new IllegalArgumentException("Request headers are not supported by provider type: " + providerType);
         }
     }
 
     public ChatOptions build(GenerateTextRequest request) {
         providerOptions.reasoningControlOptions().validate(providerType, request);
         if (request.getSeed() != null && !canMapSeed(request)) {
-            throw new IllegalArgumentException("seed is not supported by provider type: "
-                + providerType);
+            throw new IllegalArgumentException("seed is not supported by provider type: " + providerType);
         }
         var options = buildPortableOptions(request);
         options = withDefaultModel(options);
@@ -75,8 +79,7 @@ public final class LanguageModelChatOptionsBuilder {
         var toolNames = toolNames(request);
         var toolCallbacks = toolCallbacks(request, toolNames);
         if (providerOptions.toolCallingChatOptionsFactory() != null) {
-            return providerOptions.toolCallingChatOptionsFactory()
-                .build(request, toolCallbacks, toolNames);
+            return providerOptions.toolCallingChatOptionsFactory().build(request, toolCallbacks, toolNames);
         }
         return DefaultToolCallingChatOptions.builder()
                 .model(modelId)
@@ -102,15 +105,15 @@ public final class LanguageModelChatOptionsBuilder {
             return providerOptions.chatOptionsFactory().build(request);
         }
         return ChatOptions.builder()
-            .model(modelId)
-            .temperature(request.getTemperature())
-            .maxTokens(request.getMaxOutputTokens())
-            .topP(request.getTopP())
-            .topK(request.getTopK())
-            .presencePenalty(request.getPresencePenalty())
-            .frequencyPenalty(request.getFrequencyPenalty())
-            .stopSequences(request.getStopSequences())
-            .build();
+                .model(modelId)
+                .temperature(request.getTemperature())
+                .maxTokens(request.getMaxOutputTokens())
+                .topP(request.getTopP())
+                .topK(request.getTopK())
+                .presencePenalty(request.getPresencePenalty())
+                .frequencyPenalty(request.getFrequencyPenalty())
+                .stopSequences(request.getStopSequences())
+                .build();
     }
 
     private ChatOptions applyNativeOptions(ChatOptions options) {
@@ -118,8 +121,7 @@ public final class LanguageModelChatOptionsBuilder {
         if (applicator == null) {
             if (!nativeOptions.isEmpty()) {
                 throw new IllegalStateException(
-                    "Language provider does not support configured native options: "
-                        + providerType);
+                        "Language provider does not support configured native options: " + providerType);
             }
             return options;
         }
@@ -151,16 +153,15 @@ public final class LanguageModelChatOptionsBuilder {
 
     private List<ToolCallback> toolCallbacks(GenerateTextRequest request, Set<String> toolNames) {
         return ProviderToolMetadata.from(request).stream()
-            .filter(tool -> isSelectedTool(tool.name(), toolNames))
-            .map(tool -> FunctionToolCallback
-                .builder(tool.name(), (Function<Map<String, Object>, Object>) input -> Map.of())
-                .description(tool.description())
-                .inputSchema(writeJson(tool.inputSchema()))
-                .inputType(new ParameterizedTypeReference<Map<String, Object>>() {
-                })
-                .build())
-            .map(ToolCallback.class::cast)
-            .toList();
+                .filter(tool -> isSelectedTool(tool.name(), toolNames))
+                .map(tool -> FunctionToolCallback.builder(
+                                tool.name(), (Function<Map<String, Object>, Object>) input -> Map.of())
+                        .description(tool.description())
+                        .inputSchema(writeJson(tool.inputSchema()))
+                        .inputType(new ParameterizedTypeReference<Map<String, Object>>() {})
+                        .build())
+                .map(ToolCallback.class::cast)
+                .toList();
     }
 
     private Set<String> toolNames(GenerateTextRequest request) {

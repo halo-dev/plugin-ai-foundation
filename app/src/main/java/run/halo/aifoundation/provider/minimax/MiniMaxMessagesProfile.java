@@ -44,13 +44,12 @@ final class MiniMaxMessagesProfile implements AnthropicMessagesProfile {
         if (mime.startsWith("video/")) {
             return mediaBlock("video", media);
         }
-        throw new IllegalArgumentException(
-            "MiniMax Messages supports image and video media, received: " + mime);
+        throw new IllegalArgumentException("MiniMax Messages supports image and video media, received: " + mime);
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         validateSampling(body);
         body.putIfAbsent("max_tokens", 4096);
         applyActiveCache(body);
@@ -58,8 +57,7 @@ final class MiniMaxMessagesProfile implements AnthropicMessagesProfile {
     }
 
     private void removeIgnoredOptions(Map<String, Object> body) {
-        for (var field : List.of("top_k", "stop_sequences", "mcp_servers",
-            "context_management", "container")) {
+        for (var field : List.of("top_k", "stop_sequences", "mcp_servers", "context_management", "container")) {
             body.remove(field);
         }
     }
@@ -70,8 +68,7 @@ final class MiniMaxMessagesProfile implements AnthropicMessagesProfile {
     }
 
     private Map<String, Object> mediaBlock(String type, Media media) {
-        return Map.of("type", type, "source",
-            MediaContentSources.urlOrBase64Source(media, "MiniMax media"));
+        return Map.of("type", type, "source", MediaContentSources.urlOrBase64Source(media, "MiniMax media"));
     }
 
     private void applyActiveCache(Map<String, Object> body) {
@@ -126,8 +123,9 @@ final class MiniMaxMessagesProfile implements AnthropicMessagesProfile {
             return List.of(textBlock(text, cache));
         }
         if (content instanceof List<?> blocks && !blocks.isEmpty()) {
-            var values = blocks.stream().map(block -> block instanceof Map<?, ?> map
-                ? new LinkedHashMap<>((Map<?, ?>) map) : block).toList();
+            var values = blocks.stream()
+                    .map(block -> block instanceof Map<?, ?> map ? new LinkedHashMap<>((Map<?, ?>) map) : block)
+                    .toList();
             if (values.get(values.size() - 1) instanceof Map<?, ?> raw) {
                 @SuppressWarnings("unchecked")
                 var last = (Map<String, Object>) raw;
@@ -151,14 +149,12 @@ final class MiniMaxMessagesProfile implements AnthropicMessagesProfile {
             return;
         }
         if (!(value instanceof Number number)) {
-            throw new IllegalArgumentException(
-                "MiniMax " + field + " must be a number");
+            throw new IllegalArgumentException("MiniMax " + field + " must be a number");
         }
         var numericValue = number.doubleValue();
         if (numericValue >= minimum && numericValue <= maximum) {
             return;
         }
-        throw new IllegalArgumentException(
-            "MiniMax " + field + " must be between " + minimum + " and " + maximum);
+        throw new IllegalArgumentException("MiniMax " + field + " must be between " + minimum + " and " + maximum);
     }
 }

@@ -7,12 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import org.springframework.ai.chat.model.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.model.ChatModel;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.exception.DefaultModelNotConfiguredException;
@@ -31,13 +31,13 @@ import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.aifoundation.rerank.RerankResponse;
-import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
-import run.halo.aifoundation.service.embedding.EmbeddingModelRuntimeFactory;
 import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.CallerPluginObservationRegistry;
 import run.halo.aifoundation.service.audit.CallerPluginResolver;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
+import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
+import run.halo.aifoundation.service.embedding.EmbeddingModelRuntimeFactory;
 import run.halo.aifoundation.service.image.DefaultImageGenerationModelFactory;
 import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeFactory;
@@ -45,11 +45,11 @@ import run.halo.aifoundation.service.language.LanguageModelRuntimeProperties;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
-import run.halo.aifoundation.service.rerank.DefaultRerankingModelFactory;
-import run.halo.aifoundation.service.rerank.RerankingModelRuntimeFactory;
 import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.rerank.DefaultRerankingModelFactory;
+import run.halo.aifoundation.service.rerank.RerankingModelRuntimeFactory;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
 import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
@@ -86,34 +86,79 @@ class AiModelServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(callerPluginResolver.resolveCurrentCallerSnapshot())
-            .thenReturn(CallerPluginInfo.builder()
-                .detected(false)
-                .detectionSource("none")
-                .build());
-        lenient().when(usageStatisticsService.describeCall(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.isNull()))
-            .thenAnswer(invocation -> mock(UsageCallDescriptor.class));
-        lenient().when(usageStatisticsService.beginCall(org.mockito.ArgumentMatchers.any()))
-            .thenReturn(mock(UsageCallSession.class));
-        callerPluginAuditRecorder = new CallerPluginAuditRecorder(callerPluginResolver,
-            callerPluginObservationRegistry);
+        lenient()
+                .when(callerPluginResolver.resolveCurrentCallerSnapshot())
+                .thenReturn(CallerPluginInfo.builder()
+                        .detected(false)
+                        .detectionSource("none")
+                        .build());
+        lenient()
+                .when(usageStatisticsService.describeCall(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.isNull()))
+                .thenAnswer(invocation -> mock(UsageCallDescriptor.class));
+        lenient()
+                .when(usageStatisticsService.beginCall(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(mock(UsageCallSession.class));
+        callerPluginAuditRecorder =
+                new CallerPluginAuditRecorder(callerPluginResolver, callerPluginObservationRegistry);
         service = new AiModelServiceImpl(
-            new DefaultAiModelResolver(client, providerClientCache, secretResolver,
-                defaultModelSlotStore),
-            new DefaultLanguageModelFactory(providerClientCache,
-                new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport(),
-                    new MediaResourcePolicy(), new ModelCapabilityMatcher(),
-                    new LanguageModelRuntimeProperties(), new UsageExecutionObserver())),
-            new DefaultEmbeddingModelFactory(providerClientCache,
-                new EmbeddingModelRuntimeFactory(new UsageExecutionObserver())),
-            new DefaultRerankingModelFactory(providerClientCache,
-                new RerankingModelRuntimeFactory(new UsageExecutionObserver())),
-            new DefaultImageGenerationModelFactory(),
-            callerPluginAuditRecorder,
-            usageStatisticsService
-        );
+                new DefaultAiModelResolver(client, providerClientCache, secretResolver, defaultModelSlotStore),
+                new DefaultLanguageModelFactory(
+                        providerClientCache,
+                        new LanguageModelRuntimeFactory(
+                                new LanguageModelRuntimeSupport(),
+                                new MediaResourcePolicy(),
+                                new ModelCapabilityMatcher(),
+                                new LanguageModelRuntimeProperties(),
+                                new UsageExecutionObserver())),
+                new DefaultEmbeddingModelFactory(
+                        providerClientCache, new EmbeddingModelRuntimeFactory(new UsageExecutionObserver())),
+                new DefaultRerankingModelFactory(
+                        providerClientCache, new RerankingModelRuntimeFactory(new UsageExecutionObserver())),
+                new DefaultImageGenerationModelFactory(),
+                callerPluginAuditRecorder,
+                usageStatisticsService,
+                new run.halo.aifoundation.service.decision.DecisionModelFactory(
+                        providerClientCache, new UsageExecutionObserver()));
+    }
+
+    @Test
+    void decisionModel_resolvesDefaultResourceNameAndKeepsProviderCapabilities() {
+        var slots = new DefaultModelSlots();
+        slots.setDecisionModelName("decision-resource");
+        var model = aiModel("decision-resource", "typesafe-prod", "jev-latest", "Jev", true, ModelType.DECISION);
+        var provider = aiProvider("typesafe-prod", "typesafe", true);
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
+        when(client.fetch(AiModel.class, "decision-resource")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "typesafe-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("typesafe"))
+                .thenReturn(new run.halo.aifoundation.provider.typesafe.TypeSafeProvider());
+        when(providerClientCache.getOrCreateDecisionClient(provider, "sk-test", ProviderModelRef.from(model)))
+                .thenReturn(request -> Mono.empty());
+        StepVerifier.create(service.decisionModel())
+                .assertNext(resolved -> {
+                    assertThat(resolved.capabilities().getMaxScoreLevels()).isEqualTo(10);
+                    assertThat(resolved.capabilities().getChoiceProbabilities()).isTrue();
+                    assertThat(resolved.capabilities().getChoiceConfidence()).isTrue();
+                    assertThat(resolved.capabilities().getScoreProbabilities()).isTrue();
+                    assertThat(resolved.capabilities().getScoreConfidence()).isTrue();
+                    assertThat(resolved.capabilities().getScoreLegend()).isTrue();
+                    resolved.capabilities().setChoiceConfidence(false);
+                    assertThat(resolved.capabilities().getChoiceConfidence()).isTrue();
+                })
+                .verifyComplete();
+        verify(client).fetch(AiModel.class, "decision-resource");
+    }
+
+    @Test
+    void decisionModel_rejectsWrongModelType() {
+        when(client.fetch(AiModel.class, "language"))
+                .thenReturn(Mono.just(aiModel("language", "openai", "model", "Model", true)));
+        StepVerifier.create(service.decisionModel("language"))
+                .expectError(IncompatibleModelTypeException.class)
+                .verify();
     }
 
     // ---- languageModel — fetch by metadata.name ----
@@ -123,8 +168,8 @@ class AiModelServiceImplTest {
         when(client.fetch(AiModel.class, "nonexistent-model")).thenReturn(Mono.empty());
 
         StepVerifier.create(service.languageModel("nonexistent-model"))
-            .expectError(ModelNotFoundException.class)
-            .verify();
+                .expectError(ModelNotFoundException.class)
+                .verify();
     }
 
     @Test
@@ -133,10 +178,10 @@ class AiModelServiceImplTest {
         when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
 
         StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
-            .expectErrorSatisfies(e -> assertThat(e)
-                .isInstanceOf(run.halo.aifoundation.exception.ModelDisabledException.class)
-                .hasMessageContaining("openai-prod-gpt-4-abc"))
-            .verify();
+                .expectErrorSatisfies(e -> assertThat(e)
+                        .isInstanceOf(run.halo.aifoundation.exception.ModelDisabledException.class)
+                        .hasMessageContaining("openai-prod-gpt-4-abc"))
+                .verify();
     }
 
     @Test
@@ -148,8 +193,8 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
 
         StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
-            .expectError(ProviderDisabledException.class)
-            .verify();
+                .expectError(ProviderDisabledException.class)
+                .verify();
     }
 
     @Test
@@ -159,21 +204,21 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.empty());
 
         StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
-            .expectErrorSatisfies(e -> assertThat(e)
-                .isInstanceOf(ModelNotFoundException.class)
-                .hasMessageContaining("Provider not found"))
-            .verify();
+                .expectErrorSatisfies(e -> assertThat(e)
+                        .isInstanceOf(ModelNotFoundException.class)
+                        .hasMessageContaining("Provider not found"))
+                .verify();
     }
 
     @Test
     void languageModel_wrongModelType_emitsIncompatibleModelTypeException() {
-        var model = aiModel("embedding", "openai-prod", "text-embedding-3-small",
-            "Embedding", true, ModelType.EMBEDDING);
+        var model =
+                aiModel("embedding", "openai-prod", "text-embedding-3-small", "Embedding", true, ModelType.EMBEDDING);
         when(client.fetch(AiModel.class, "embedding")).thenReturn(Mono.just(model));
 
         StepVerifier.create(service.languageModel("embedding"))
-            .expectError(IncompatibleModelTypeException.class)
-            .verify();
+                .expectError(IncompatibleModelTypeException.class)
+                .verify();
     }
 
     @Test
@@ -181,8 +226,8 @@ class AiModelServiceImplTest {
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
 
         StepVerifier.create(service.languageModel())
-            .expectError(DefaultModelNotConfiguredException.class)
-            .verify();
+                .expectError(DefaultModelNotConfiguredException.class)
+                .verify();
     }
 
     @Test
@@ -198,13 +243,12 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateChatModel(provider, "sk-test",
-            ProviderModelRef.from(model)))
-            .thenReturn(chatModel);
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", ProviderModelRef.from(model)))
+                .thenReturn(chatModel);
 
         StepVerifier.create(service.languageModel())
-            .assertNext(languageModel -> assertThat(languageModel).isNotNull())
-            .verifyComplete();
+                .assertNext(languageModel -> assertThat(languageModel).isNotNull())
+                .verifyComplete();
     }
 
     @Test
@@ -214,16 +258,16 @@ class AiModelServiceImplTest {
         var chatModel = mock(ChatModel.class);
         var providerType = languageProviderType();
         var caller = CallerPluginInfo.builder()
-            .detected(true)
-            .detectionSource("stack-classloader")
-            .pluginName("consumer-plugin")
-            .build();
+                .detected(true)
+                .detectionSource("stack-classloader")
+                .pluginName("consumer-plugin")
+                .build();
         var enrichedCaller = CallerPluginInfo.builder()
-            .detected(true)
-            .detectionSource("stack-classloader")
-            .pluginName("consumer-plugin")
-            .displayName("Consumer Plugin")
-            .build();
+                .detected(true)
+                .detectionSource("stack-classloader")
+                .pluginName("consumer-plugin")
+                .displayName("Consumer Plugin")
+                .build();
 
         when(callerPluginResolver.resolveCurrentCallerSnapshot()).thenReturn(caller);
         when(callerPluginResolver.resolveCurrentCaller()).thenReturn(Mono.just(enrichedCaller));
@@ -231,13 +275,12 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateChatModel(provider, "sk-test",
-            ProviderModelRef.from(model)))
-            .thenReturn(chatModel);
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", ProviderModelRef.from(model)))
+                .thenReturn(chatModel);
 
         StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
-            .assertNext(languageModel -> assertThat(languageModel).isNotNull())
-            .verifyComplete();
+                .assertNext(languageModel -> assertThat(languageModel).isNotNull())
+                .verifyComplete();
 
         verify(callerPluginObservationRegistry).record(enrichedCaller);
     }
@@ -255,20 +298,24 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateChatModel(provider, "sk-test",
-            ProviderModelRef.from(model)))
-            .thenReturn(chatModel);
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", ProviderModelRef.from(model)))
+                .thenReturn(chatModel);
 
         StepVerifier.create(service.languageModel("  "))
-            .assertNext(languageModel -> assertThat(languageModel).isNotNull())
-            .verifyComplete();
+                .assertNext(languageModel -> assertThat(languageModel).isNotNull())
+                .verifyComplete();
     }
 
     @Test
     void embeddingModel_withoutName_resolvesConfiguredModel() {
         var slots = defaultSlots(null, "openai-prod-embedding");
-        var model = aiModel("openai-prod-embedding", "openai-prod",
-            "text-embedding-3-small", "Embedding", true, ModelType.EMBEDDING);
+        var model = aiModel(
+                "openai-prod-embedding",
+                "openai-prod",
+                "text-embedding-3-small",
+                "Embedding",
+                true,
+                ModelType.EMBEDDING);
         var provider = aiProvider("openai-prod", "openai", true);
         var springEmbeddingModel = mock(org.springframework.ai.embedding.EmbeddingModel.class);
         var providerType = providerType(ModelType.EMBEDDING);
@@ -278,12 +325,12 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateEmbeddingModel(provider, "sk-test",
-            ProviderModelRef.from(model))).thenReturn(springEmbeddingModel);
+        when(providerClientCache.getOrCreateEmbeddingModel(provider, "sk-test", ProviderModelRef.from(model)))
+                .thenReturn(springEmbeddingModel);
 
         StepVerifier.create(service.embeddingModel())
-            .assertNext(embeddingModel -> assertThat(embeddingModel).isNotNull())
-            .verifyComplete();
+                .assertNext(embeddingModel -> assertThat(embeddingModel).isNotNull())
+                .verifyComplete();
     }
 
     @Test
@@ -291,19 +338,17 @@ class AiModelServiceImplTest {
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
 
         StepVerifier.create(service.embeddingModel(""))
-            .expectError(DefaultModelNotConfiguredException.class)
-            .verify();
+                .expectError(DefaultModelNotConfiguredException.class)
+                .verify();
     }
 
     @Test
     void rerankingModel_withoutName_resolvesConfiguredModel() {
         var slots = defaultSlots(null, null, "native-rerank-model");
-        var model = aiModel("native-rerank-model", "rerank-provider",
-            "rerank-v3.5", "Rerank", true, ModelType.RERANK);
+        var model = aiModel("native-rerank-model", "rerank-provider", "rerank-v3.5", "Rerank", true, ModelType.RERANK);
         var provider = aiProvider("rerank-provider", "native-rerank", true);
-        ProviderRerankingClient rerankingClient = request -> Mono.just(RerankResponse.builder()
-            .query(request.getQuery())
-            .build());
+        ProviderRerankingClient rerankingClient = request ->
+                Mono.just(RerankResponse.builder().query(request.getQuery()).build());
         var providerType = providerType(ModelType.RERANK);
 
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
@@ -311,30 +356,28 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test",
-            ProviderModelRef.from(model)))
-            .thenReturn(rerankingClient);
+        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", ProviderModelRef.from(model)))
+                .thenReturn(rerankingClient);
 
         StepVerifier.create(service.rerankingModel())
-            .assertNext(rerankingModel -> assertThat(rerankingModel).isNotNull())
-            .verifyComplete();
+                .assertNext(rerankingModel -> assertThat(rerankingModel).isNotNull())
+                .verifyComplete();
     }
 
     @Test
     void rerankingModel_wrongModelType_emitsIncompatibleModelTypeException() {
-        var model = aiModel("embedding", "openai-prod", "text-embedding-3-small",
-            "Embedding", true, ModelType.EMBEDDING);
+        var model =
+                aiModel("embedding", "openai-prod", "text-embedding-3-small", "Embedding", true, ModelType.EMBEDDING);
         when(client.fetch(AiModel.class, "embedding")).thenReturn(Mono.just(model));
 
         StepVerifier.create(service.rerankingModel("embedding"))
-            .expectError(IncompatibleModelTypeException.class)
-            .verify();
+                .expectError(IncompatibleModelTypeException.class)
+                .verify();
     }
 
     @Test
     void rerankingModel_unsupportedProvider_emitsModelNotFoundException() {
-        var model = aiModel("native-rerank-model", "rerank-provider",
-            "rerank-v3.5", "Rerank", true, ModelType.RERANK);
+        var model = aiModel("native-rerank-model", "rerank-provider", "rerank-v3.5", "Rerank", true, ModelType.RERANK);
         var provider = aiProvider("rerank-provider", "native-rerank", true);
         var providerType = providerType(ModelType.RERANK);
 
@@ -342,22 +385,21 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test",
-            ProviderModelRef.from(model)))
-            .thenReturn(null);
+        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", ProviderModelRef.from(model)))
+                .thenReturn(null);
 
         StepVerifier.create(service.rerankingModel("native-rerank-model"))
-            .expectErrorSatisfies(error -> assertThat(error)
-                .isInstanceOf(ModelNotFoundException.class)
-                .hasMessageContaining("does not support reranking"))
-            .verify();
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(ModelNotFoundException.class)
+                        .hasMessageContaining("does not support reranking"))
+                .verify();
     }
 
     @Test
     void imageGenerationModel_withoutName_resolvesConfiguredModel() {
         var slots = defaultSlots(null, null, null, "openai-prod-image");
-        var model = aiModel("openai-prod-image", "openai-prod",
-            "gpt-image-1", "Image", true, ModelType.IMAGE_GENERATION);
+        var model =
+                aiModel("openai-prod-image", "openai-prod", "gpt-image-1", "Image", true, ModelType.IMAGE_GENERATION);
         var provider = aiProvider("openai-prod", "openai", true);
         var providerType = providerType(ModelType.IMAGE_GENERATION);
 
@@ -368,24 +410,23 @@ class AiModelServiceImplTest {
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
 
         StepVerifier.create(service.imageGenerationModel())
-            .assertNext(imageGenerationModel -> {
-                assertThat(imageGenerationModel).isNotNull();
-                StepVerifier.create(imageGenerationModel.generateImage("halo"))
-                    .expectError(UnsupportedModelCapabilityException.class)
-                    .verify();
-            })
-            .verifyComplete();
+                .assertNext(imageGenerationModel -> {
+                    assertThat(imageGenerationModel).isNotNull();
+                    StepVerifier.create(imageGenerationModel.generateImage("halo"))
+                            .expectError(UnsupportedModelCapabilityException.class)
+                            .verify();
+                })
+                .verifyComplete();
     }
 
     @Test
     void imageGenerationModel_wrongModelType_emitsIncompatibleModelTypeException() {
-        var model = aiModel("language", "openai-prod", "gpt-4", "GPT-4", true,
-            ModelType.LANGUAGE);
+        var model = aiModel("language", "openai-prod", "gpt-4", "GPT-4", true, ModelType.LANGUAGE);
         when(client.fetch(AiModel.class, "language")).thenReturn(Mono.just(model));
 
         StepVerifier.create(service.imageGenerationModel("language"))
-            .expectError(IncompatibleModelTypeException.class)
-            .verify();
+                .expectError(IncompatibleModelTypeException.class)
+                .verify();
     }
 
     @Test
@@ -393,19 +434,23 @@ class AiModelServiceImplTest {
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
 
         StepVerifier.create(service.imageGenerationModel(""))
-            .expectError(DefaultModelNotConfiguredException.class)
-            .verify();
+                .expectError(DefaultModelNotConfiguredException.class)
+                .verify();
     }
 
     // ---- helpers ----
 
-    private AiModel aiModel(String name, String providerName, String modelId,
-                            String displayName, boolean enabled) {
+    private AiModel aiModel(String name, String providerName, String modelId, String displayName, boolean enabled) {
         return aiModel(name, providerName, modelId, displayName, enabled, ModelType.LANGUAGE);
     }
 
-    private AiModel aiModel(String name, String providerName, String modelId,
-                            String displayName, boolean enabled, ModelType modelType) {
+    private AiModel aiModel(
+            String name,
+            String providerName,
+            String modelId,
+            String displayName,
+            boolean enabled,
+            ModelType modelType) {
         var model = new AiModel();
         var metadata = new Metadata();
         metadata.setName(name);
@@ -438,13 +483,16 @@ class AiModelServiceImplTest {
         return defaultSlots(languageModelName, embeddingModelName, null);
     }
 
-    private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName,
-        String rerankModelName) {
+    private DefaultModelSlots defaultSlots(
+            String languageModelName, String embeddingModelName, String rerankModelName) {
         return defaultSlots(languageModelName, embeddingModelName, rerankModelName, null);
     }
 
-    private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName,
-        String rerankModelName, String imageGenerationModelName) {
+    private DefaultModelSlots defaultSlots(
+            String languageModelName,
+            String embeddingModelName,
+            String rerankModelName,
+            String imageGenerationModelName) {
         var slots = new DefaultModelSlots();
         slots.setLanguageModelName(languageModelName);
         slots.setEmbeddingModelName(embeddingModelName);
@@ -461,13 +509,13 @@ class AiModelServiceImplTest {
 
     private AiProviderType providerType(ModelType modelType) {
         var type = mock(AiProviderType.class);
-        lenient().when(type.getSupportedAdapterTypes())
-            .thenReturn(List.of(defaultAdapter(modelType)));
+        lenient().when(type.getSupportedAdapterTypes()).thenReturn(List.of(defaultAdapter(modelType)));
         return type;
     }
 
     private AdapterType defaultAdapter(ModelType modelType) {
         return switch (modelType) {
+            case DECISION -> AdapterType.TYPESAFE_SYSTEM_ONE;
             case LANGUAGE -> AdapterType.OPENAI_CHAT;
             case EMBEDDING -> AdapterType.OPENAI_EMBEDDING;
             case IMAGE_GENERATION -> AdapterType.OPENAI_IMAGE;

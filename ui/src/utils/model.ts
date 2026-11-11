@@ -12,6 +12,7 @@ import {
 } from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/use-models-fetch'
 import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
+import { reconcileModelCapabilities } from './model-capability-changes'
 
 export function findProviderTypeForModel(
   model: AiModel,
@@ -34,12 +35,19 @@ export function modelFeatureOptionsForProviderType(
   providerType: ProviderTypeInfo | undefined,
   adapterType?: string,
 ) {
-  if (!providerType) {
+  const supportedFeatures = modelSupportedFeaturesForProviderType(providerType, adapterType)
+  if (!supportedFeatures) {
     return [...MODEL_FEATURE_OPTIONS]
   }
-  const adapter = providerType.adapters?.find((item) => item.adapterType === adapterType)
-  const supportedFeatures = adapter?.supportedFeatures ?? providerType.supportedFeatures ?? []
   return MODEL_FEATURE_OPTIONS.filter((item) => supportedFeatures.includes(item.value))
+}
+
+export function modelSupportedFeaturesForProviderType(
+  providerType: ProviderTypeInfo | undefined,
+  adapterType?: string,
+) {
+  const adapter = providerType?.adapters?.find((item) => item.adapterType === adapterType)
+  return adapter?.supportedFeatures ?? providerType?.supportedFeatures
 }
 
 export function defaultModelTypeForProviderType(
@@ -121,6 +129,7 @@ export interface DiscoveredModelProfileOverride {
   modelType?: AiModel['spec']['modelType']
   adapterType?: AiModel['spec']['adapterType']
   features?: NonNullable<AiModel['spec']['features']>
+  parameterConstraints?: AiModel['spec']['parameterConstraints']
 }
 
 export interface DiscoveredModelProfile {
@@ -250,6 +259,7 @@ export function createModelFromDiscovered(
   providerName: string,
   model: DiscoveredModel,
   override?: DiscoveredModelProfileOverride,
+  providerType?: ProviderTypeInfo,
 ): AiModel {
   const modelType = override?.modelType || model.modelType || AiModelSpecModelTypeEnum.Language
   const adapterType =
@@ -265,6 +275,8 @@ export function createModelFromDiscovered(
     discoveryConfidence: model.confidence || AiModelSpecDiscoveryConfidenceEnum.Low,
     ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
+    catalogParameters: model.catalogParameters,
+    parameterConstraints: override?.parameterConstraints,
   } as AiModel['spec']
 
   return {
@@ -273,7 +285,10 @@ export function createModelFromDiscovered(
     metadata: {
       name: '',
     },
-    spec,
+    spec: reconcileModelCapabilities(model, spec, {
+      importing: true,
+      supportedFeatures: modelSupportedFeaturesForProviderType(providerType, adapterType),
+    }),
   }
 }
 

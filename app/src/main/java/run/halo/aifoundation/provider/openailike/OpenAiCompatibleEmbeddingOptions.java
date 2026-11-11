@@ -8,7 +8,7 @@ import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.lang.Nullable;
 
 public class OpenAiCompatibleEmbeddingOptions
-    implements run.halo.aifoundation.provider.support.ParameterMappedEmbeddingOptions {
+        implements run.halo.aifoundation.provider.support.ParameterMappedEmbeddingOptions {
 
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
     public static final int DEFAULT_MAX_RETRIES = 3;
@@ -103,19 +103,19 @@ public class OpenAiCompatibleEmbeddingOptions
 
     public Builder mutate() {
         return builder()
-            .baseUrl(baseUrl)
-            .endpointPath(endpointPath)
-            .apiKey(apiKey)
-            .model(model)
-            .deploymentName(deploymentName)
-            .timeout(timeout)
-            .maxRetries(maxRetries)
-            .proxy(proxy)
-            .customHeaders(customHeaders)
-            .user(user)
-            .encodingFormat(encodingFormat)
-            .dimensions(dimensions)
-            .extraBody(extraBody);
+                .baseUrl(baseUrl)
+                .endpointPath(endpointPath)
+                .apiKey(apiKey)
+                .model(model)
+                .deploymentName(deploymentName)
+                .timeout(timeout)
+                .maxRetries(maxRetries)
+                .proxy(proxy)
+                .customHeaders(customHeaders)
+                .user(user)
+                .encodingFormat(encodingFormat)
+                .dimensions(dimensions)
+                .extraBody(extraBody);
     }
 
     @Override
@@ -131,7 +131,8 @@ public class OpenAiCompatibleEmbeddingOptions
     }
 
     public enum EncodingFormat {
-        FLOAT("float"), BASE64("base64");
+        FLOAT("float"),
+        BASE64("base64");
 
         private final String value;
 

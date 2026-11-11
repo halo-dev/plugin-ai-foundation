@@ -11,7 +11,7 @@ not consumer APIs.
 
 | Area                    | Public types                                                            | Purpose                                                                                |
 | ----------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Service                 | `AiModelService`                                                        | Resolve default or named language, embedding, reranking, and image models.             |
+| Service                 | `AiModelService`                                                        | Resolve default or named language, embedding, reranking, image, and decision models.   |
 | Shared tools            | `AiToolService`, `AiToolProvider`, `ToolRegistration`, `ToolDescriptor` | [Register, discover and resolve explicitly selected shared tools](../tool-catalog.md). |
 | Tool configuration      | `ToolConfiguration`                                                     | Provide a FormKit schema and configuration read/save callbacks.                        |
 | Model identity          | `ModelInfo`, `ProviderInfo`                                             | Read-only resolved model and provider information.                                     |
@@ -128,6 +128,17 @@ The main `ToolDefinition` builder fields are `name`, `description`, `inputSchema
 | Source reranking      | `RagSourceReranker`, `RagSourceRerankRequest`, `RerankingModelRagSourceReranker`      |
 | Policies              | `RagPromptPlacement`, `RagFailurePolicy`, `RagEmptyContextPolicy`                     |
 | Observation           | `RagLifecycle`, `RagLifecycleEvent`                                                   |
+
+## Decision models
+
+Resolve with `AiModelService.decisionModel()` or `decisionModel(modelName)`. See the [decision model guide](./decision-models.md).
+
+| Area | Public types |
+| --- | --- |
+| Inference | `DecisionModel`, `DecisionRequest`, `DecisionResponse` |
+| Typed questions and results | `DecisionQuestion`, `DecisionQuestionType`, `DecisionAnswer` |
+| Capabilities and token usage | `DecisionCapability`, `DecisionUsage` |
+| Request control errors | `DecisionCancelledException`, `DecisionTimeoutException` |
 
 ## Image generation
 

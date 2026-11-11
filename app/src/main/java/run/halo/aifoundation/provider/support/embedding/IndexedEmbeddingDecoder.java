@@ -14,17 +14,15 @@ import org.springframework.ai.embedding.Embedding;
 /** Deterministically maps indexed embedding arrays without provider-specific response probing. */
 public final class IndexedEmbeddingDecoder {
 
-    private IndexedEmbeddingDecoder() {
+    private IndexedEmbeddingDecoder() {}
+
+    public static List<Embedding> decode(JsonNode data, Function<JsonNode, float[]> vectorDecoder) {
+        return decode(
+                data, item -> item.path("index").isNumber() ? item.path("index").asInt() : -1, vectorDecoder);
     }
 
-    public static List<Embedding> decode(JsonNode data,
-        Function<JsonNode, float[]> vectorDecoder) {
-        return decode(data, item -> item.path("index").isNumber()
-            ? item.path("index").asInt() : -1, vectorDecoder);
-    }
-
-    public static List<Embedding> decode(JsonNode data, ToIntFunction<JsonNode> indexDecoder,
-        Function<JsonNode, float[]> vectorDecoder) {
+    public static List<Embedding> decode(
+            JsonNode data, ToIntFunction<JsonNode> indexDecoder, Function<JsonNode, float[]> vectorDecoder) {
         var values = new ArrayList<IndexedEmbedding>();
         for (var item : data) {
             var decodedIndex = indexDecoder.applyAsInt(item);
@@ -33,8 +31,8 @@ public final class IndexedEmbeddingDecoder {
         }
         values.sort(Comparator.comparingInt(IndexedEmbedding::index));
         return values.stream()
-            .map(value -> new Embedding(value.vector(), value.index()))
-            .toList();
+                .map(value -> new Embedding(value.vector(), value.index()))
+                .toList();
     }
 
     public static float[] floatArray(JsonNode value, String invalidShapeMessage) {
@@ -55,8 +53,7 @@ public final class IndexedEmbeddingDecoder {
         if (!value.isTextual()) {
             throw new IllegalArgumentException(invalidShapeMessage);
         }
-        var buffer = ByteBuffer.wrap(Base64.getDecoder().decode(value.asText()))
-            .order(ByteOrder.LITTLE_ENDIAN);
+        var buffer = ByteBuffer.wrap(Base64.getDecoder().decode(value.asText())).order(ByteOrder.LITTLE_ENDIAN);
         var vector = new float[buffer.remaining() / Float.BYTES];
         for (var index = 0; index < vector.length; index++) {
             vector[index] = buffer.getFloat();
@@ -64,6 +61,5 @@ public final class IndexedEmbeddingDecoder {
         return vector;
     }
 
-    private record IndexedEmbedding(int index, float[] vector) {
-    }
+    private record IndexedEmbedding(int index, float[] vector) {}
 }

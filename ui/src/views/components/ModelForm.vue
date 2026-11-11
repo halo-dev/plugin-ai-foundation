@@ -15,6 +15,8 @@ import {
   ModelCapabilitySourcesLanguageEnum,
   AiModelSpecFeaturesEnum as ModelFeature,
 } from '@/api/generated'
+import { useModelCatalogParameters } from '@/composables/use-model-catalog-parameters'
+import { useModelParameters } from '@/composables/use-model-parameters'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import type { ModelFormState } from '@/types/form'
 import { booleanCapabilityFormValue, booleanCapabilityValue } from '@/utils/boolean-capability-form'
@@ -26,11 +28,19 @@ import {
 import {
   adapterOptionsForProviderType,
   defaultAdapterForProviderType,
-  defaultParameterMappingsForAdapter,
   defaultModelTypeForProviderType,
+  defaultParameterMappingsForAdapter,
   modelFeatureOptionsForProviderType,
+  modelSupportedFeaturesForProviderType,
   modelTypeOptionsForProviderType,
 } from '@/utils/model'
+import {
+  featureConstraints,
+  featuresWithConstraints,
+  filterFeatureSupport,
+  parameterFeatures,
+  withFeatureSupport,
+} from '@/utils/model-feature-support'
 import {
   mappingsForModelType,
   validateReasoningMappings,
@@ -45,11 +55,15 @@ import { submitForm } from '@formkit/core'
 import { Toast } from '@halo-dev/components'
 import { computed, ref, shallowRef, watch } from 'vue'
 import AdvancedSettingsCollapsible from './AdvancedSettingsCollapsible.vue'
+import ModelCatalogProvenance from './ModelCatalogProvenance.vue'
+import ModelNativeParameterConstraintFields from './ModelNativeParameterConstraintFields.vue'
+import ModelParameterConstraintFields from './ModelParameterConstraintFields.vue'
 import ParameterMappingFields from './ParameterMappingFields.vue'
 
 const props = defineProps<{
   formState?: ModelFormState
   providerType: string
+  providerName?: string
   modelName?: string
   inheritedMappings?: ModelParameterMappings
 }>()
@@ -97,6 +111,9 @@ const featureOptions = computed(() => {
   ).map((item) => ({
     value: item.value,
     label: item.label,
+    attrs: {
+      onChange: (event: Event) => onFeatureChange(item.value, event),
+    },
   }))
 })
 const selectedAdapterDescription = computed(
@@ -105,6 +122,74 @@ const selectedAdapterDescription = computed(
       ?.description || '选择此模型调用供应商时使用的原生 API 协议。',
 )
 const parameterMappings = ref(props.formState?.parameterMappings)
+const parameterConstraints = ref(props.formState?.parameterConstraints)
+const modelId = shallowRef(props.formState?.modelId || '')
+const isDecisionModel = computed(
+  () => selectedModelType.value === AiModelSpecModelTypeEnum.Decision,
+)
+const modelDraft = computed<AiModel | undefined>(() =>
+  props.providerName && !isDecisionModel.value
+    ? {
+        apiVersion: 'aifoundation.halo.run/v1alpha1',
+        kind: 'AiModel',
+        metadata: { name: props.modelName || '' },
+        spec: {
+          providerName: props.providerName,
+          displayName: props.formState?.displayName || modelId.value,
+          enabled: props.formState?.enabled ?? true,
+          modelId: modelId.value,
+          modelType: selectedModelType.value,
+          adapterType: selectedAdapterType.value,
+        },
+      }
+    : undefined,
+)
+const formIdentity = computed(() =>
+  JSON.stringify([
+    props.modelName,
+    props.providerName,
+    props.providerType,
+    modelId.value,
+    selectedModelType.value,
+    selectedAdapterType.value,
+  ]),
+)
+const parameterIdentityReady = computed(() =>
+  Boolean(props.providerName && selectedProviderType.value),
+)
+const { data: catalogParameters, waitForCurrent: waitForCatalogParameters } =
+  useModelCatalogParameters(
+    modelDraft,
+    computed(() => props.providerType),
+    parameterIdentityReady,
+    computed(() => props.formState?.catalogParameters),
+  )
+const parameterDraft = computed(() =>
+  modelDraft.value
+    ? {
+        ...modelDraft.value,
+        spec: { ...modelDraft.value.spec, catalogParameters: catalogParameters.value },
+      }
+    : undefined,
+)
+const {
+  data: inheritedParameters,
+  isError: inheritedParametersError,
+  isFetching: inheritedParametersLoading,
+} = useModelParameters(parameterDraft)
+const effectiveDraft = computed(() =>
+  parameterDraft.value && !validateReasoningMappings(parameterMappings.value).length
+    ? {
+        ...parameterDraft.value,
+        spec: {
+          ...parameterDraft.value.spec,
+          parameterMappings: parameterMappings.value,
+          parameterConstraints: parameterConstraints.value,
+        },
+      }
+    : undefined,
+)
+const { data: effectiveParameters } = useModelParameters(effectiveDraft)
 
 const booleanCapabilityOptions = [
   { label: '未知', value: '' },
@@ -123,8 +208,17 @@ const inputSourceOptions = [
   { label: 'URL', value: LanguageCapabilityInputSourcesEnum.Url },
 ]
 
-const selectedFeatures = ref<string[]>(
-  props.formState?.features ? [...props.formState.features] : [],
+const featureBaseline = ref(props.formState?.features || [])
+const selectedFeatures = ref<AiModelSpecFeaturesEnum[]>([])
+const effectiveFeatureConstraints = computed(() =>
+  selectedModelType.value === AiModelSpecModelTypeEnum.Language
+    ? featureConstraints(
+        catalogParameters.value,
+        parameterConstraints.value,
+        props.inheritedMappings,
+        parameterMappings.value,
+      )
+    : undefined,
 )
 const languageFileInputValue = ref(
   booleanCapabilityFormValue(props.formState?.capabilities?.language?.fileInput),
@@ -182,6 +276,8 @@ const languageSourceLabel = computed(() =>
       props.formState?.capabilitySources,
       'language',
     ),
+    props.formState?.catalogMatch,
+    'language',
   ),
 )
 const imageGenerationSourceLabel = computed(() =>
@@ -191,6 +287,8 @@ const imageGenerationSourceLabel = computed(() =>
       props.formState?.capabilitySources,
       'imageGeneration',
     ),
+    props.formState?.catalogMatch,
+    'imageGeneration',
   ),
 )
 const visibleCapabilitySourceLabel = computed(() =>
@@ -217,6 +315,7 @@ watch(
 watch(
   [adapterOptions, () => props.formState?.adapterType],
   ([, formAdapter]) => {
+    if (!selectedProviderType.value) return
     selectedAdapterType.value = defaultAdapterForProviderType(
       selectedProviderType.value,
       selectedModelType.value,
@@ -227,18 +326,44 @@ watch(
 )
 
 watch(
-  () => props.formState?.features,
+  () => props.formState?.modelId,
   (value) => {
-    selectedFeatures.value = value ? [...value] : []
+    modelId.value = value || ''
   },
 )
 
-watch(featureOptions, (options) => {
-  const allowedFeatures = new Set(options.map((option) => option.value))
-  selectedFeatures.value = selectedFeatures.value.filter((feature) =>
-    allowedFeatures.has(feature as AiModelSpecFeaturesEnum),
-  )
-})
+watch(
+  () => props.formState?.parameterMappings,
+  (value) => {
+    parameterMappings.value = value
+  },
+)
+
+watch(
+  () => props.formState?.parameterConstraints,
+  (value) => {
+    parameterConstraints.value = value
+  },
+)
+
+watch(
+  () => props.formState?.features,
+  (features) => {
+    featureBaseline.value = features || []
+  },
+)
+
+const supportedFeatures = computed(() =>
+  modelSupportedFeaturesForProviderType(selectedProviderType.value, selectedAdapterType.value),
+)
+
+watch(
+  [featureBaseline, effectiveFeatureConstraints, supportedFeatures],
+  ([features, constraints, supported]) => {
+    selectedFeatures.value = featuresWithConstraints(features, constraints, supported)
+  },
+  { immediate: true },
+)
 
 watch(
   () => props.formState?.capabilities?.language?.fileInput,
@@ -247,7 +372,9 @@ watch(
   },
 )
 
-function onSubmit(data: ModelFormRawState) {
+const isSubmitting = shallowRef(false)
+async function onSubmit(data: ModelFormRawState) {
+  if (isSubmitting.value) return
   let nativeOptions: Record<string, unknown> | undefined
   try {
     nativeOptions = parseProviderNativeOptions(data.nativeOptionsJson)
@@ -265,27 +392,49 @@ function onSubmit(data: ModelFormRawState) {
     Toast.error(mappingErrors[0])
     return
   }
-  const capabilities = buildCapabilities(data)
-  const capabilitySources = buildCapabilitySources(capabilities)
-  if (capabilities && capabilitySources) {
-    capabilities.sources = capabilitySources
+  if (!selectedProviderType.value) {
+    Toast.error('供应商配置尚未加载完成，请稍后重试。')
+    return
   }
-  emit('submit', {
-    modelId: data.modelId,
-    displayName: data.displayName,
-    enabled: data.enabled,
-    modelType: data.modelType,
-    features: data.features?.length ? data.features : undefined,
-    adapterType: selectedAdapterType.value,
-    capabilities,
-    capabilitySources,
-    parameterMappings: normalizedMappings,
-    nativeOptions,
-  })
+  isSubmitting.value = true
+  const submittedIdentity = formIdentity.value
+  try {
+    if (!(await waitForCatalogParameters()) || submittedIdentity !== formIdentity.value) return
+    const features = featuresWithConstraints(
+      data.features,
+      effectiveFeatureConstraints.value,
+      supportedFeatures.value,
+    )
+    const capabilities = buildCapabilities({ ...data, features })
+    const capabilitySources = buildCapabilitySources(capabilities)
+    if (capabilities && capabilitySources) {
+      capabilities.sources = capabilitySources
+    }
+    emit('submit', {
+      modelId: data.modelId,
+      displayName: data.displayName,
+      enabled: data.enabled,
+      modelType: data.modelType,
+      features: features.length ? features : undefined,
+      adapterType: selectedAdapterType.value,
+      capabilities,
+      capabilitySources,
+      parameterMappings: normalizedMappings,
+      parameterConstraints:
+        data.modelType === AiModelSpecModelTypeEnum.Decision
+          ? undefined
+          : filterFeatureSupport(parameterConstraints.value, supportedFeatures.value),
+      catalogParameters: catalogParameters.value,
+      nativeOptions,
+    })
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 defineExpose({
   submit: () => submitForm('model-form'),
+  isSubmitting,
 })
 
 interface ModelFormRawState extends ModelFormState {
@@ -365,14 +514,13 @@ function buildCapabilitySources(
 }
 
 function sourceFor(
-  domain: keyof ModelCapabilitySources,
+  domain: 'language' | 'imageGeneration',
   nextDomain?: LanguageCapability | ImageGenerationCapability,
 ) {
   if (!nextDomain) {
     return undefined
   }
-  const previousDomain =
-    props.formState?.capabilities?.[domain as keyof NonNullable<AiModel['spec']['capabilities']>]
+  const previousDomain = props.formState?.capabilities?.[domain]
   const previousSource =
     props.formState?.capabilitySources?.[domain] || props.formState?.capabilities?.sources?.[domain]
   if (sameJson(previousDomain, nextDomain)) {
@@ -405,8 +553,21 @@ function listFormValue(values?: string[]) {
   return values?.join('\n') || ''
 }
 
-function onFeaturesInput(value: unknown) {
-  selectedFeatures.value = normalizeFeatureValues(value)
+function onFeatureChange(feature: AiModelSpecFeaturesEnum, event: Event) {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement) || input.type !== 'checkbox') return
+  const features = new Set(featureBaseline.value)
+  if (input.checked) features.add(feature)
+  else features.delete(feature)
+  featureBaseline.value = [...features]
+  const parameterFeature = parameterFeatures.find((item) => item === feature)
+  if (!parameterFeature) return
+  // Only a checkbox interaction creates an override; FormKit value sync must not do so.
+  parameterConstraints.value = withFeatureSupport(
+    parameterConstraints.value,
+    parameterFeature,
+    input.checked,
+  )
 }
 
 function onLanguageFileInput(value: unknown) {
@@ -450,6 +611,7 @@ function sameJson(a: unknown, b: unknown) {
       placeholder="例如: gpt-4o"
       :disabled="isEditing"
       :value="formState?.modelId"
+      @input="modelId = String($event || '')"
     />
 
     <FormKit
@@ -490,23 +652,37 @@ function sameJson(a: unknown, b: unknown) {
       :value="formState?.enabled ?? true"
     />
 
-    <AdvancedSettingsCollapsible title="参数映射" source-label="模型覆盖">
+    <AdvancedSettingsCollapsible v-if="!isDecisionModel" title="参数映射">
       <p class=":uno: mb-3 text-xs text-gray-500">
-        仅在这个模型需要例外处理时覆盖。未配置的参数继续继承 Provider 设置。
+        未配置的参数使用供应商覆盖、模型目录和内置默认值。
       </p>
       <ParameterMappingFields
         v-model="parameterMappings"
+        v-model:constraints="parameterConstraints"
         context="model"
         :model-type="selectedModelType as MappingModelType"
         :adapter-type="selectedAdapterType"
         :definitions="selectedProviderType?.parameterDefinitions"
         :templates="selectedProviderType?.parameterMappingTemplates"
         :defaults="defaultParameterMappings"
-        :inherited-mappings="inheritedMappings"
+        :inherited-mappings="inheritedParameters?.mappings || inheritedMappings"
+        :effective-mappings="effectiveParameters?.mappings"
+        :resolved-inheritance="Boolean(inheritedParameters)"
       />
     </AdvancedSettingsCollapsible>
 
-    <AdvancedSettingsCollapsible title="供应商原生参数" source-label="模型配置">
+    <AdvancedSettingsCollapsible v-if="!isDecisionModel" title="Token 限制">
+      <p v-if="inheritedParametersError" class=":uno: text-xs text-red-600">
+        暂时无法获取继承配置，请稍后重试。
+      </p>
+      <ModelParameterConstraintFields
+        v-model="parameterConstraints"
+        :model-type="selectedModelType"
+        :inherited="inheritedParameters?.constraints"
+      />
+    </AdvancedSettingsCollapsible>
+
+    <AdvancedSettingsCollapsible title="供应商原生参数">
       <FormKit
         type="textarea"
         name="nativeOptionsJson"
@@ -516,6 +692,13 @@ function sameJson(a: unknown, b: unknown) {
         :rows="8"
         :value="formatProviderNativeOptions(formState?.nativeOptions)"
       />
+      <ModelNativeParameterConstraintFields
+        v-if="isLanguageCapabilityVisible"
+        v-model="parameterConstraints"
+        :inherited="inheritedParameters?.constraints"
+        :loading="inheritedParametersLoading"
+        :failed="inheritedParametersError"
+      />
     </AdvancedSettingsCollapsible>
 
     <AdvancedSettingsCollapsible
@@ -524,13 +707,13 @@ function sameJson(a: unknown, b: unknown) {
       :source-label="visibleCapabilitySourceLabel"
     >
       <template v-if="isLanguageCapabilityVisible">
+        <ModelCatalogProvenance v-if="formState?.catalogMatch" :match="formState.catalogMatch" />
         <FormKit
+          v-model="selectedFeatures"
           type="checkbox"
           name="features"
           label="模型能力"
           :options="featureOptions"
-          :value="selectedFeatures"
-          @input="onFeaturesInput"
         />
         <FormKit
           type="select"

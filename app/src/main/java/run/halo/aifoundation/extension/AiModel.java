@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
+import run.halo.aifoundation.catalog.ModelCatalogMatch;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
@@ -19,8 +20,7 @@ import run.halo.app.extension.GVK;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@GVK(group = "aifoundation.halo.run", version = "v1alpha1", kind = "AiModel",
-    plural = "aimodels", singular = "aimodel")
+@GVK(group = "aifoundation.halo.run", version = "v1alpha1", kind = "AiModel", plural = "aimodels", singular = "aimodel")
 public class AiModel extends AbstractExtension {
 
     @Schema(requiredMode = REQUIRED)
@@ -28,34 +28,56 @@ public class AiModel extends AbstractExtension {
 
     @Data
     public static class AiModelSpec {
-        @Schema(requiredMode = REQUIRED, description = "References AiProvider.metadata.name (provider instance resource name)")
+        @Schema(
+                requiredMode = REQUIRED,
+                description = "References AiProvider.metadata.name (provider instance resource name)")
         private String providerName;
+
         @Schema(requiredMode = REQUIRED, description = "Unique identifier of the model within the provider")
         private String modelId;
+
         @Schema(requiredMode = REQUIRED, description = "Display name of the model")
         private String displayName;
+
         @Schema(requiredMode = REQUIRED, description = "Whether the model is enabled")
         private boolean enabled = true;
+
         @Schema(requiredMode = REQUIRED, description = "Primary model purpose")
         private ModelType modelType;
+
         @Schema(description = "Optional model features")
         private List<ModelFeature> features = List.of();
+
         @Schema(description = "Internal invocation adapter")
         private AdapterType adapterType;
+
         @Schema(description = "How this model profile was obtained")
         private DiscoverySource discoverySource = DiscoverySource.MANUAL;
+
         @Schema(description = "How reliable the discovered model profile is")
         private DiscoveryConfidence discoveryConfidence = DiscoveryConfidence.HIGH;
+
         @Schema(description = "Fine-grained model capabilities")
         private ModelCapabilities capabilities;
+
         @Schema(description = "Source of fine-grained model capabilities by domain")
         private ModelCapabilitySources capabilitySources = ModelCapabilitySources.unknown();
+
+        @Schema(description = "Third-party catalog provenance captured at import; " + "never refreshed automatically")
+        private ModelCatalogMatch catalogMatch;
+
         @Schema(description = "Model-specific parameter mapping overrides")
         private ModelParameterMappings parameterMappings;
+
+        @Schema(description = "Model-specific automatic configuration captured from the catalog")
+        private ModelParameterProfile catalogParameters;
+
+        @Schema(description = "Administrator overrides of model parameter constraints")
+        private ModelParameterConstraints parameterConstraints;
+
         @Schema(
-            description = "Provider-native non-secret options configured by the model administrator",
-            additionalProperties = Schema.AdditionalPropertiesValue.TRUE
-        )
+                description = "Provider-native non-secret options configured by the model administrator",
+                additionalProperties = Schema.AdditionalPropertiesValue.TRUE)
         private Map<String, Object> nativeOptions = Map.of();
     }
 }

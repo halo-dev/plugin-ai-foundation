@@ -3,50 +3,49 @@ package run.halo.aifoundation.provider.mapping;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.AdapterProtocol;
+import run.halo.aifoundation.provider.support.AdapterType;
 
 public final class ProviderParameterMappingDefaults {
 
     private static final ModelParameterCatalog CATALOG = new ModelParameterCatalog();
 
-    private ProviderParameterMappingDefaults() {
-    }
+    private ProviderParameterMappingDefaults() {}
 
-    public static Map<ModelParameter, DefaultParameterMapping> forAdapters(
-        List<AdapterType> adapters) {
+    public static Map<ModelParameter, DefaultParameterMapping> forAdapters(List<AdapterType> adapters) {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         if (adapters == null) {
             return Map.of();
         }
-        var modelTypes = adapters.stream().map(AdapterType::getModelType).distinct().toList();
+        var modelTypes =
+                adapters.stream().map(AdapterType::getModelType).distinct().toList();
         for (var definition : CATALOG.definitionsFor(modelTypes)) {
             defaults.put(definition.parameter(), DefaultParameterMapping.unsupported());
         }
-        if (adapters.stream().anyMatch(adapter -> adapter.getModelType()
-            == run.halo.aifoundation.provider.support.ModelType.LANGUAGE
-            && adapter != AdapterType.OLLAMA_CHAT)) {
+        if (adapters.stream()
+                .anyMatch(adapter -> adapter.getModelType() == run.halo.aifoundation.provider.support.ModelType.LANGUAGE
+                        && adapter != AdapterType.OLLAMA_CHAT)) {
             putLanguage(defaults, "openai.max-tokens");
         }
         if (adapters.contains(AdapterType.OLLAMA_CHAT)) {
             putOllamaLanguage(defaults);
         }
-        if (adapters.stream().anyMatch(adapter -> adapter.getModelType()
-            == run.halo.aifoundation.provider.support.ModelType.EMBEDDING)) {
-            defaults.put(ModelParameter.DIMENSIONS,
-                DefaultParameterMapping.template("embedding.dimensions"));
-        }
         if (adapters.stream()
-            .anyMatch(adapter -> adapter.getProtocol() == AdapterProtocol.RERANK)) {
+                .anyMatch(adapter ->
+                        adapter.getModelType() == run.halo.aifoundation.provider.support.ModelType.EMBEDDING)) {
+            defaults.put(ModelParameter.DIMENSIONS, DefaultParameterMapping.template("embedding.dimensions"));
+        }
+        if (adapters.stream().anyMatch(adapter -> adapter.getProtocol() == AdapterProtocol.RERANK)) {
             defaults.put(ModelParameter.TOP_N, DefaultParameterMapping.template("rerank.top-n"));
         }
-        adapters.stream().filter(ProviderParameterMappingDefaults::isImage).findFirst()
-            .ifPresent(adapter -> putImage(defaults, adapter));
+        adapters.stream()
+                .filter(ProviderParameterMappingDefaults::isImage)
+                .findFirst()
+                .ifPresent(adapter -> putImage(defaults, adapter));
         return Map.copyOf(defaults);
     }
 
-    private static void putLanguage(Map<ModelParameter, DefaultParameterMapping> defaults,
-        String maxOutputTokens) {
+    private static void putLanguage(Map<ModelParameter, DefaultParameterMapping> defaults, String maxOutputTokens) {
         defaults.put(ModelParameter.MAX_OUTPUT_TOKENS, DefaultParameterMapping.template(maxOutputTokens));
         put(defaults, ModelParameter.TEMPERATURE, "chat.temperature");
         put(defaults, ModelParameter.TOP_P, "chat.top-p");
@@ -62,10 +61,8 @@ public final class ProviderParameterMappingDefaults {
         put(defaults, ModelParameter.PARALLEL_TOOL_CALLS, "chat.parallel-tool-calls");
     }
 
-    private static void putOllamaLanguage(
-        Map<ModelParameter, DefaultParameterMapping> defaults) {
-        defaults.put(ModelParameter.MAX_OUTPUT_TOKENS,
-            DefaultParameterMapping.template("ollama.num-predict"));
+    private static void putOllamaLanguage(Map<ModelParameter, DefaultParameterMapping> defaults) {
+        defaults.put(ModelParameter.MAX_OUTPUT_TOKENS, DefaultParameterMapping.template("ollama.num-predict"));
         put(defaults, ModelParameter.TEMPERATURE, "chat.temperature");
         put(defaults, ModelParameter.TOP_P, "chat.top-p");
         put(defaults, ModelParameter.TOP_K, "chat.top-k");
@@ -77,16 +74,14 @@ public final class ProviderParameterMappingDefaults {
         put(defaults, ModelParameter.SEED, "chat.seed");
     }
 
-    private static void put(Map<ModelParameter, DefaultParameterMapping> defaults,
-        ModelParameter parameter, String template) {
+    private static void put(
+            Map<ModelParameter, DefaultParameterMapping> defaults, ModelParameter parameter, String template) {
         defaults.put(parameter, DefaultParameterMapping.template(template));
     }
 
-    private static void putImage(Map<ModelParameter, DefaultParameterMapping> defaults,
-        AdapterType adapter) {
+    private static void putImage(Map<ModelParameter, DefaultParameterMapping> defaults, AdapterType adapter) {
         switch (adapter) {
-            case OPENAI_IMAGE, ERNIE_IMAGE, GITEE_IMAGE, ZHIPU_IMAGE, AIHUBMIX_IMAGE,
-                 OLLAMA_IMAGE -> {
+            case OPENAI_IMAGE, ERNIE_IMAGE, GITEE_IMAGE, ZHIPU_IMAGE, AIHUBMIX_IMAGE, OLLAMA_IMAGE -> {
                 put(defaults, ModelParameter.IMAGE_COUNT, "image.n");
                 put(defaults, ModelParameter.IMAGE_SIZE, "image.size");
                 put(defaults, ModelParameter.RESPONSE_FORMAT, "image.response-format.openai");
@@ -101,8 +96,7 @@ public final class ProviderParameterMappingDefaults {
                 put(defaults, ModelParameter.IMAGE_COUNT, "image.parameters.n");
                 put(defaults, ModelParameter.IMAGE_SIZE, "image.parameters.size");
                 put(defaults, ModelParameter.IMAGE_SEED, "image.parameters.seed");
-                put(defaults, ModelParameter.NEGATIVE_PROMPT,
-                    "image.parameters.negative-prompt");
+                put(defaults, ModelParameter.NEGATIVE_PROMPT, "image.parameters.negative-prompt");
             }
             case DOUBAO_IMAGE -> {
                 put(defaults, ModelParameter.IMAGE_SIZE, "image.size");
@@ -123,7 +117,7 @@ public final class ProviderParameterMappingDefaults {
                 put(defaults, ModelParameter.IMAGE_SEED, "image.seed");
                 put(defaults, ModelParameter.NEGATIVE_PROMPT, "image.negative-prompt");
             }
-            default -> { }
+            default -> {}
         }
     }
 

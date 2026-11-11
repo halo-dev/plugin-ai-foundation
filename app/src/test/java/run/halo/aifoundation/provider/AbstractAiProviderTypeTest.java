@@ -15,13 +15,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import reactor.netty.transport.ProxyProvider.Proxy;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
-import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.Metadata;
@@ -66,13 +68,12 @@ class AbstractAiProviderTypeTest {
 
         @Override
         public org.springframework.ai.chat.model.ChatModel buildChatModel(
-            AiProvider provider, String apiKey, String modelId) {
+                AiProvider provider, String apiKey, String modelId) {
             return null;
         }
 
         @Override
-        public reactor.core.publisher.Mono<List<DiscoveredModel>> discoverModels(
-            AiProvider provider, String apiKey) {
+        public reactor.core.publisher.Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
             return discoverDataArrayModels(provider, apiKey);
         }
     }
@@ -111,7 +112,8 @@ class AbstractAiProviderTypeTest {
     @Test
     void defaults_buildEmbeddingModel_returnsNull() {
         var provider = providerWithBaseUrl(null);
-        assertThat(new TestProviderType().buildEmbeddingModel(provider, "key", "model")).isNull();
+        assertThat(new TestProviderType().buildEmbeddingModel(provider, "key", "model"))
+                .isNull();
     }
 
     @Test
@@ -121,7 +123,7 @@ class AbstractAiProviderTypeTest {
         assertThat(client.configuration().proxyProvider()).isNull();
         assertThat(client.configuration().responseTimeout()).isEqualTo(java.time.Duration.ofMinutes(5));
         assertThat(client.configuration().options().get(ChannelOption.CONNECT_TIMEOUT_MILLIS))
-            .isEqualTo(10_000);
+                .isEqualTo(10_000);
     }
 
     @Test
@@ -133,11 +135,11 @@ class AbstractAiProviderTypeTest {
         assertThat(proxy).isNotNull();
         assertThat(proxy.getType()).isEqualTo(Proxy.HTTP);
         assertThat(proxy.getAddress().get())
-            .extracting(InetSocketAddress::getHostString, InetSocketAddress::getPort)
-            .containsExactly("proxy.example.com", 8080);
+                .extracting(InetSocketAddress::getHostString, InetSocketAddress::getPort)
+                .containsExactly("proxy.example.com", 8080);
         assertThat(client.configuration().responseTimeout()).isEqualTo(java.time.Duration.ofMinutes(5));
         assertThat(client.configuration().options().get(ChannelOption.CONNECT_TIMEOUT_MILLIS))
-            .isEqualTo(10_000);
+                .isEqualTo(10_000);
     }
 
     @Test
@@ -145,8 +147,8 @@ class AbstractAiProviderTypeTest {
         var provider = providerWithProxy("proxy.example.com", 0);
 
         assertThatThrownBy(() -> new TestProviderType().httpClient(provider))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("proxyPort must be between 1 and 65535");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("proxyPort must be between 1 and 65535");
     }
 
     @Test
@@ -160,15 +162,14 @@ class AbstractAiProviderTypeTest {
             provider.getSpec().setBaseUrl("http://upstream.example.test");
 
             StepVerifier.create(new TestProviderType().discoverModels(provider, "key"))
-                .assertNext(models -> assertThat(models).singleElement()
-                    .satisfies(model -> {
+                    .assertNext(models -> assertThat(models).singleElement().satisfies(model -> {
                         assertThat(model.modelId()).isEqualTo("gpt-test");
                         assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
                         assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
                         assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
                         assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
                     }))
-                .verifyComplete();
+                    .verifyComplete();
             assertThat(proxyHit).isCompletedWithValue(true);
         } finally {
             proxyServer.close();
@@ -178,23 +179,63 @@ class AbstractAiProviderTypeTest {
 
     @Test
     void modelProfile_usesProviderDefaultWithoutInspectingIdentifier() {
-        var profile = new TestProviderType().modelProfile(
-            Map.of("id", "identifier-with-embedding-word"),
-            "identifier-with-embedding-word");
+        var profile = new TestProviderType()
+                .modelProfile(Map.of("id", "identifier-with-embedding-word"), "identifier-with-embedding-word");
 
         assertThat(profile.modelType()).isEqualTo(ModelType.LANGUAGE);
         assertThat(profile.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
-        assertThat(profile.features()).containsExactlyInAnyOrder(
-            ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
+        assertThat(profile.features()).containsExactlyInAnyOrder(ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
         assertThat(profile.source()).isEqualTo(DiscoverySource.RULE);
         assertThat(profile.confidence()).isEqualTo(DiscoveryConfidence.LOW);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "tool-call, structured-output",
+        "tool_call, structured_output",
+        "toolcall, structuredoutput",
+        "function-calling, json-schema",
+        "function_calling, json_schema",
+        "functioncalling, jsonschema",
+        "TOOL-CALL, STRUCTURED-OUTPUT",
+        "tools, structured-outputs",
+        "tools, structured_outputs"
+    })
+    void modelProfile_recognizesDeclaredFeatureAliases(String tools, String structuredOutput) {
+        var profile = new TestProviderType()
+                .modelProfile(Map.of("type", "language", "features", List.of(tools, structuredOutput)), "opaque-model");
+
+        assertThat(profile.features()).contains(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT);
+        assertThat(profile.featureEvidence())
+                .containsEntry(ModelFeature.TOOL_CALL, true)
+                .containsEntry(ModelFeature.STRUCTURED_OUTPUT, true);
+    }
+
+    @Test
+    void modelProfile_explicitFalseOverridesFeatureAliases() {
+        var profile = new TestProviderType()
+                .modelProfile(
+                        Map.of(
+                                "type",
+                                "language",
+                                "features",
+                                List.of("tool-call", "structured-output"),
+                                "tool_call",
+                                false,
+                                "structured_output",
+                                false),
+                        "opaque-model");
+
+        assertThat(profile.features()).doesNotContain(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT);
+        assertThat(profile.featureEvidence())
+                .containsEntry(ModelFeature.TOOL_CALL, false)
+                .containsEntry(ModelFeature.STRUCTURED_OUTPUT, false);
+    }
+
     @Test
     void modelProfile_usesExplicitRemoteImageGenerationMetadata() {
-        var profile = new TestProviderType().modelProfile(
-            Map.of("id", "opaque-model", "type", "text-to-image"),
-            "opaque-model");
+        var profile = new TestProviderType()
+                .modelProfile(Map.of("id", "opaque-model", "type", "text-to-image"), "opaque-model");
 
         assertThat(profile.modelType()).isEqualTo(ModelType.IMAGE_GENERATION);
         assertThat(profile.source()).isEqualTo(DiscoverySource.REMOTE);
@@ -216,22 +257,22 @@ class AbstractAiProviderTypeTest {
             var provider = providerWithBaseUrl("http://127.0.0.1:" + server.getLocalPort());
 
             StepVerifier.create(new RerankTestProviderType().discoverModels(provider, "key"))
-                .assertNext(models -> {
-                    assertThat(models).hasSize(2);
-                    assertThat(models)
-                        .extracting(DiscoveredModel::modelType)
-                        .containsExactly(ModelType.RERANK, ModelType.RERANK);
-                    assertThat(models)
-                        .extracting(DiscoveredModel::adapterType)
-                        .containsExactly(AdapterType.RERANK, AdapterType.RERANK);
-                    assertThat(models)
-                        .extracting(DiscoveredModel::source)
-                        .containsExactly(DiscoverySource.REMOTE, DiscoverySource.REMOTE);
-                    assertThat(models)
-                        .extracting(DiscoveredModel::confidence)
-                        .containsExactly(DiscoveryConfidence.HIGH, DiscoveryConfidence.HIGH);
-                })
-                .verifyComplete();
+                    .assertNext(models -> {
+                        assertThat(models).hasSize(2);
+                        assertThat(models)
+                                .extracting(DiscoveredModel::modelType)
+                                .containsExactly(ModelType.RERANK, ModelType.RERANK);
+                        assertThat(models)
+                                .extracting(DiscoveredModel::adapterType)
+                                .containsExactly(AdapterType.RERANK, AdapterType.RERANK);
+                        assertThat(models)
+                                .extracting(DiscoveredModel::source)
+                                .containsExactly(DiscoverySource.REMOTE, DiscoverySource.REMOTE);
+                        assertThat(models)
+                                .extracting(DiscoveredModel::confidence)
+                                .containsExactly(DiscoveryConfidence.HIGH, DiscoveryConfidence.HIGH);
+                    })
+                    .verifyComplete();
         } finally {
             server.close();
             serverThread.join();
@@ -248,16 +289,15 @@ class AbstractAiProviderTypeTest {
             var provider = providerWithBaseUrl("http://127.0.0.1:" + server.getLocalPort());
 
             StepVerifier.create(new RerankTestProviderType().discoverModels(provider, "key"))
-                .assertNext(models -> assertThat(models).singleElement()
-                    .satisfies(model -> {
+                    .assertNext(models -> assertThat(models).singleElement().satisfies(model -> {
                         assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
                         assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
-                        assertThat(model.features()).containsExactlyInAnyOrder(
-                            ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
+                        assertThat(model.features())
+                                .containsExactlyInAnyOrder(ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
                         assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
                         assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
                     }))
-                .verifyComplete();
+                    .verifyComplete();
         } finally {
             server.close();
             serverThread.join();
@@ -266,8 +306,8 @@ class AbstractAiProviderTypeTest {
 
     @Test
     void remoteDiscoveredModel_buildsHighConfidenceProfile() {
-        var profile = new TestProviderType().remoteDiscoveredModel("remote-embedding",
-            ModelType.EMBEDDING, Set.of(), AdapterType.OPENAI_EMBEDDING);
+        var profile = new TestProviderType()
+                .remoteDiscoveredModel("remote-embedding", ModelType.EMBEDDING, Set.of(), AdapterType.OPENAI_EMBEDDING);
 
         assertThat(profile.modelId()).isEqualTo("remote-embedding");
         assertThat(profile.modelType()).isEqualTo(ModelType.EMBEDDING);
@@ -280,15 +320,12 @@ class AbstractAiProviderTypeTest {
     @Test
     void discoveredModelsFromNodes_skipsMalformedItems() {
         var type = new TestProviderType();
-        var models = type.discoveredModelsFromNodes(List.of(
-            Map.of("id", "gpt-test"),
-            Map.of("name", "missing-id"),
-            "not-object"
-        ), "id", node -> type.modelProfile(node, type.stringValue(node, "id")));
+        var models = type.discoveredModelsFromNodes(
+                List.of(Map.of("id", "gpt-test"), Map.of("name", "missing-id"), "not-object"),
+                "id",
+                node -> type.modelProfile(node, type.stringValue(node, "id")));
 
-        assertThat(models).singleElement()
-            .extracting(DiscoveredModel::modelId)
-            .isEqualTo("gpt-test");
+        assertThat(models).singleElement().extracting(DiscoveredModel::modelId).isEqualTo("gpt-test");
     }
 
     @Test
@@ -300,8 +337,8 @@ class AbstractAiProviderTypeTest {
             var provider = providerWithBaseUrl("http://127.0.0.1:" + server.getLocalPort());
 
             StepVerifier.create(new TestProviderType().discoverModels(provider, "key"))
-                .expectNext(List.of())
-                .verifyComplete();
+                    .expectNext(List.of())
+                    .verifyComplete();
         } finally {
             server.close();
             serverThread.join();
@@ -329,28 +366,26 @@ class AbstractAiProviderTypeTest {
     static class RerankTestProviderType extends TestProviderType {
         @Override
         public java.util.List<AdapterType> getSupportedAdapterTypes() {
-            return java.util.List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
-                AdapterType.RERANK);
+            return java.util.List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
         }
     }
 
     private void handleSingleProxyRequest(ServerSocket serverSocket, CompletableFuture<Boolean> proxyHit) {
         try (var socket = serverSocket.accept();
-            var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(),
-                StandardCharsets.US_ASCII));
-            var output = socket.getOutputStream()) {
+                var reader =
+                        new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
+                var output = socket.getOutputStream()) {
             readHttpRequest(reader);
-            output.write("HTTP/1.1 200 Connection Established\r\n\r\n"
-                .getBytes(StandardCharsets.US_ASCII));
+            output.write("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
             output.flush();
 
             readHttpRequest(reader);
             var body = "{\"data\":[{\"id\":\"gpt-test\"}]}";
             var response = "HTTP/1.1 200 OK\r\n"
-                + "Content-Type: application/json\r\n"
-                + "Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n"
-                + "\r\n"
-                + body;
+                    + "Content-Type: application/json\r\n"
+                    + "Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n"
+                    + "\r\n"
+                    + body;
             output.write(response.getBytes(StandardCharsets.UTF_8));
             output.flush();
             proxyHit.complete(true);
@@ -368,15 +403,15 @@ class AbstractAiProviderTypeTest {
 
     private void handleSingleHttpRequest(ServerSocket serverSocket, String body) {
         try (var socket = serverSocket.accept();
-            var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(),
-                StandardCharsets.US_ASCII));
-            var output = socket.getOutputStream()) {
+                var reader =
+                        new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
+                var output = socket.getOutputStream()) {
             readHttpRequest(reader);
             var response = "HTTP/1.1 200 OK\r\n"
-                + "Content-Type: application/json\r\n"
-                + "Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n"
-                + "\r\n"
-                + body;
+                    + "Content-Type: application/json\r\n"
+                    + "Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n"
+                    + "\r\n"
+                    + body;
             output.write(response.getBytes(StandardCharsets.UTF_8));
             output.flush();
         } catch (Exception ignored) {

@@ -11,8 +11,9 @@ import java.util.Map;
  * @param filename optional filename
  * @param providerMetadata provider-specific metadata
  */
-public record SourceDocumentPart(String sourceId, String mediaType, String title, String filename,
-                                 Map<String, Object> providerMetadata) implements UIMessagePart {
+public record SourceDocumentPart(
+        String sourceId, String mediaType, String title, String filename, Map<String, Object> providerMetadata)
+        implements UIMessagePart {
     @Override
     public String type() {
         return UIMessageChunkType.SOURCE_DOCUMENT;

@@ -5,17 +5,18 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.http.HttpHeaders;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
-import run.halo.aifoundation.provider.protocol.messages.AnthropicMessagesProfile;
 import run.halo.aifoundation.provider.protocol.messages.AnthropicMessagesOutputFormats;
+import run.halo.aifoundation.provider.protocol.messages.AnthropicMessagesProfile;
 import run.halo.aifoundation.provider.protocol.messages.StandardAnthropicMessagesProfile;
 import run.halo.aifoundation.provider.support.MediaContentSources;
 
 /** DashScope policy for its workspace-scoped Anthropic Messages endpoint. */
 final class DashScopeMessagesProfile implements AnthropicMessagesProfile {
 
-    private static final StandardAnthropicMessagesProfile STANDARD =
-        new StandardAnthropicMessagesProfile(
-            "dashscope", "dashscope-messages", "/v1/messages",
+    private static final StandardAnthropicMessagesProfile STANDARD = new StandardAnthropicMessagesProfile(
+            "dashscope",
+            "dashscope-messages",
+            "/v1/messages",
             StandardAnthropicMessagesProfile.Authentication.X_API_KEY);
 
     @Override
@@ -39,8 +40,8 @@ final class DashScopeMessagesProfile implements AnthropicMessagesProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         STANDARD.customizeRequest(body, prompt, options, stream);
         validateTemperature(body.get("temperature"));
         AnthropicMessagesOutputFormats.applyJsonSchema(body, options);
@@ -55,13 +56,11 @@ final class DashScopeMessagesProfile implements AnthropicMessagesProfile {
         if (mime.startsWith("video/")) {
             return mediaBlock("video", media);
         }
-        throw new IllegalArgumentException(
-            "DashScope Messages supports image and video media, received: " + mime);
+        throw new IllegalArgumentException("DashScope Messages supports image and video media, received: " + mime);
     }
 
     private Map<String, Object> mediaBlock(String type, Media media) {
-        return Map.of("type", type, "source",
-            MediaContentSources.urlOrBase64Source(media, "DashScope Messages media"));
+        return Map.of("type", type, "source", MediaContentSources.urlOrBase64Source(media, "DashScope Messages media"));
     }
 
     private void validateTemperature(Object value) {
@@ -82,6 +81,6 @@ final class DashScopeMessagesProfile implements AnthropicMessagesProfile {
 
     private IllegalArgumentException temperatureError() {
         return new IllegalArgumentException(
-            "DashScope Messages temperature must be greater than or equal to 0 and less than 2");
+                "DashScope Messages temperature must be greater than or equal to 0 and less than 2");
     }
 }

@@ -140,6 +140,7 @@ describe('ToolConfigurationModal', () => {
         { $formkit: 'checkbox', name: 'advanced', label: '高级配置', delay: 0 },
         {
           if: '$advanced',
+          // oxlint-disable-next-line no-thenable -- FormKit conditional schema field.
           then: { $formkit: 'text', name: 'endpoint', label: '服务地址', delay: 0 },
         },
       ] as unknown as ToolDescriptor['configurationSchema'],

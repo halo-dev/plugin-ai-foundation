@@ -23,24 +23,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EmbeddingResponse {
-    /**
-     * Embedding vectors in the same order as request inputs.
-     */
+    /** Embedding vectors in the same order as request inputs. */
     private List<float[]> embeddings;
-    /**
-     * Token usage when reported by the provider.
-     */
+    /** Token usage when reported by the provider. */
     private EmbeddingUsage usage;
-    /**
-     * Response-side metadata.
-     */
+    /** Response-side metadata. */
     private EmbeddingResponseMetadata response;
-    /**
-     * Non-fatal diagnostics emitted while serving the request.
-     */
+    /** Non-fatal diagnostics emitted while serving the request. */
     private List<EmbeddingWarning> warnings;
-    /**
-     * Sanitized provider metadata.
-     */
+    /** Sanitized provider metadata. */
     private Map<String, Object> providerMetadata;
 }

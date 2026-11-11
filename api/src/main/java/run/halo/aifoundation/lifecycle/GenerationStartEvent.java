@@ -11,42 +11,24 @@ import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.tool.ToolChoice;
 import run.halo.aifoundation.tool.ToolDefinition;
 
-/**
- * Lifecycle event emitted before text generation begins.
- */
+/** Lifecycle event emitted before text generation begins. */
 @Value
 @Builder
 public class GenerationStartEvent {
-    /**
-     * Original generation request.
-     */
+    /** Original generation request. */
     GenerateTextRequest request;
-    /**
-     * Request metadata created for this generation.
-     */
+    /** Request metadata created for this generation. */
     GenerationRequestMetadata requestMetadata;
-    /**
-     * Caller-supplied metadata copied from the request.
-     */
+    /** Caller-supplied metadata copied from the request. */
     Map<String, Object> metadata;
-    /**
-     * Caller-supplied context copied from the request.
-     */
+    /** Caller-supplied context copied from the request. */
     Map<String, Object> context;
-    /**
-     * Effective tool definitions available to the first step.
-     */
+    /** Effective tool definitions available to the first step. */
     List<ToolDefinition> tools;
-    /**
-     * Effective tool choice for the first step.
-     */
+    /** Effective tool choice for the first step. */
     ToolChoice toolChoice;
-    /**
-     * Effective stop condition for the generation loop.
-     */
+    /** Effective stop condition for the generation loop. */
     StopCondition stopWhen;
-    /**
-     * Effective timeout settings.
-     */
+    /** Effective timeout settings. */
     GenerationTimeouts timeouts;
 }

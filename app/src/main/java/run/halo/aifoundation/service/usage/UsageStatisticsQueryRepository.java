@@ -20,32 +20,46 @@ import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 class UsageStatisticsQueryRepository {
 
-    UsageSummary summary(Connection connection, UsageQuery query, boolean complete)
-        throws SQLException {
+    UsageSummary summary(Connection connection, UsageQuery query, boolean complete) throws SQLException {
         var values = queryRawSummary(connection, query);
         var tokens = values.tokens;
-        return new UsageSummary(values.calls, values.inProgress, values.succeeded, values.failed,
-            tokens.input, tokens.output, tokens.cacheRead, tokens.cacheCreation,
-            tokens.reasoning, tokens.total, values.missing, values.partial,
-            values.calls == 0 ? 1D : (double) (values.known - values.partial) / values.calls,
-            complete && values.incomplete == 0);
+        return new UsageSummary(
+                values.calls,
+                values.inProgress,
+                values.succeeded,
+                values.failed,
+                tokens.input,
+                tokens.output,
+                tokens.cacheRead,
+                tokens.cacheCreation,
+                tokens.reasoning,
+                tokens.total,
+                values.missing,
+                values.partial,
+                values.calls == 0 ? 1D : (double) (values.known - values.partial) / values.calls,
+                complete && values.incomplete == 0);
     }
 
     private static SummaryValues readSummary(ResultSet row) throws SQLException {
-        return new SummaryValues(row.getLong("call_count"),
-            row.getLong("in_progress_count"), row.getLong("success_count"),
-            row.getLong("failed_count"),
-            row.getLong("known_usage_calls"), row.getLong("missing_usage_calls"),
-            row.getLong("incomplete_calls"), row.getLong("partial_usage_calls"),
-            new TokenValues(nullableLong(row, "input_tokens"), nullableLong(row, "output_tokens"),
-                nullableLong(row, "cache_read_input_tokens"),
-                nullableLong(row, "cache_creation_input_tokens"),
-                nullableLong(row, "reasoning_output_tokens"),
-                nullableLong(row, "accounted_total_tokens")));
+        return new SummaryValues(
+                row.getLong("call_count"),
+                row.getLong("in_progress_count"),
+                row.getLong("success_count"),
+                row.getLong("failed_count"),
+                row.getLong("known_usage_calls"),
+                row.getLong("missing_usage_calls"),
+                row.getLong("incomplete_calls"),
+                row.getLong("partial_usage_calls"),
+                new TokenValues(
+                        nullableLong(row, "input_tokens"),
+                        nullableLong(row, "output_tokens"),
+                        nullableLong(row, "cache_read_input_tokens"),
+                        nullableLong(row, "cache_creation_input_tokens"),
+                        nullableLong(row, "reasoning_output_tokens"),
+                        nullableLong(row, "accounted_total_tokens")));
     }
 
-    private SummaryValues queryRawSummary(Connection connection, UsageQuery query)
-        throws SQLException {
+    private SummaryValues queryRawSummary(Connection connection, UsageQuery query) throws SQLException {
         var filter = aggregateFilter(query);
         // The index orders these groups. Classify each group once, rather than evaluating
         // every status/quality counter for every call, and avoid a temporary GROUP BY sort.
@@ -58,7 +72,7 @@ class UsageStatisticsQueryRepository {
               SUM(accounted_total_tokens) accounted_total_tokens
             FROM
             """ + aggregateTable() + " " + filter.sql()
-            + " GROUP BY (started_at_ms / 3600000), status, usage_quality, complete";
+                + " GROUP BY (started_at_ms / 3600000), status, usage_quality, complete";
         // Fold the ordered groups with scalar aggregates, without a second GROUP BY sort.
         // This returns one row and avoids JDBC work proportional to the number of hours.
         sql = """
@@ -86,8 +100,9 @@ class UsageStatisticsQueryRepository {
         }
     }
 
-    List<UsageTrendPoint> trends(Connection connection, UsageQuery query,
-        boolean complete, UsageBreakdownDimension dimension) throws SQLException {
+    List<UsageTrendPoint> trends(
+            Connection connection, UsageQuery query, boolean complete, UsageBreakdownDimension dimension)
+            throws SQLException {
         var points = new java.util.TreeMap<Instant, UsageTrendPoint>();
         var rules = query.timeZone().getRules();
         var from = query.from();
@@ -96,38 +111,47 @@ class UsageStatisticsQueryRepository {
         while (from.isBefore(query.to())) {
             var transition = rules.nextTransition(from);
             var to = transition != null && transition.getInstant().isBefore(query.to())
-                ? transition.getInstant() : query.to();
+                    ? transition.getInstant()
+                    : query.to();
             var previous = rules.previousTransition(from.plusNanos(1));
-            queryTrendInterval(connection, withRange(query, from, to), complete, dimension,
-                previous == null ? null : previous.getInstant()).forEach(point ->
-                    points.merge(point.bucketStart(), point,
-                        UsageStatisticsQueryRepository::mergePoint));
+            queryTrendInterval(
+                            connection,
+                            withRange(query, from, to),
+                            complete,
+                            dimension,
+                            previous == null ? null : previous.getInstant())
+                    .forEach(point ->
+                            points.merge(point.bucketStart(), point, UsageStatisticsQueryRepository::mergePoint));
             from = to;
         }
         return List.copyOf(points.values());
     }
 
-    private List<UsageTrendPoint> queryTrendInterval(Connection connection, UsageQuery query,
-        boolean complete, UsageBreakdownDimension dimension, Instant offsetStart)
-        throws SQLException {
+    private List<UsageTrendPoint> queryTrendInterval(
+            Connection connection,
+            UsageQuery query,
+            boolean complete,
+            UsageBreakdownDimension dimension,
+            Instant offsetStart)
+            throws SQLException {
         var filter = aggregateFilter(query);
         var resolution = query.effectiveResolution();
         var offset = query.timeZone().getRules().getOffset(query.from()).getTotalSeconds() * 1000L;
         var unit = resolution == UsageTrendResolution.DAY ? 86_400_000L : 3_600_000L;
         var localTime = "(started_at_ms + " + offset + ")";
         // Integer floor division also handles instants before the Unix epoch.
-        var bucket = "(" + localTime + " - CASE WHEN " + localTime + " < 0 THEN "
-            + (unit - 1) + " ELSE 0 END) / " + unit;
+        var bucket =
+                "(" + localTime + " - CASE WHEN " + localTime + " < 0 THEN " + (unit - 1) + " ELSE 0 END) / " + unit;
         var dimensionColumn = dimension == null ? null : dimension.column();
         var sql = "SELECT " + (dimensionColumn == null ? "" : dimensionColumn + " group_value, ")
-            + bucket + " bucket, COUNT(*) call_count,"
-            + " SUM(input_tokens) input_tokens, SUM(output_tokens) output_tokens,"
-            + " SUM(accounted_total_tokens) accounted_total_tokens,"
-            + " COUNT(*) FILTER (WHERE usage_quality = 'MISSING') missing_usage_calls,"
-            + " COUNT(*) FILTER (WHERE usage_quality = 'PARTIAL') partial_usage_calls,"
-            + " COUNT(*) FILTER (WHERE complete = 0) incomplete_calls FROM " + aggregateTable()
-            + " " + filter.sql() + " GROUP BY bucket"
-            + (dimensionColumn == null ? "" : ", " + dimensionColumn);
+                + bucket + " bucket, COUNT(*) call_count,"
+                + " SUM(input_tokens) input_tokens, SUM(output_tokens) output_tokens,"
+                + " SUM(accounted_total_tokens) accounted_total_tokens,"
+                + " COUNT(*) FILTER (WHERE usage_quality = 'MISSING') missing_usage_calls,"
+                + " COUNT(*) FILTER (WHERE usage_quality = 'PARTIAL') partial_usage_calls,"
+                + " COUNT(*) FILTER (WHERE complete = 0) incomplete_calls FROM " + aggregateTable()
+                + " " + filter.sql() + " GROUP BY bucket"
+                + (dimensionColumn == null ? "" : ", " + dimensionColumn);
         try (var statement = connection.prepareStatement(sql)) {
             bind(statement, filter.parameters());
             try (var rows = statement.executeQuery()) {
@@ -135,53 +159,66 @@ class UsageStatisticsQueryRepository {
                 while (rows.next()) {
                     var bucketNumber = rows.getLong("bucket");
                     var startedAt = resolution == UsageTrendResolution.DAY
-                        ? LocalDate.ofEpochDay(bucketNumber).atStartOfDay(query.timeZone()).toInstant()
-                        : Instant.ofEpochMilli(bucketNumber * unit - offset);
+                            ? LocalDate.ofEpochDay(bucketNumber)
+                                    .atStartOfDay(query.timeZone())
+                                    .toInstant()
+                            : Instant.ofEpochMilli(bucketNumber * unit - offset);
                     // A fractional-hour DST transition starts a partial hour. Clamp to the
                     // offset boundary, not the query boundary, and keep repeated hours distinct.
-                    if (resolution == UsageTrendResolution.HOUR && offsetStart != null
-                        && startedAt.isBefore(offsetStart)) {
+                    if (resolution == UsageTrendResolution.HOUR
+                            && offsetStart != null
+                            && startedAt.isBefore(offsetStart)) {
                         startedAt = offsetStart;
                     }
                     Map<String, UsageTrendDimensionValue> byDimension = null;
                     if (dimensionColumn != null) {
-                        byDimension = Map.of(groupValue(rows.getString("group_value")),
-                            new UsageTrendDimensionValue(rows.getLong("call_count"),
-                                nullableLong(rows, "accounted_total_tokens")));
+                        byDimension = Map.of(
+                                groupValue(rows.getString("group_value")),
+                                new UsageTrendDimensionValue(
+                                        rows.getLong("call_count"), nullableLong(rows, "accounted_total_tokens")));
                     }
-                    points.add(new UsageTrendPoint(startedAt, resolution,
-                        rows.getLong("call_count"), nullableLong(rows, "input_tokens"),
-                        nullableLong(rows, "output_tokens"),
-                        nullableLong(rows, "accounted_total_tokens"),
-                        rows.getLong("missing_usage_calls"), rows.getLong("partial_usage_calls"),
-                        complete && rows.getLong("incomplete_calls") == 0, byDimension));
+                    points.add(new UsageTrendPoint(
+                            startedAt,
+                            resolution,
+                            rows.getLong("call_count"),
+                            nullableLong(rows, "input_tokens"),
+                            nullableLong(rows, "output_tokens"),
+                            nullableLong(rows, "accounted_total_tokens"),
+                            rows.getLong("missing_usage_calls"),
+                            rows.getLong("partial_usage_calls"),
+                            complete && rows.getLong("incomplete_calls") == 0,
+                            byDimension));
                 }
                 return points;
             }
         }
     }
 
-    UsageBreakdown breakdown(Connection connection, UsageQuery query,
-        UsageBreakdownDimension dimension) throws SQLException {
+    UsageBreakdown breakdown(Connection connection, UsageQuery query, UsageBreakdownDimension dimension)
+            throws SQLException {
         var filter = aggregateFilter(query);
         var sql = "SELECT " + dimension.column() + " group_value, COUNT(*) call_count, "
-            + "COUNT(*) FILTER (WHERE status = 'FAILED') failed_count,"
-            + " COUNT(*) FILTER (WHERE usage_quality = 'MISSING') missing_usage_calls,"
-            + " COUNT(*) FILTER (WHERE usage_quality = 'PARTIAL') partial_usage_calls,"
-            + " SUM(accounted_total_tokens) accounted_total_tokens FROM " + aggregateTable() + " "
-            + filter.sql() + " GROUP BY " + dimension.column();
+                + "COUNT(*) FILTER (WHERE status = 'FAILED') failed_count,"
+                + " COUNT(*) FILTER (WHERE usage_quality = 'MISSING') missing_usage_calls,"
+                + " COUNT(*) FILTER (WHERE usage_quality = 'PARTIAL') partial_usage_calls,"
+                + " SUM(accounted_total_tokens) accounted_total_tokens FROM " + aggregateTable() + " "
+                + filter.sql() + " GROUP BY " + dimension.column();
         try (var statement = connection.prepareStatement(sql)) {
             bind(statement, filter.parameters());
             try (var rows = statement.executeQuery()) {
                 var items = new ArrayList<UsageBreakdownItem>();
                 while (rows.next()) {
-                    items.add(new UsageBreakdownItem(groupValue(rows.getString("group_value")),
-                        rows.getLong("call_count"), rows.getLong("failed_count"),
-                        nullableLong(rows, "accounted_total_tokens"),
-                        rows.getLong("missing_usage_calls"), rows.getLong("partial_usage_calls")));
+                    items.add(new UsageBreakdownItem(
+                            groupValue(rows.getString("group_value")),
+                            rows.getLong("call_count"),
+                            rows.getLong("failed_count"),
+                            nullableLong(rows, "accounted_total_tokens"),
+                            rows.getLong("missing_usage_calls"),
+                            rows.getLong("partial_usage_calls")));
                 }
-                items.sort(java.util.Comparator.comparing(UsageBreakdownItem::accountedTotalTokens,
-                    java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+                items.sort(java.util.Comparator.comparing(
+                        UsageBreakdownItem::accountedTotalTokens,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
                 return new UsageBreakdown(List.copyOf(items));
             }
         }
@@ -193,8 +230,8 @@ class UsageStatisticsQueryRepository {
         return value == null ? "" : value;
     }
 
-    UsageCallPage listCalls(Connection connection, UsageQuery query, int size,
-        String encodedCursor) throws SQLException {
+    UsageCallPage listCalls(Connection connection, UsageQuery query, int size, String encodedCursor)
+            throws SQLException {
         var base = filter(query);
         var parameters = new ArrayList<>(base.parameters());
         var sql = new StringBuilder("SELECT * FROM ai_calls ").append(base.sql());
@@ -233,6 +270,35 @@ class UsageStatisticsQueryRepository {
         return Optional.of(new UsageCallDetail(call.get(), findExecutions(connection, id)));
     }
 
+    List<UsageCallerPlugin> callerPlugins(Connection connection) throws SQLException {
+        // Take version and detection source from each caller's most recent call. The id tie-break
+        // keeps the choice deterministic when a caller has calls in the same millisecond.
+        var sql = """
+            WITH names(name) AS (
+              SELECT DISTINCT caller_plugin_name FROM ai_calls
+              WHERE caller_plugin_name IS NOT NULL
+            )
+            SELECT n.name AS caller_plugin_name, c.caller_plugin_version,
+              c.caller_detection_source
+            FROM names n JOIN ai_calls c ON c.id = (
+              SELECT c2.id FROM ai_calls c2 WHERE c2.caller_plugin_name = n.name
+              ORDER BY c2.started_at_ms DESC, c2.id DESC LIMIT 1
+            )
+            ORDER BY n.name
+            """;
+        try (var statement = connection.prepareStatement(sql);
+                var rows = statement.executeQuery()) {
+            var plugins = new ArrayList<UsageCallerPlugin>();
+            while (rows.next()) {
+                plugins.add(new UsageCallerPlugin(
+                        rows.getString("caller_plugin_name"),
+                        rows.getString("caller_plugin_version"),
+                        rows.getString("caller_detection_source")));
+            }
+            return plugins;
+        }
+    }
+
     private Optional<UsageCallItem> findCall(Connection connection, String id) throws SQLException {
         try (var statement = connection.prepareStatement("SELECT * FROM ai_calls WHERE id = ?")) {
             statement.setString(1, id);
@@ -242,8 +308,7 @@ class UsageStatisticsQueryRepository {
         }
     }
 
-    private List<UsageExecutionRecord> findExecutions(Connection connection, String callId)
-        throws SQLException {
+    private List<UsageExecutionRecord> findExecutions(Connection connection, String callId) throws SQLException {
         var sql = """
             SELECT * FROM ai_model_executions WHERE call_id = ?
             ORDER BY started_at_ms, unit_index, attempt_index
@@ -253,14 +318,20 @@ class UsageStatisticsQueryRepository {
             try (var rows = statement.executeQuery()) {
                 var result = new ArrayList<UsageExecutionRecord>();
                 while (rows.next()) {
-                    result.add(new UsageExecutionRecord(rows.getString("id"),
-                        rows.getString("call_id"), rows.getLong("epoch"),
-                        UsageUnitKind.valueOf(rows.getString("unit_kind")),
-                        rows.getInt("unit_index"), rows.getInt("attempt_index"),
-                        instant(rows, "started_at_ms"), instant(rows, "completed_at_ms"),
-                        UsageStatus.valueOf(rows.getString("status")),
-                        error(rows), rows.getString("request_model_id"),
-                        rows.getString("response_model_id"), usage(rows)));
+                    result.add(new UsageExecutionRecord(
+                            rows.getString("id"),
+                            rows.getString("call_id"),
+                            rows.getLong("epoch"),
+                            UsageUnitKind.valueOf(rows.getString("unit_kind")),
+                            rows.getInt("unit_index"),
+                            rows.getInt("attempt_index"),
+                            instant(rows, "started_at_ms"),
+                            instant(rows, "completed_at_ms"),
+                            UsageStatus.valueOf(rows.getString("status")),
+                            error(rows),
+                            rows.getString("request_model_id"),
+                            rows.getString("response_model_id"),
+                            usage(rows)));
                 }
                 return List.copyOf(result);
             }
@@ -268,18 +339,27 @@ class UsageStatisticsQueryRepository {
     }
 
     private UsageCallItem mapCall(ResultSet row) throws SQLException {
-        return new UsageCallItem(row.getString("id"), instant(row, "started_at_ms"),
-            nullableLong(row, "duration_ms"),
-            row.getString("caller_plugin_name"), row.getString("caller_plugin_version"),
-            row.getString("feature"),
-            row.getString("operation"), row.getString("model_type"),
-            row.getString("model_name"), row.getString("provider_name"),
-            row.getString("request_model_id"),
-            row.getString("response_model_id"), row.getInt("streaming") != 0,
-            UsageStatus.valueOf(row.getString("status")), row.getString("error_type"),
-            row.getInt("step_count"),
-            row.getInt("attempt_count"), row.getInt("missing_execution_count"),
-            row.getInt("complete") != 0, usage(row));
+        return new UsageCallItem(
+                row.getString("id"),
+                instant(row, "started_at_ms"),
+                nullableLong(row, "duration_ms"),
+                row.getString("caller_plugin_name"),
+                row.getString("caller_plugin_version"),
+                row.getString("feature"),
+                row.getString("operation"),
+                row.getString("model_type"),
+                row.getString("model_name"),
+                row.getString("provider_name"),
+                row.getString("request_model_id"),
+                row.getString("response_model_id"),
+                row.getInt("streaming") != 0,
+                UsageStatus.valueOf(row.getString("status")),
+                row.getString("error_type"),
+                row.getInt("step_count"),
+                row.getInt("attempt_count"),
+                row.getInt("missing_execution_count"),
+                row.getInt("complete") != 0,
+                usage(row));
     }
 
     private SqlFilter filter(UsageQuery query) {
@@ -295,17 +375,33 @@ class UsageStatisticsQueryRepository {
         addFilter(clauses, parameters, "model_name", query.modelName());
         addFilter(clauses, parameters, "model_type", query.modelType());
         addFilter(clauses, parameters, "operation", query.operation());
-        addFilter(clauses, parameters, "status",
-            query.status() == null ? null : query.status().name());
-        addFilter(clauses, parameters, "usage_quality",
-            query.usageQuality() == null ? null : query.usageQuality().name());
+        addFilter(
+                clauses,
+                parameters,
+                "status",
+                query.status() == null ? null : query.status().name());
+        addFilter(
+                clauses,
+                parameters,
+                "usage_quality",
+                query.usageQuality() == null ? null : query.usageQuality().name());
         return new SqlFilter("WHERE " + String.join(" AND ", clauses), parameters);
     }
 
     private static UsageQuery withRange(UsageQuery source, Instant from, Instant to) {
-        return new UsageQuery(from, to, source.callerPlugin(), source.feature(),
-            source.providerName(), source.modelName(), source.modelType(), source.operation(),
-            source.status(), source.usageQuality(), source.resolution(), source.timeZone());
+        return new UsageQuery(
+                from,
+                to,
+                source.callerPlugin(),
+                source.feature(),
+                source.providerName(),
+                source.modelName(),
+                source.modelType(),
+                source.operation(),
+                source.status(),
+                source.usageQuality(),
+                source.resolution(),
+                source.timeZone());
     }
 
     private static String aggregateTable() {
@@ -321,24 +417,26 @@ class UsageStatisticsQueryRepository {
         parameters.add(query.to().toEpochMilli() / 3_600_000L);
         // Keep millisecond predicates for exact edge hours; the leading index expression
         // also lets hourly GROUP BY stream ordered rows without a large temporary sort.
-        return new SqlFilter(base.sql()
-            + " AND (started_at_ms / 3600000) >= ? AND (started_at_ms / 3600000) <= ?",
-            parameters);
+        return new SqlFilter(
+                base.sql() + " AND (started_at_ms / 3600000) >= ? AND (started_at_ms / 3600000) <= ?", parameters);
     }
 
     private static UsageTrendPoint mergePoint(UsageTrendPoint left, UsageTrendPoint right) {
-        return new UsageTrendPoint(left.bucketStart(), left.resolution(),
-            left.callCount() + right.callCount(), add(left.inputTokens(), right.inputTokens()),
-            add(left.outputTokens(), right.outputTokens()),
-            add(left.accountedTotalTokens(), right.accountedTotalTokens()),
-            left.missingUsageCalls() + right.missingUsageCalls(),
-            left.partialUsageCalls() + right.partialUsageCalls(),
-            left.complete() && right.complete(),
-            mergeDimensions(left.byDimension(), right.byDimension()));
+        return new UsageTrendPoint(
+                left.bucketStart(),
+                left.resolution(),
+                left.callCount() + right.callCount(),
+                add(left.inputTokens(), right.inputTokens()),
+                add(left.outputTokens(), right.outputTokens()),
+                add(left.accountedTotalTokens(), right.accountedTotalTokens()),
+                left.missingUsageCalls() + right.missingUsageCalls(),
+                left.partialUsageCalls() + right.partialUsageCalls(),
+                left.complete() && right.complete(),
+                mergeDimensions(left.byDimension(), right.byDimension()));
     }
 
     private static Map<String, UsageTrendDimensionValue> mergeDimensions(
-        Map<String, UsageTrendDimensionValue> left, Map<String, UsageTrendDimensionValue> right) {
+            Map<String, UsageTrendDimensionValue> left, Map<String, UsageTrendDimensionValue> right) {
         if (left == null) {
             return right;
         }
@@ -346,15 +444,14 @@ class UsageStatisticsQueryRepository {
             return left;
         }
         var merged = new java.util.HashMap<>(left);
-        right.forEach((key, value) -> merged.merge(key, value,
-            UsageStatisticsQueryRepository::mergeDimensionValue));
+        right.forEach((key, value) -> merged.merge(key, value, UsageStatisticsQueryRepository::mergeDimensionValue));
         return java.util.Collections.unmodifiableMap(merged);
     }
 
-    private static UsageTrendDimensionValue mergeDimensionValue(UsageTrendDimensionValue left,
-        UsageTrendDimensionValue right) {
-        return new UsageTrendDimensionValue(left.callCount() + right.callCount(),
-            add(left.accountedTotalTokens(), right.accountedTotalTokens()));
+    private static UsageTrendDimensionValue mergeDimensionValue(
+            UsageTrendDimensionValue left, UsageTrendDimensionValue right) {
+        return new UsageTrendDimensionValue(
+                left.callCount() + right.callCount(), add(left.accountedTotalTokens(), right.accountedTotalTokens()));
     }
 
     private static Long add(Long left, Long right) {
@@ -367,29 +464,29 @@ class UsageStatisticsQueryRepository {
         return Math.addExact(left, right);
     }
 
-    private static void addFilter(List<String> clauses, List<Object> parameters, String column,
-        String value) {
+    private static void addFilter(List<String> clauses, List<Object> parameters, String column, String value) {
         if (StringUtils.hasText(value)) {
             clauses.add(column + " = ?");
             parameters.add(value);
         }
     }
 
-    private static void bind(PreparedStatement statement, List<Object> parameters)
-        throws SQLException {
+    private static void bind(PreparedStatement statement, List<Object> parameters) throws SQLException {
         for (int i = 0; i < parameters.size(); i++) {
             statement.setObject(i + 1, parameters.get(i));
         }
     }
 
     private static NormalizedUsage usage(ResultSet row) throws SQLException {
-        return new NormalizedUsage(nullableLong(row, "input_tokens"),
-            nullableLong(row, "output_tokens"), nullableLong(row, "cache_read_input_tokens"),
-            nullableLong(row, "cache_creation_input_tokens"),
-            nullableLong(row, "reasoning_output_tokens"),
-            nullableLong(row, "provider_total_tokens"),
-            nullableLong(row, "accounted_total_tokens"),
-            UsageQuality.valueOf(row.getString("usage_quality")));
+        return new NormalizedUsage(
+                nullableLong(row, "input_tokens"),
+                nullableLong(row, "output_tokens"),
+                nullableLong(row, "cache_read_input_tokens"),
+                nullableLong(row, "cache_creation_input_tokens"),
+                nullableLong(row, "reasoning_output_tokens"),
+                nullableLong(row, "provider_total_tokens"),
+                nullableLong(row, "accounted_total_tokens"),
+                UsageQuality.valueOf(row.getString("usage_quality")));
     }
 
     private static UsageError error(ResultSet row) throws SQLException {
@@ -405,15 +502,19 @@ class UsageStatisticsQueryRepository {
         return UsageSqliteJdbc.nullableLong(row, column);
     }
 
-    private record SqlFilter(String sql, List<Object> parameters) {
-    }
+    private record SqlFilter(String sql, List<Object> parameters) {}
 
-    private record SummaryValues(long calls, long inProgress, long succeeded, long failed,
-                                 long known, long missing,
-                                 long incomplete, long partial, TokenValues tokens) {
-    }
+    private record SummaryValues(
+            long calls,
+            long inProgress,
+            long succeeded,
+            long failed,
+            long known,
+            long missing,
+            long incomplete,
+            long partial,
+            TokenValues tokens) {}
 
-    private record TokenValues(Long input, Long output, Long cacheRead, Long cacheCreation,
-                               Long reasoning, Long total) {
-    }
+    private record TokenValues(
+            Long input, Long output, Long cacheRead, Long cacheCreation, Long reasoning, Long total) {}
 }

@@ -7,8 +7,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 /** AIHubMix Chat Completions adapter with gateway reasoning replay. */
 public final class AiHubMixChatModel extends ChatCompletionsModel {
 
-    public AiHubMixChatModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public AiHubMixChatModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new AiHubMixChatProfile());
     }
 }

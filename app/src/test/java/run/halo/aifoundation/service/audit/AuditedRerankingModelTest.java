@@ -25,18 +25,17 @@ import run.halo.aifoundation.service.usage.UsageStatisticsService;
 class AuditedRerankingModelTest {
 
     private final RerankingModel delegate = mock(RerankingModel.class);
-    private final ModelCallContext context = new ModelCallContext(
-        ModelType.RERANK, "default-rerank", "provider", "openai", "rerank");
+    private final ModelCallContext context =
+            new ModelCallContext(ModelType.RERANK, "default-rerank", "provider", "openai", "rerank");
     private final UsageStatisticsService statistics = mock(UsageStatisticsService.class);
-    private final AuditedRerankingModel model = new AuditedRerankingModel(delegate, context,
-        mock(CallerPluginAuditRecorder.class), statistics);
+    private final AuditedRerankingModel model =
+            new AuditedRerankingModel(delegate, context, mock(CallerPluginAuditRecorder.class), statistics);
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void assemblesBothOverloadsOnceBeforeSubscription(boolean enabled) {
         var descriptor = mock(UsageCallDescriptor.class);
-        when(statistics.describeCall(context, "rerank.rerank", false, null))
-            .thenReturn(enabled ? descriptor : null);
+        when(statistics.describeCall(context, "rerank.rerank", false, null)).thenReturn(enabled ? descriptor : null);
         when(statistics.beginCall(descriptor)).thenReturn(mock(UsageCallSession.class));
         var documents = List.of("hello");
         var request = RerankRequest.builder().query("hello").documents("hello").build();
@@ -69,7 +68,7 @@ class AuditedRerankingModelTest {
     @ValueSource(booleans = {true, false})
     void synchronousDelegateFailureDoesNotCreateSession(boolean enabled) {
         when(statistics.describeCall(context, "rerank.rerank", false, null))
-            .thenReturn(enabled ? mock(UsageCallDescriptor.class) : null);
+                .thenReturn(enabled ? mock(UsageCallDescriptor.class) : null);
         var request = RerankRequest.builder().query("hello").documents("hello").build();
         var failure = new IllegalStateException("invalid request");
         when(delegate.rerank(request)).thenThrow(failure);

@@ -3,7 +3,6 @@ package run.halo.aifoundation.provider.zhipu;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Component;
@@ -18,10 +17,8 @@ import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
-import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -78,9 +75,12 @@ public class ZhiPuProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.ZHIPU_CHAT, AdapterType.ZHIPU_MESSAGES,
-            AdapterType.ZHIPU_EMBEDDING,
-            AdapterType.RERANK, AdapterType.ZHIPU_IMAGE);
+        return List.of(
+                AdapterType.ZHIPU_CHAT,
+                AdapterType.ZHIPU_MESSAGES,
+                AdapterType.ZHIPU_EMBEDDING,
+                AdapterType.RERANK,
+                AdapterType.ZHIPU_IMAGE);
     }
 
     @Override
@@ -118,8 +118,8 @@ public class ZhiPuProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new ZhiPuChatModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new ZhiPuChatModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     @Override
@@ -128,71 +128,70 @@ public class ZhiPuProvider extends AbstractAiProviderType {
         var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of());
         return switch (resolved.adapterType()) {
             case ZHIPU_CHAT -> new ZhiPuChatModel(options, webClientBuilder(provider));
-            case ZHIPU_MESSAGES -> new ZhiPuMessagesModel(options.mutate()
-                .baseUrl(ProviderUris.withoutTrailingPath(options.getBaseUrl(), "/api/paas/v4"))
-                .build(), webClientBuilder(provider));
-            default -> throw new IllegalArgumentException(
-                "Unsupported Zhipu language adapter: " + resolved.adapterType());
+            case ZHIPU_MESSAGES ->
+                new ZhiPuMessagesModel(
+                        options.mutate()
+                                .baseUrl(new ZhiPuEndpointResolver(options.getBaseUrl()).messagesBaseUrl())
+                                .build(),
+                        webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException("Unsupported Zhipu language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = ZhiPuEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .build();
         return new ZhiPuEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
-        return new ZhiPuRerankingClient(resolveBaseUrl(provider), modelId, apiKey,
-            webClientBuilder(provider));
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
+        return new ZhiPuRerankingClient(resolveBaseUrl(provider), modelId, apiKey, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new ZhiPuImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new ZhiPuImageGenerationClient(
+                new ImageGenerationClientOptions(getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+                imageWebClientBuilder(provider));
     }
 
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
-        return languageModelProviderOptions(
-            ReasoningControlOptions.unsupported(), StructuredOutputSupport.JSON_OBJECT);
+        return languageModelProviderOptions(ReasoningControlOptions.unsupported(), StructuredOutputSupport.JSON_OBJECT);
     }
 
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions(AdapterType adapterType) {
         if (adapterType == AdapterType.ZHIPU_MESSAGES) {
             return languageModelProviderOptions(
-                ReasoningControlOptions.unsupported(), StructuredOutputSupport.PROMPT_ONLY);
+                    ReasoningControlOptions.unsupported(), StructuredOutputSupport.PROMPT_ONLY);
         }
         return languageModelProviderOptions();
     }
 
     private LanguageModelProviderOptions languageModelProviderOptions(
-        ReasoningControlOptions reasoning, StructuredOutputSupport structuredOutput) {
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, structuredOutput);
+            ReasoningControlOptions reasoning, StructuredOutputSupport structuredOutput) {
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, structuredOutput);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(false)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(structuredOutput)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(false)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(structuredOutput)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
@@ -204,10 +203,16 @@ public class ZhiPuProvider extends AbstractAiProviderType {
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        for (var parameter : List.of(ModelParameter.PRESENCE_PENALTY,
-            ModelParameter.FREQUENCY_PENALTY, ModelParameter.TOP_K, ModelParameter.MIN_P,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.SEED, ModelParameter.LOGPROBS,
-            ModelParameter.TOP_LOGPROBS, ModelParameter.PARALLEL_TOOL_CALLS)) {
+        for (var parameter : List.of(
+                ModelParameter.PRESENCE_PENALTY,
+                ModelParameter.FREQUENCY_PENALTY,
+                ModelParameter.TOP_K,
+                ModelParameter.MIN_P,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.SEED,
+                ModelParameter.LOGPROBS,
+                ModelParameter.TOP_LOGPROBS,
+                ModelParameter.PARALLEL_TOOL_CALLS)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);
@@ -220,5 +225,4 @@ public class ZhiPuProvider extends AbstractAiProviderType {
         var value = message.getMetadata().get("reasoningContent");
         return value != null ? value.toString() : null;
     }
-
 }

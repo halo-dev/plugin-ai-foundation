@@ -12,8 +12,9 @@ import java.util.Map;
  * @param data optional inline file data
  * @param providerMetadata provider-specific metadata
  */
-public record FilePart(String fileId, String url, String title, String mediaType, Object data,
-                       Map<String, Object> providerMetadata) implements UIMessagePart {
+public record FilePart(
+        String fileId, String url, String title, String mediaType, Object data, Map<String, Object> providerMetadata)
+        implements UIMessagePart {
     @Override
     public String type() {
         return UIMessageChunkType.FILE;

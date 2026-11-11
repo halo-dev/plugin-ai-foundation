@@ -11,6 +11,7 @@ final class Fields {
     static final String DATA = "data";
     static final String DELTA = "delta";
     static final String DESCRIPTION = "description";
+    static final String ERROR = "error";
     static final String EXPIRES_AT = "expires_at";
     static final String FINISH_REASON = "finish_reason";
     static final String FINISH_REASON_CAMEL = "finishReason";
@@ -69,8 +70,7 @@ final class Fields {
     static final String VERBOSITY = "verbosity";
     static final String VOICE = "voice";
 
-    private Fields() {
-    }
+    private Fields() {}
 }
 
 final class Values {
@@ -86,6 +86,5 @@ final class Values {
     static final String TEXT = "text";
     static final String WAV = "wav";
 
-    private Values() {
-    }
+    private Values() {}
 }

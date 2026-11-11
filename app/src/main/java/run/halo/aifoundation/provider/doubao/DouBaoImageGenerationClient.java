@@ -15,8 +15,7 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 /** Volcano Ark image generation adapter, including native sequential image generation. */
 public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerationClient {
 
-    public DouBaoImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public DouBaoImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
@@ -26,8 +25,7 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
         if (nativeOptions != null) {
             body.putAll(nativeOptions);
@@ -42,12 +40,10 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
         putIfNotNull(body, "seed", request.getSeed());
         if (request.getN() != null && request.getN() > 1) {
             body.put("sequential_image_generation", "auto");
-            body.put("sequential_image_generation_options",
-                Map.of("max_images", request.getN()));
+            body.put("sequential_image_generation_options", Map.of("max_images", request.getN()));
         }
         if (request.getResponseFormat() != null) {
-            body.put("response_format", request.getResponseFormat() == ImageResponseFormat.BASE64
-                ? "b64_json" : "url");
+            body.put("response_format", request.getResponseFormat() == ImageResponseFormat.BASE64 ? "b64_json" : "url");
         }
         body.putIfAbsent("output_format", "png");
         body.put("stream", false);
@@ -55,8 +51,8 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "Doubao");
         var images = new ArrayList<GeneratedFile>();
         var dataNode = root.path("data");
@@ -73,21 +69,26 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
                 var base64 = textOrNull(item.path("b64_json"));
                 if (hasText(base64)) {
                     images.add(GeneratedFile.builder()
-                        .base64(base64)
-                        .mediaType(outputMediaType(outputFormat))
-                        .metadata(metadata)
-                        .build());
+                            .base64(base64)
+                            .mediaType(outputMediaType(outputFormat))
+                            .metadata(metadata)
+                            .build());
                 } else if (hasText(url)) {
                     images.add(GeneratedFile.builder()
-                        .url(url)
-                        .mediaType(outputMediaType(outputFormat))
-                        .metadata(metadata)
-                        .build());
+                            .url(url)
+                            .mediaType(outputMediaType(outputFormat))
+                            .metadata(metadata)
+                            .build());
                 }
             }
         }
-        return result(data, root, List.copyOf(images), tokenUsage(root.path("usage"),
-            images.size()), List.of(), textOrNull(root.path("id")),
-            textOrNull(root.path("model")));
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                tokenUsage(root.path("usage"), images.size()),
+                List.of(),
+                textOrNull(root.path("id")),
+                textOrNull(root.path("model")));
     }
 }

@@ -11,8 +11,7 @@ class ResponsesInputsTest {
 
     @Test
     void inspectsUntypedContainerObjectsWithoutTreatingNullAsAType() {
-        var input = List.of(Map.of("role", "user", "content",
-            List.of(Map.of("type", "input_image"))));
+        var input = List.of(Map.of("role", "user", "content", List.of(Map.of("type", "input_image"))));
 
         assertThat(ResponsesInputs.containsType(input, Set.of("input_image"))).isTrue();
         assertThat(ResponsesInputs.containsType(input, Set.of("input_file"))).isFalse();

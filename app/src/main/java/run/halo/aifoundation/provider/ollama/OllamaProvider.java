@@ -27,8 +27,8 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
-import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
@@ -99,10 +99,13 @@ public class OllamaProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OLLAMA_CHAT, AdapterType.OLLAMA_OPENAI_CHAT,
-            AdapterType.OLLAMA_RESPONSES, AdapterType.OLLAMA_MESSAGES,
-            AdapterType.OLLAMA_EMBEDDING,
-            AdapterType.OLLAMA_IMAGE);
+        return List.of(
+                AdapterType.OLLAMA_CHAT,
+                AdapterType.OLLAMA_OPENAI_CHAT,
+                AdapterType.OLLAMA_RESPONSES,
+                AdapterType.OLLAMA_MESSAGES,
+                AdapterType.OLLAMA_EMBEDDING,
+                AdapterType.OLLAMA_IMAGE);
     }
 
     @Override
@@ -125,8 +128,7 @@ public class OllamaProvider extends AbstractAiProviderType {
     }
 
     @Override
-    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
-        AdapterType adapterType) {
+    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(AdapterType adapterType) {
         if (adapterType == null) {
             return super.getDefaultParameterMappings();
         }
@@ -136,8 +138,7 @@ public class OllamaProvider extends AbstractAiProviderType {
         if (reasoningTemplate == null) {
             return Map.copyOf(defaults);
         }
-        defaults.put(ModelParameter.REASONING,
-            DefaultParameterMapping.template(reasoningTemplate));
+        defaults.put(ModelParameter.REASONING, DefaultParameterMapping.template(reasoningTemplate));
         return Map.copyOf(defaults);
     }
 
@@ -145,16 +146,18 @@ public class OllamaProvider extends AbstractAiProviderType {
     public List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
         return switch (adapterType) {
             case OLLAMA_RESPONSES -> ProviderFeatureSets.REASONING_TEXT;
-            case OLLAMA_CHAT, OLLAMA_OPENAI_CHAT, OLLAMA_MESSAGES ->
-                ProviderFeatureSets.VISION_REASONING;
+            case OLLAMA_CHAT, OLLAMA_OPENAI_CHAT, OLLAMA_MESSAGES -> ProviderFeatureSets.VISION_REASONING;
             default -> List.of();
         };
     }
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new OllamaChatModel(resolveBaseUrl(provider), apiKey,
-            OllamaChatOptions.builder().model(modelId).build(), webClientBuilder(provider));
+        return new OllamaChatModel(
+                resolveBaseUrl(provider),
+                apiKey,
+                OllamaChatOptions.builder().model(modelId).build(),
+                webClientBuilder(provider));
     }
 
     @Override
@@ -164,38 +167,43 @@ public class OllamaProvider extends AbstractAiProviderType {
             return buildChatModel(provider, apiKey, resolved.modelId());
         }
         var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of())
-            .mutate()
-            .baseUrl(OllamaEndpoints.openAiBaseUrl(resolveBaseUrl(provider)))
-            .build();
+                .mutate()
+                .baseUrl(OllamaEndpoints.openAiBaseUrl(resolveBaseUrl(provider)))
+                .build();
         return switch (resolved.adapterType()) {
-            case OLLAMA_OPENAI_CHAT -> new OllamaOpenAiChatModel(options.mutate()
-                .endpointPath("/chat/completions").build(), webClientBuilder(provider));
-            case OLLAMA_RESPONSES -> new OllamaResponsesModel(options.mutate()
-                .endpointPath("/responses").build(), webClientBuilder(provider));
-            case OLLAMA_MESSAGES -> new OllamaMessagesModel(options.mutate()
-                .baseUrl(OllamaEndpoints.nativeBaseUrl(resolveBaseUrl(provider))).build(),
-                webClientBuilder(provider));
-            default -> throw new IllegalArgumentException(
-                "Unsupported Ollama language adapter: " + resolved.adapterType());
+            case OLLAMA_OPENAI_CHAT ->
+                new OllamaOpenAiChatModel(
+                        options.mutate().endpointPath("/chat/completions").build(), webClientBuilder(provider));
+            case OLLAMA_RESPONSES ->
+                new OllamaResponsesModel(
+                        options.mutate().endpointPath("/responses").build(), webClientBuilder(provider));
+            case OLLAMA_MESSAGES ->
+                new OllamaMessagesModel(
+                        options.mutate()
+                                .baseUrl(OllamaEndpoints.nativeBaseUrl(resolveBaseUrl(provider)))
+                                .build(),
+                        webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException("Unsupported Ollama language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         return LanguageModelProviderOptions.builder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(true)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
-            .chatOptionsFactory(OllamaChatOptionsSupport::basic)
-            .toolCallingChatOptionsFactory(OllamaChatOptionsSupport::tools)
-            .structuredOutputChatOptionsFactory(OllamaChatOptionsSupport::structured)
-            .nativeOptionsApplicator(OllamaChatOptionsSupport::applyNativeOptions)
-            .reasoningControlOptions(ReasoningControlOptions.unsupported())
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
+                .chatOptionsFactory(OllamaChatOptionsSupport::basic)
+                .toolCallingChatOptionsFactory(OllamaChatOptionsSupport::tools)
+                .structuredOutputChatOptionsFactory(OllamaChatOptionsSupport::structured)
+                .nativeOptionsApplicator(OllamaChatOptionsSupport::applyNativeOptions)
+                .reasoningControlOptions(ReasoningControlOptions.unsupported())
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
@@ -211,27 +219,25 @@ public class OllamaProvider extends AbstractAiProviderType {
 
     private LanguageModelProviderOptions promptOnlyLanguageModelProviderOptions() {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, StructuredOutputSupport.PROMPT_ONLY);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, StructuredOutputSupport.PROMPT_ONLY);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(StructuredOutputSupport.PROMPT_ONLY)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(StructuredOutputSupport.PROMPT_ONLY)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var defaults = new OllamaEmbeddingOptions(modelId, null, null, Map.of());
-        return new OllamaEmbeddingModel(resolveBaseUrl(provider), apiKey, defaults,
-            webClientBuilder(provider));
+        return new OllamaEmbeddingModel(resolveBaseUrl(provider), apiKey, defaults, webClientBuilder(provider));
     }
 
     @Override
@@ -245,57 +251,71 @@ public class OllamaProvider extends AbstractAiProviderType {
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new OllamaImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), OllamaEndpoints.openAiBaseUrl(resolveBaseUrl(provider)), apiKey,
-            modelId, null), imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new OllamaImageGenerationClient(
+                new ImageGenerationClientOptions(
+                        getProviderType(),
+                        OllamaEndpoints.openAiBaseUrl(resolveBaseUrl(provider)),
+                        apiKey,
+                        modelId,
+                        null),
+                imageWebClientBuilder(provider));
     }
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         var webClient = webClientBuilder(provider).build();
         var tagsUrl = OllamaEndpoints.nativeUrl(resolveBaseUrl(provider), "/tags");
-        return webClient.get().uri(URI.create(tagsUrl))
-            .headers(headers -> applyAuth(headers, apiKey))
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return response.createException().flatMap(Mono::error);
-                }
-                return response.bodyToMono(Map.class);
-            })
-            .flatMapMany(root -> Flux.fromIterable(modelNames(root)))
-            .flatMap(modelId -> showModel(provider, apiKey, modelId)
-                .map(details -> discoveredModel(modelId, details))
-                .onErrorResume(error -> {
-                    log.warn("Skipping Ollama model {} because /api/show failed: {}", modelId,
-                        error.getMessage());
-                    return Mono.empty();
-                }), 4)
-            .filter(java.util.Objects::nonNull)
-            .collectList();
+        return webClient
+                .get()
+                .uri(URI.create(tagsUrl))
+                .headers(headers -> applyAuth(headers, apiKey))
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return response.createException().flatMap(Mono::error);
+                    }
+                    return response.bodyToMono(Map.class);
+                })
+                .flatMapMany(root -> Flux.fromIterable(modelNames(root)))
+                .flatMap(
+                        modelId -> showModel(provider, apiKey, modelId)
+                                .map(details -> discoveredModel(modelId, details))
+                                .onErrorResume(error -> {
+                                    log.warn(
+                                            "Skipping Ollama model {} because /api/show failed: {}",
+                                            modelId,
+                                            error.getMessage());
+                                    return Mono.empty();
+                                }),
+                        4)
+                .filter(java.util.Objects::nonNull)
+                .collectList();
     }
 
     private Mono<Map<?, ?>> showModel(AiProvider provider, String apiKey, String modelId) {
         var diagnostics = run.halo.aifoundation.provider.transport.ProviderDiagnostics.create(
-            getProviderType(), "model-discovery");
+                getProviderType(), "model-discovery");
         var url = OllamaEndpoints.nativeUrl(resolveBaseUrl(provider), "/show");
         var body = Map.of("model", modelId, "verbose", false);
         diagnostics.request(url, body, false);
-        return webClientBuilder(provider).build().post().uri(URI.create(url))
-            .headers(headers -> {
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                applyAuth(headers, apiKey);
-            })
-            .bodyValue(body)
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response, getProviderType(),
-                        "model-show", diagnostics);
-                }
-                return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(this::modelDetails);
-            });
+        return webClientBuilder(provider)
+                .build()
+                .post()
+                .uri(URI.create(url))
+                .headers(headers -> {
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    applyAuth(headers, apiKey);
+                })
+                .bodyValue(body)
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(
+                                response, getProviderType(), "model-show", diagnostics);
+                    }
+                    return ProviderHttpResponseSupport.body(response, diagnostics)
+                            .map(this::modelDetails);
+                });
     }
 
     private Map<?, ?> modelDetails(String data) {
@@ -324,16 +344,16 @@ public class OllamaProvider extends AbstractAiProviderType {
         var capabilities = normalizedValues(details.get("capabilities"));
         var modelType = modelType(capabilities);
         if (modelType == null) {
-            log.debug("Ignoring Ollama model {} with unrecognized capabilities {}", modelId,
-                capabilities);
+            log.debug("Ignoring Ollama model {} with unrecognized capabilities {}", modelId, capabilities);
             return null;
         }
-        var adapter = switch (modelType) {
-            case LANGUAGE -> AdapterType.OLLAMA_CHAT;
-            case EMBEDDING -> AdapterType.OLLAMA_EMBEDDING;
-            case IMAGE_GENERATION -> AdapterType.OLLAMA_IMAGE;
-            default -> null;
-        };
+        var adapter =
+                switch (modelType) {
+                    case LANGUAGE -> AdapterType.OLLAMA_CHAT;
+                    case EMBEDDING -> AdapterType.OLLAMA_EMBEDDING;
+                    case IMAGE_GENERATION -> AdapterType.OLLAMA_IMAGE;
+                    default -> null;
+                };
         var features = new LinkedHashSet<ModelFeature>();
         if (modelType == ModelType.LANGUAGE) {
             features.add(ModelFeature.STREAMING);
@@ -349,22 +369,23 @@ public class OllamaProvider extends AbstractAiProviderType {
             }
         }
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(modelType)
-            .features(Set.copyOf(features))
-            .adapterType(adapter)
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(modelType)
+                .features(Set.copyOf(features))
+                .adapterType(adapter)
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .build();
     }
 
     private ModelType modelType(Set<String> capabilities) {
         if (capabilities.contains("embedding")) {
             return ModelType.EMBEDDING;
         }
-        if (capabilities.contains("image") || capabilities.contains("image_generation")
-            || capabilities.contains("image-generation")) {
+        if (capabilities.contains("image")
+                || capabilities.contains("image_generation")
+                || capabilities.contains("image-generation")) {
             return ModelType.IMAGE_GENERATION;
         }
         if (capabilities.contains("completion")) {

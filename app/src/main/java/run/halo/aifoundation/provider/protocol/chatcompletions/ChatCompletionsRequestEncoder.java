@@ -19,6 +19,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 
 /** Encodes Spring AI prompts into the Chat Completions request contract. */
 final class ChatCompletionsRequestEncoder {
@@ -36,17 +37,23 @@ final class ChatCompletionsRequestEncoder {
         if (options.getExtraBody() != null) {
             body.putAll(options.getExtraBody());
         }
-        body.put(Fields.MESSAGES, prompt.getInstructions().stream()
-            .flatMap(message -> messageBodies(message).stream())
-            .toList());
+        body.put(
+                Fields.MESSAGES,
+                prompt.getInstructions().stream()
+                        .flatMap(message -> messageBodies(message).stream())
+                        .toList());
         body.put(Fields.MODEL, model(options));
         putOptions(body, options);
         putTools(body, options);
         if (stream) {
-            body.put(Fields.STREAM_OPTIONS, streamOptions(options.getStreamOptions()));
+            var streamOptions = streamOptions(options.getStreamOptions());
+            if (!streamOptions.isEmpty()) {
+                body.put(Fields.STREAM_OPTIONS, streamOptions);
+            }
             body.put(Fields.STREAM, true);
         }
         profile.customizeRequest(body, prompt, options, stream);
+        ProviderRequestValidation.validate(options, body);
         return body;
     }
 
@@ -92,8 +99,7 @@ final class ChatCompletionsRequestEncoder {
     }
 
     private List<Map<String, Object>> messageBodies(Message message) {
-        if (message instanceof UserMessage userMessage
-            && !CollectionUtils.isEmpty(userMessage.getMedia())) {
+        if (message instanceof UserMessage userMessage && !CollectionUtils.isEmpty(userMessage.getMedia())) {
             return List.of(userMessageBody(userMessage));
         }
         if (message instanceof AssistantMessage assistantMessage) {
@@ -101,15 +107,14 @@ final class ChatCompletionsRequestEncoder {
         }
         if (message instanceof ToolResponseMessage toolResponseMessage) {
             return toolResponseMessage.getResponses().stream()
-                .<Map<String, Object>>map(response -> {
-                    var body = new LinkedHashMap<String, Object>();
-                    body.put(Fields.ROLE, MessageType.TOOL.getValue());
-                    body.put(Fields.TOOL_CALL_ID, response.id());
-                    body.put(Fields.CONTENT,
-                        response.responseData() == null ? "" : response.responseData());
-                    return body;
-                })
-                .toList();
+                    .<Map<String, Object>>map(response -> {
+                        var body = new LinkedHashMap<String, Object>();
+                        body.put(Fields.ROLE, MessageType.TOOL.getValue());
+                        body.put(Fields.TOOL_CALL_ID, response.id());
+                        body.put(Fields.CONTENT, response.responseData() == null ? "" : response.responseData());
+                        return body;
+                    })
+                    .toList();
         }
         var body = new LinkedHashMap<String, Object>();
         body.put(Fields.ROLE, message.getMessageType().getValue());
@@ -150,8 +155,8 @@ final class ChatCompletionsRequestEncoder {
         }
         var mimeTypeValue = mimeType.toString();
         if (mimeTypeValue.startsWith(Values.IMAGE_MIME_PREFIX)) {
-            return Map.of(Fields.TYPE, Values.IMAGE_URL, Fields.IMAGE_URL,
-                Map.of(Fields.URL, mediaData(mimeType, data)));
+            return Map.of(
+                    Fields.TYPE, Values.IMAGE_URL, Fields.IMAGE_URL, Map.of(Fields.URL, mediaData(mimeType, data)));
         }
         if (mimeTypeValue.startsWith(Values.AUDIO_MIME_PREFIX)) {
             return audioContentPart(mimeTypeValue, data);
@@ -175,8 +180,7 @@ final class ChatCompletionsRequestEncoder {
 
     private String mediaData(MimeType mimeType, Object data) {
         if (data instanceof byte[] bytes) {
-            return "data:" + mimeType + ";base64,"
-                + Base64.getEncoder().encodeToString(bytes);
+            return "data:" + mimeType + ";base64," + Base64.getEncoder().encodeToString(bytes);
         }
         return data.toString();
     }
@@ -190,12 +194,12 @@ final class ChatCompletionsRequestEncoder {
         body.put(Fields.ROLE, MessageType.ASSISTANT.getValue());
         body.put(Fields.CONTENT, assistantContent(message));
         if (!CollectionUtils.isEmpty(message.getToolCalls())) {
-            body.put(Fields.TOOL_CALLS, message.getToolCalls().stream()
-                .map(this::toolCall)
-                .toList());
+            body.put(
+                    Fields.TOOL_CALLS,
+                    message.getToolCalls().stream().map(this::toolCall).toList());
         }
-        var reasoningContent = firstMetadataText(message.getMetadata(),
-            Fields.REASONING_CONTENT_CAMEL, Fields.REASONING_CONTENT);
+        var reasoningContent =
+                firstMetadataText(message.getMetadata(), Fields.REASONING_CONTENT_CAMEL, Fields.REASONING_CONTENT);
         if (hasText(reasoningContent)) {
             body.put(Fields.REASONING_CONTENT, reasoningContent);
         }
@@ -234,13 +238,13 @@ final class ChatCompletionsRequestEncoder {
         return null;
     }
 
-    private List<Map<String, Object>> tools(List<ToolCallback> callbacks,
-        Map<String, Boolean> strictByToolName) {
-        return callbacks.stream().map(callback -> tool(callback, strictByToolName)).toList();
+    private List<Map<String, Object>> tools(List<ToolCallback> callbacks, Map<String, Boolean> strictByToolName) {
+        return callbacks.stream()
+                .map(callback -> tool(callback, strictByToolName))
+                .toList();
     }
 
-    private Map<String, Object> tool(ToolCallback callback,
-        Map<String, Boolean> strictByToolName) {
+    private Map<String, Object> tool(ToolCallback callback, Map<String, Boolean> strictByToolName) {
         var definition = callback.getToolDefinition();
         var function = new LinkedHashMap<String, Object>();
         function.put(Fields.NAME, textOrEmpty(definition.name()));
@@ -294,8 +298,8 @@ final class ChatCompletionsRequestEncoder {
             return Map.of(Fields.INCLUDE_USAGE, true);
         }
         var body = new LinkedHashMap<String, Object>();
-        body.put(Fields.INCLUDE_OBFUSCATION, Boolean.TRUE.equals(options.includeObfuscation()));
-        body.put(Fields.INCLUDE_USAGE, Boolean.TRUE.equals(options.includeUsage()));
+        putIfPresent(body, Fields.INCLUDE_OBFUSCATION, options.includeObfuscation());
+        putIfPresent(body, Fields.INCLUDE_USAGE, options.includeUsage());
         if (options.additionalProperties() != null) {
             body.putAll(options.additionalProperties());
         }

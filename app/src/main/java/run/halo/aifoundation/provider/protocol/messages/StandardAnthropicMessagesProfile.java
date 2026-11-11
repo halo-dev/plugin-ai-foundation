@@ -1,18 +1,15 @@
 package run.halo.aifoundation.provider.protocol.messages;
 
-import java.util.Objects;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.http.HttpHeaders;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 
 /** Common policy for providers that expose the standard Anthropic Messages wire contract. */
 public record StandardAnthropicMessagesProfile(
-    String providerType,
-    String adapterType,
-    String endpointPath,
-    Authentication authentication
-) implements AnthropicMessagesProfile {
+        String providerType, String adapterType, String endpointPath, Authentication authentication)
+        implements AnthropicMessagesProfile {
 
     public StandardAnthropicMessagesProfile {
         Objects.requireNonNull(providerType, "providerType must not be null");
@@ -28,8 +25,8 @@ public record StandardAnthropicMessagesProfile(
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         body.putIfAbsent("max_tokens", 4096);
     }
 

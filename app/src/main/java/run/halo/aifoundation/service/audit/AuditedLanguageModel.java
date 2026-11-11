@@ -13,7 +13,6 @@ import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
-import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageObservation;
@@ -30,14 +29,15 @@ public class AuditedLanguageModel implements LanguageModel {
     private final CallerPluginAuditRecorder auditRecorder;
     private final UsageObservation usageStatistics;
 
-    public AuditedLanguageModel(LanguageModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
+    public AuditedLanguageModel(
+            LanguageModel delegate,
+            ModelCallContext context,
+            CallerPluginAuditRecorder auditRecorder,
+            UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
-        this.auditRecorder = Objects.requireNonNull(auditRecorder,
-            "auditRecorder must not be null");
-        this.usageStatistics = Objects.requireNonNull(usageStatistics,
-            "usageStatistics must not be null");
+        this.auditRecorder = Objects.requireNonNull(auditRecorder, "auditRecorder must not be null");
+        this.usageStatistics = Objects.requireNonNull(usageStatistics, "usageStatistics must not be null");
     }
 
     @Override
@@ -49,8 +49,10 @@ public class AuditedLanguageModel implements LanguageModel {
     @Override
     public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
         auditRecorder.recordModelInvocation(context, GENERATE_TEXT);
-        return recordMono(GENERATE_TEXT, request == null ? null : request.getMetadata(),
-            () -> LanguageModelMiddlewares.applyRequestMiddleware(delegate, request));
+        return recordMono(
+                GENERATE_TEXT,
+                request == null ? null : request.getMetadata(),
+                () -> LanguageModelMiddlewares.applyRequestMiddleware(delegate, request));
     }
 
     @Override
@@ -58,11 +60,13 @@ public class AuditedLanguageModel implements LanguageModel {
         auditRecorder.recordModelInvocation(context, STREAM_TEXT);
         var result = LanguageModelMiddlewares.applyRequestStreamMiddleware(delegate, request);
         var descriptor = UsageTelemetry.safely(
-            () -> usageStatistics.describeCall(context, STREAM_TEXT, true,
-            request == null ? null : request.getMetadata()), null);
+                () -> usageStatistics.describeCall(
+                        context, STREAM_TEXT, true, request == null ? null : request.getMetadata()),
+                null);
         var lazy = new LazySession(usageStatistics, descriptor);
         var outputType = request == null || request.getOutput() == null
-            ? null : request.getOutput().getType();
+                ? null
+                : request.getOutput().getType();
         var partialOutput = result.partialOutputStream();
         var elements = result.elementStream();
         var output = result.output();
@@ -76,18 +80,17 @@ public class AuditedLanguageModel implements LanguageModel {
                     elements = recordFlux(elements, lazy);
                     output = recordProjection(output, lazy);
                 }
-                case TEXT -> { }
+                case TEXT -> {}
                 default -> output = recordProjection(output, lazy);
             }
         }
         return new StreamTextResult(
-            recordFlux(result.fullStream(), lazy),
-            recordFlux(result.textStream(), lazy),
-            partialOutput,
-            elements,
-            output,
-            recordResult(result.result(), lazy)
-        );
+                recordFlux(result.fullStream(), lazy),
+                recordFlux(result.textStream(), lazy),
+                partialOutput,
+                elements,
+                output,
+                recordResult(result.result(), lazy));
     }
 
     @Override
@@ -95,25 +98,22 @@ public class AuditedLanguageModel implements LanguageModel {
         return delegate.capabilities();
     }
 
-    private Mono<GenerateTextResult> recordMono(String operation, Map<String, Object> metadata,
-        Supplier<Mono<GenerateTextResult>> invocation) {
-        return UsageCallRecorder.record(usageStatistics, context, operation, false, metadata,
-            invocation, 0, AuditedLanguageModel::succeed);
+    private Mono<GenerateTextResult> recordMono(
+            String operation, Map<String, Object> metadata, Supplier<Mono<GenerateTextResult>> invocation) {
+        return UsageCallRecorder.record(
+                usageStatistics, context, operation, false, metadata, invocation, 0, AuditedLanguageModel::succeed);
     }
 
-    private static Mono<GenerateTextResult> recordResult(Mono<GenerateTextResult> source,
-        LazySession lazy) {
+    private static Mono<GenerateTextResult> recordResult(Mono<GenerateTextResult> source, LazySession lazy) {
         return Mono.defer(() -> {
             var session = UsageTelemetry.safely(lazy::start, null);
             if (session == null) {
                 return source;
             }
-            return source.doOnSuccess(result ->
-                    UsageTelemetry.safely(() -> succeed(session, result)))
-                .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, 0)))
-                .doFinally(signal -> lazy.finish(session, signal))
-                .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+            return source.doOnSuccess(result -> UsageTelemetry.safely(() -> succeed(session, result)))
+                    .doOnError(error -> UsageTelemetry.safely(() -> session.fail(error, 0)))
+                    .doFinally(signal -> lazy.finish(session, signal))
+                    .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         });
     }
 
@@ -123,12 +123,10 @@ public class AuditedLanguageModel implements LanguageModel {
             if (session == null) {
                 return source;
             }
-            return source.doOnSuccess(ignored -> UsageTelemetry.safely(
-                    session::succeedProjection))
-                .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, 0)))
-                .doFinally(signal -> lazy.finish(session, signal))
-                .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+            return source.doOnSuccess(ignored -> UsageTelemetry.safely(session::succeedProjection))
+                    .doOnError(error -> UsageTelemetry.safely(() -> session.fail(error, 0)))
+                    .doFinally(signal -> lazy.finish(session, signal))
+                    .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         });
     }
 
@@ -138,12 +136,10 @@ public class AuditedLanguageModel implements LanguageModel {
             if (session == null) {
                 return source;
             }
-            return source.doOnComplete(() -> UsageTelemetry.safely(
-                    session::succeedProjection))
-                .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, 0)))
-                .doFinally(signal -> lazy.finish(session, signal))
-                .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+            return source.doOnComplete(() -> UsageTelemetry.safely(session::succeedProjection))
+                    .doOnError(error -> UsageTelemetry.safely(() -> session.fail(error, 0)))
+                    .doFinally(signal -> lazy.finish(session, signal))
+                    .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         });
     }
 
@@ -152,7 +148,8 @@ public class AuditedLanguageModel implements LanguageModel {
             session.succeed(null, 0);
             return;
         }
-        var responseModel = result.getResponse() == null ? null : result.getResponse().getModel();
+        var responseModel =
+                result.getResponse() == null ? null : result.getResponse().getModel();
         var steps = result.getSteps() == null ? 1 : result.getSteps().size();
         session.succeed(responseModel, steps);
     }

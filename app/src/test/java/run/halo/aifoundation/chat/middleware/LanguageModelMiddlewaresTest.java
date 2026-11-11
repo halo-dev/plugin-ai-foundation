@@ -21,16 +21,15 @@ class LanguageModelMiddlewaresTest {
     void generateTextAppliesModelAndRequestMiddlewareInOrder() {
         var events = new ArrayList<String>();
         var model = new RecordingLanguageModel();
-        var wrapped = LanguageModelMiddlewares.wrap(model,
-            appendPrompt("model", events, "|model"));
+        var wrapped = LanguageModelMiddlewares.wrap(model, appendPrompt("model", events, "|model"));
         var request = GenerateTextRequest.builder()
-            .prompt("hello")
-            .middleware(appendPrompt("request", events, "|request"))
-            .build();
+                .prompt("hello")
+                .middleware(appendPrompt("request", events, "|request"))
+                .build();
 
         StepVerifier.create(wrapped.generateText(request))
-            .assertNext(result -> assertThat(result.getText()).isEqualTo("hello|model|request"))
-            .verifyComplete();
+                .assertNext(result -> assertThat(result.getText()).isEqualTo("hello|model|request"))
+                .verifyComplete();
 
         assertThat(events).containsExactly("model", "request");
         assertThat(model.capturedRequest.getMiddleware()).isNull();
@@ -41,13 +40,13 @@ class LanguageModelMiddlewaresTest {
         var events = new ArrayList<String>();
         var model = new RecordingLanguageModel();
         var request = GenerateTextRequest.builder()
-            .prompt("hello")
-            .middleware(appendPrompt("request", events, "|request"))
-            .build();
+                .prompt("hello")
+                .middleware(appendPrompt("request", events, "|request"))
+                .build();
 
         StepVerifier.create(LanguageModelMiddlewares.applyRequestMiddleware(model, request))
-            .assertNext(result -> assertThat(result.getText()).isEqualTo("hello|request"))
-            .verifyComplete();
+                .assertNext(result -> assertThat(result.getText()).isEqualTo("hello|request"))
+                .verifyComplete();
 
         assertThat(events).containsExactly("request");
         assertThat(model.capturedRequest.getMiddleware()).isNull();
@@ -57,19 +56,18 @@ class LanguageModelMiddlewaresTest {
     void terminalRequestPreservesTypedSamplingAndToolSettings() {
         var model = new RecordingLanguageModel();
         var request = GenerateTextRequest.builder()
-            .prompt("hello")
-            .minP(0.1)
-            .repetitionPenalty(1.2)
-            .logprobs(true)
-            .topLogprobs(3)
-            .parallelToolCalls(false)
-            .middleware(new LanguageModelMiddleware() {
-            })
-            .build();
+                .prompt("hello")
+                .minP(0.1)
+                .repetitionPenalty(1.2)
+                .logprobs(true)
+                .topLogprobs(3)
+                .parallelToolCalls(false)
+                .middleware(new LanguageModelMiddleware() {})
+                .build();
 
         StepVerifier.create(LanguageModelMiddlewares.applyRequestMiddleware(model, request))
-            .expectNextCount(1)
-            .verifyComplete();
+                .expectNextCount(1)
+                .verifyComplete();
 
         assertThat(model.capturedRequest.getMinP()).isEqualTo(0.1);
         assertThat(model.capturedRequest.getRepetitionPenalty()).isEqualTo(1.2);
@@ -81,32 +79,31 @@ class LanguageModelMiddlewaresTest {
     @Test
     void streamTextSharesAsyncTransformedExecutionAcrossViews() {
         var model = new RecordingLanguageModel();
-        var wrapped = LanguageModelMiddlewares.wrap(model,
-            appendPrompt("model", new ArrayList<>(), "|model"));
+        var wrapped = LanguageModelMiddlewares.wrap(model, appendPrompt("model", new ArrayList<>(), "|model"));
 
-        var stream = wrapped.streamText(GenerateTextRequest.builder().prompt("hello").build());
+        var stream =
+                wrapped.streamText(GenerateTextRequest.builder().prompt("hello").build());
 
         StepVerifier.create(stream.textStream().collectList())
-            .assertNext(text -> assertThat(text).containsExactly("hello|model"))
-            .verifyComplete();
+                .assertNext(text -> assertThat(text).containsExactly("hello|model"))
+                .verifyComplete();
         StepVerifier.create(stream.result())
-            .assertNext(result -> assertThat(result.getText()).isEqualTo("hello|model"))
-            .verifyComplete();
+                .assertNext(result -> assertThat(result.getText()).isEqualTo("hello|model"))
+                .verifyComplete();
 
         assertThat(model.streamCalls).hasValue(1);
         assertThat(model.streamSubscriptions).hasValue(1);
     }
 
-    private static LanguageModelMiddleware appendPrompt(String name, List<String> events,
-        String suffix) {
+    private static LanguageModelMiddleware appendPrompt(String name, List<String> events, String suffix) {
         return new LanguageModelMiddleware() {
             @Override
             public Mono<GenerateTextRequest> transformRequest(LanguageModelRequestContext context) {
                 return Mono.fromSupplier(() -> {
                     events.add(name);
                     return GenerateTextRequest.builder()
-                        .prompt(context.request().getPrompt() + suffix)
-                        .build();
+                            .prompt(context.request().getPrompt() + suffix)
+                            .build();
                 });
             }
         };
@@ -125,9 +122,8 @@ class LanguageModelMiddlewaresTest {
         @Override
         public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
             capturedRequest = request;
-            return Mono.just(GenerateTextResult.builder()
-                .text(request.getPrompt())
-                .build());
+            return Mono.just(
+                    GenerateTextResult.builder().text(request.getPrompt()).build());
         }
 
         @Override
@@ -138,22 +134,21 @@ class LanguageModelMiddlewaresTest {
             var fullStream = Flux.defer(() -> {
                 streamSubscriptions.incrementAndGet();
                 return Flux.just(
-                    TextStreamPart.start("msg_test"),
-                    TextStreamPart.textStart("text_0"),
-                    TextStreamPart.textDelta("text_0", text),
-                    TextStreamPart.textEnd("text_0"),
-                    TextStreamPart.finish(null, null, null)
-                );
+                        TextStreamPart.start("msg_test"),
+                        TextStreamPart.textStart("text_0"),
+                        TextStreamPart.textDelta("text_0", text),
+                        TextStreamPart.textEnd("text_0"),
+                        TextStreamPart.finish(null, null, null));
             });
             return new StreamTextResult(
-                fullStream,
-                fullStream.filter(part -> "text-delta".equals(part.getType()))
-                    .map(TextStreamPart::getDelta),
-                Flux.empty(),
-                Flux.empty(),
-                Mono.empty(),
-                Mono.just(GenerateTextResult.builder().text(text).build())
-            );
+                    fullStream,
+                    fullStream
+                            .filter(part -> "text-delta".equals(part.getType()))
+                            .map(TextStreamPart::getDelta),
+                    Flux.empty(),
+                    Flux.empty(),
+                    Mono.empty(),
+                    Mono.just(GenerateTextResult.builder().text(text).build()));
         }
     }
 }

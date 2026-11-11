@@ -25,6 +25,12 @@ export interface DefaultModelSlots {
      * @type {string}
      * @memberof DefaultModelSlots
      */
+    'decisionModelName'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof DefaultModelSlots
+     */
     'embeddingModelName'?: string;
     /**
      * 

@@ -38,8 +38,7 @@ import run.halo.aifoundation.service.observation.UsageFeature;
 
 @Slf4j
 @Component
-public class UsageStatisticsService
-    implements run.halo.aifoundation.service.observation.UsageObservation {
+public class UsageStatisticsService implements run.halo.aifoundation.service.observation.UsageObservation {
 
     static final int WRITE_QUEUE_CAPACITY = 8_192;
     static final int MAX_WRITE_ATTEMPTS = 3;
@@ -49,8 +48,7 @@ public class UsageStatisticsService
     private final CallerPluginResolver callerPluginResolver;
     private final Clock clock;
     private final ThreadPoolExecutor writer;
-    private final ArrayBlockingQueue<PendingWrite> pendingWrites =
-        new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
+    private final ArrayBlockingQueue<PendingWrite> pendingWrites = new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
     private final AtomicBoolean draining = new AtomicBoolean();
     private final AtomicBoolean closing = new AtomicBoolean();
     private final Object admissionLock = new Object();
@@ -74,21 +72,23 @@ public class UsageStatisticsService
     private final AtomicBoolean maintenanceQueued = new AtomicBoolean();
 
     @Autowired
-    public UsageStatisticsService(UsageStatisticsStore store,
-        CallerPluginResolver callerPluginResolver) {
+    public UsageStatisticsService(UsageStatisticsStore store, CallerPluginResolver callerPluginResolver) {
         this(store, callerPluginResolver, Clock.systemUTC());
     }
 
-    UsageStatisticsService(UsageStatisticsStore store, CallerPluginResolver callerPluginResolver,
-        Clock clock) {
+    UsageStatisticsService(UsageStatisticsStore store, CallerPluginResolver callerPluginResolver, Clock clock) {
         this.store = store;
         this.callerPluginResolver = callerPluginResolver;
         this.clock = clock;
-        this.writer = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY), threadFactory("ai-usage-writer-"),
-            new ThreadPoolExecutor.AbortPolicy());
-        this.maintenance = Executors.newSingleThreadScheduledExecutor(
-            threadFactory("ai-usage-maintenance-"));
+        this.writer = new ThreadPoolExecutor(
+                1,
+                1,
+                0,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY),
+                threadFactory("ai-usage-writer-"),
+                new ThreadPoolExecutor.AbortPolicy());
+        this.maintenance = Executors.newSingleThreadScheduledExecutor(threadFactory("ai-usage-maintenance-"));
         this.readerScheduler = Schedulers.newBoundedElastic(2, 128, "ai-usage-reader");
     }
 
@@ -110,26 +110,34 @@ public class UsageStatisticsService
             }
             available = false;
             accepting = false;
-            log.error("AI usage statistics are disabled because initialization failed ({})",
-                safeMessage(error), error);
+            log.error("AI usage statistics are disabled because initialization failed ({})", safeMessage(error), error);
         }
     }
 
-    public UsageCallDescriptor describeCall(ModelCallContext context, String operation,
-        boolean streaming, java.util.Map<String, Object> metadata) {
+    public UsageCallDescriptor describeCall(
+            ModelCallContext context, String operation, boolean streaming, java.util.Map<String, Object> metadata) {
         var caller = callerPluginResolver.resolveCurrentCallerSnapshot();
-        return new UsageCallDescriptor(context, operation, streaming,
-            UsageFeature.fromMetadata(metadata), caller);
+        return new UsageCallDescriptor(context, operation, streaming, UsageFeature.fromMetadata(metadata), caller);
     }
 
     public UsageCallSession beginCall(UsageCallDescriptor descriptor) {
         var context = descriptor.context();
         var caller = descriptor.caller();
-        var start = new UsageCallStart(java.util.UUID.randomUUID().toString(), epoch,
-            clock.instant(), caller.getPluginName(), caller.getVersion(),
-            caller.getDetectionSource(), descriptor.feature(), descriptor.operation(),
-            context.modelType().name(), context.modelName(), context.providerName(),
-            context.providerType(), context.modelId(), descriptor.streaming());
+        var start = new UsageCallStart(
+                java.util.UUID.randomUUID().toString(),
+                epoch,
+                clock.instant(),
+                caller.getPluginName(),
+                caller.getVersion(),
+                caller.getDetectionSource(),
+                descriptor.feature(),
+                descriptor.operation(),
+                context.modelType().name(),
+                context.modelName(),
+                context.providerName(),
+                context.providerType(),
+                context.modelId(),
+                descriptor.streaming());
         var session = new UsageCallSession(this, start, clock);
         synchronized (admissionLock) {
             if (!accepting || !available) {
@@ -150,8 +158,7 @@ public class UsageStatisticsService
     }
 
     public void recordExecution(UsageCallSession session, UsageExecutionRecord execution) {
-        submit(session.start().epoch(), () -> store.recordExecution(execution),
-            () -> markIncomplete(session));
+        submit(session.start().epoch(), () -> store.recordExecution(execution), () -> markIncomplete(session));
     }
 
     public void finishCall(UsageCallSession session, UsageCallTerminal terminal) {
@@ -163,31 +170,33 @@ public class UsageStatisticsService
                 markIncomplete(session);
             }
         }
-        submit(session.start().epoch(), () -> {
-            store.finishCall(withCurrentCompleteness(session, terminal));
-            synchronized (admissionLock) {
-                trackedCalls.computeIfPresent(session.start().id(),
-                    (id, tracked) -> new TrackedCall(tracked.session(), true));
-            }
-        }, () -> {
-            synchronized (admissionLock) {
-                if (session.start().epoch() != epoch) {
-                    return;
-                }
-                markIncomplete(session);
-                trackedCalls.computeIfPresent(session.start().id(),
-                    (id, tracked) -> new TrackedCall(tracked.session(), true));
-                reconciliationNeeded = true;
-            }
-        });
+        submit(
+                session.start().epoch(),
+                () -> {
+                    store.finishCall(withCurrentCompleteness(session, terminal));
+                    synchronized (admissionLock) {
+                        trackedCalls.computeIfPresent(
+                                session.start().id(), (id, tracked) -> new TrackedCall(tracked.session(), true));
+                    }
+                },
+                () -> {
+                    synchronized (admissionLock) {
+                        if (session.start().epoch() != epoch) {
+                            return;
+                        }
+                        markIncomplete(session);
+                        trackedCalls.computeIfPresent(
+                                session.start().id(), (id, tracked) -> new TrackedCall(tracked.session(), true));
+                        reconciliationNeeded = true;
+                    }
+                });
     }
 
     public Mono<UsageSummary> summary(UsageQuery query) {
         return read(() -> store.summary(query, isComplete(query)));
     }
 
-    public Mono<List<UsageTrendPoint>> trends(UsageQuery query,
-        UsageBreakdownDimension dimension) {
+    public Mono<List<UsageTrendPoint>> trends(UsageQuery query, UsageBreakdownDimension dimension) {
         return read(() -> store.trends(query, isComplete(query), dimension));
     }
 
@@ -202,10 +211,20 @@ public class UsageStatisticsService
                 return new UsageCallPage(List.of(), null);
             }
             var recent = query.from().isBefore(cutoff)
-                ? new UsageQuery(cutoff, query.to(), query.callerPlugin(), query.feature(),
-                    query.providerName(), query.modelName(), query.modelType(), query.operation(),
-                    query.status(), query.usageQuality(), query.resolution(), query.timeZone())
-                : query;
+                    ? new UsageQuery(
+                            cutoff,
+                            query.to(),
+                            query.callerPlugin(),
+                            query.feature(),
+                            query.providerName(),
+                            query.modelName(),
+                            query.modelType(),
+                            query.operation(),
+                            query.status(),
+                            query.usageQuality(),
+                            query.resolution(),
+                            query.timeZone())
+                    : query;
             var recentCursor = cursor;
             if (cursor != null && !cursor.isBlank()) {
                 var decoded = UsageCursor.decode(cursor, query);
@@ -216,14 +235,18 @@ public class UsageStatisticsService
                 return page;
             }
             var next = UsageCursor.decode(page.nextCursor(), recent);
-            return new UsageCallPage(page.items(),
-                UsageCursor.encode(next.startedAt(), next.id(), query));
+            return new UsageCallPage(page.items(), UsageCursor.encode(next.startedAt(), next.id(), query));
         });
     }
 
     public Mono<Optional<UsageCallDetail>> getCall(String id) {
-        return read(() -> store.getCall(id).filter(detail ->
-            !detail.call().startedAt().isBefore(clock.instant().minus(CALL_DETAIL_RANGE))));
+        return read(() -> store.getCall(id)
+                .filter(detail ->
+                        !detail.call().startedAt().isBefore(clock.instant().minus(CALL_DETAIL_RANGE))));
+    }
+
+    public Mono<List<UsageCallerPlugin>> callerPlugins() {
+        return read(store::callerPlugins);
     }
 
     public Mono<Void> reset(String confirmation) {
@@ -253,11 +276,18 @@ public class UsageStatisticsService
     }
 
     public UsageHealth health() {
-        return new UsageHealth(available, hasCompleteHistory(),
-            pendingWrites.size(), droppedEvents.get(), incompleteCalls.get(),
-            writeFailures.get(), lastWriteErrorAt.get(), affectedSince.get(),
-            affectedUntil.get(),
-            initializationError.get(), integrityError.get());
+        return new UsageHealth(
+                available,
+                hasCompleteHistory(),
+                pendingWrites.size(),
+                droppedEvents.get(),
+                incompleteCalls.get(),
+                writeFailures.get(),
+                lastWriteErrorAt.get(),
+                affectedSince.get(),
+                affectedUntil.get(),
+                initializationError.get(),
+                integrityError.get());
     }
 
     private boolean hasCompleteHistory() {
@@ -427,7 +457,8 @@ public class UsageStatisticsService
                     var failure = writeBatchWithRetries(batch);
                     handleBatchFailure(batch, failure);
                     if (failure != null) {
-                        log.warn("AI usage batch failed ({})", failure.getClass().getSimpleName());
+                        log.warn(
+                                "AI usage batch failed ({})", failure.getClass().getSimpleName());
                     }
                     persistHealthIfDirty();
                 } finally {
@@ -451,15 +482,15 @@ public class UsageStatisticsService
             }
             final java.util.Set<String> active;
             synchronized (admissionLock) {
-                if (!available || healthDirty.get() || !reconciliationNeeded
-                    || !pendingWrites.isEmpty()) {
+                if (!available || healthDirty.get() || !reconciliationNeeded || !pendingWrites.isEmpty()) {
                     return;
                 }
                 // Only this writer persists queued events. New admissions after the snapshot
                 // cannot reach SQLite until this recovery finishes; reset holds the write lock.
                 active = trackedCalls.entrySet().stream()
-                    .filter(entry -> !entry.getValue().ended())
-                    .map(java.util.Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
+                        .filter(entry -> !entry.getValue().ended())
+                        .map(java.util.Map.Entry::getKey)
+                        .collect(java.util.stream.Collectors.toSet());
                 reconciliationNeeded = false;
             }
             try {
@@ -545,8 +576,7 @@ public class UsageStatisticsService
         RuntimeException failure = null;
         for (int attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt++) {
             if (!available) {
-                return failure == null
-                    ? new IllegalStateException("AI usage statistics are unavailable") : failure;
+                return failure == null ? new IllegalStateException("AI usage statistics are unavailable") : failure;
             }
             try {
                 store.writeBatch(batch.stream().map(PendingWrite::action).toList());
@@ -581,10 +611,11 @@ public class UsageStatisticsService
             if (error instanceof SQLException sql) {
                 // SQLite primary result codes: read-only, busy/locked, I/O, full, cannot open,
                 // corrupt/not-a-database. Retrying each event cannot isolate these failures.
-                var storageFailure = switch (sql.getErrorCode() & 0xff) {
-                    case 5, 6, 8, 10, 11, 13, 14, 26 -> true;
-                    default -> false;
-                };
+                var storageFailure =
+                        switch (sql.getErrorCode() & 0xff) {
+                            case 5, 6, 8, 10, 11, 13, 14, 26 -> true;
+                            default -> false;
+                        };
                 if (storageFailure) {
                     return true;
                 }
@@ -593,11 +624,9 @@ public class UsageStatisticsService
         return false;
     }
 
-    private record PendingWrite(long epoch, Runnable action, Runnable onFailure) {
-    }
+    private record PendingWrite(long epoch, Runnable action, Runnable onFailure) {}
 
-    private record TrackedCall(UsageCallSession session, boolean ended) {
-    }
+    private record TrackedCall(UsageCallSession session, boolean ended) {}
 
     private void markIncomplete(UsageCallSession session) {
         synchronized (admissionLock) {
@@ -608,17 +637,24 @@ public class UsageStatisticsService
         }
     }
 
-    private static UsageCallTerminal withCurrentCompleteness(UsageCallSession session,
-        UsageCallTerminal terminal) {
+    private static UsageCallTerminal withCurrentCompleteness(UsageCallSession session, UsageCallTerminal terminal) {
         if (!session.isIncomplete()) {
             return terminal;
         }
         if (!terminal.complete()) {
             return terminal;
         }
-        return new UsageCallTerminal(terminal.start(), terminal.completedAt(), terminal.status(),
-            terminal.error(), terminal.responseModelId(), terminal.stepCount(),
-            terminal.attemptCount(), terminal.missingExecutionCount(), false, terminal.usage());
+        return new UsageCallTerminal(
+                terminal.start(),
+                terminal.completedAt(),
+                terminal.status(),
+                terminal.error(),
+                terminal.responseModelId(),
+                terminal.stepCount(),
+                terminal.attemptCount(),
+                terminal.missingExecutionCount(),
+                false,
+                terminal.usage());
     }
 
     private <T> Mono<T> read(java.util.concurrent.Callable<T> query) {
@@ -631,19 +667,20 @@ public class UsageStatisticsService
 
     private <T> Mono<T> access(java.util.concurrent.Callable<T> query, Lock lock) {
         return Mono.fromCallable(() -> {
-            lock.lock();
-            try {
-                if (!canAccessStore()) {
-                    throw new IllegalStateException("AI usage statistics are unavailable");
-                }
-                return query.call();
-            } catch (Exception | LinkageError error) {
-                disableIfUnavailable(error);
-                throw error;
-            } finally {
-                lock.unlock();
-            }
-        }).subscribeOn(readerScheduler);
+                    lock.lock();
+                    try {
+                        if (!canAccessStore()) {
+                            throw new IllegalStateException("AI usage statistics are unavailable");
+                        }
+                        return query.call();
+                    } catch (Exception | LinkageError error) {
+                        disableIfUnavailable(error);
+                        throw error;
+                    } finally {
+                        lock.unlock();
+                    }
+                })
+                .subscribeOn(readerScheduler);
     }
 
     private boolean canAccessStore() {
@@ -745,10 +782,15 @@ public class UsageStatisticsService
     }
 
     private UsageHealthState healthState() {
-        return new UsageHealthState(droppedEvents.get(), incompleteCalls.get(),
-            writeFailures.get(), lastWriteErrorAt.get(), affectedSince.get(),
-            affectedUntil.get(),
-            initializationError.get(), integrityError.get());
+        return new UsageHealthState(
+                droppedEvents.get(),
+                incompleteCalls.get(),
+                writeFailures.get(),
+                lastWriteErrorAt.get(),
+                affectedSince.get(),
+                affectedUntil.get(),
+                initializationError.get(),
+                integrityError.get());
     }
 
     private boolean isComplete(UsageQuery query) {
@@ -787,16 +829,20 @@ public class UsageStatisticsService
             if (!available) {
                 return false;
             }
-            ended = trackedCalls.entrySet().stream().filter(entry -> entry.getValue().ended())
-                .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
-                    java.util.Map.Entry::getValue));
+            ended = trackedCalls.entrySet().stream()
+                    .filter(entry -> entry.getValue().ended())
+                    .collect(java.util.stream.Collectors.toMap(
+                            java.util.Map.Entry::getKey, java.util.Map.Entry::getValue));
             if (!healthDirty.compareAndSet(true, false)) {
                 ended.forEach((id, tracked) -> trackedCalls.remove(id, tracked));
                 return true;
             }
             health = healthState();
-            incomplete = trackedCalls.values().stream().map(TrackedCall::session)
-                .filter(UsageCallSession::isIncomplete).map(UsageCallSession::start).toList();
+            incomplete = trackedCalls.values().stream()
+                    .map(TrackedCall::session)
+                    .filter(UsageCallSession::isIncomplete)
+                    .map(UsageCallSession::start)
+                    .toList();
         }
         try {
             store.writeHealth(health, incomplete);
@@ -858,8 +904,7 @@ public class UsageStatisticsService
                 sql = cause;
             }
         }
-        return root.getClass().getSimpleName()
-            + (sql == null ? "" : " (SQLite errorCode=" + sql.getErrorCode() + ")");
+        return root.getClass().getSimpleName() + (sql == null ? "" : " (SQLite errorCode=" + sql.getErrorCode() + ")");
     }
 
     private static boolean isIntegrityFailure(Throwable error) {

@@ -15,48 +15,42 @@ class ProviderModelResolverTest {
     @Test
     void builtInProviderNormalizesLegacyGenericAdapter() {
         var providerType = new TestProviderType(true, List.of(AdapterType.DEEPSEEK_CHAT));
-        var persisted = new ProviderModelRef("deepseek-chat", ModelType.LANGUAGE,
-            AdapterType.OPENAI_CHAT);
+        var persisted = new ProviderModelRef("deepseek-chat", ModelType.LANGUAGE, AdapterType.OPENAI_CHAT);
 
         assertThat(ProviderModelResolver.resolve(providerType, persisted).adapterType())
-            .isEqualTo(AdapterType.DEEPSEEK_CHAT);
+                .isEqualTo(AdapterType.DEEPSEEK_CHAT);
     }
 
     @Test
     void configurableCompatibleProviderKeepsGenericAdapter() {
         var providerType = new TestProviderType(false, List.of(AdapterType.OPENAI_CHAT));
-        var persisted = new ProviderModelRef("third-party-model", ModelType.LANGUAGE,
-            AdapterType.OPENAI_CHAT);
+        var persisted = new ProviderModelRef("third-party-model", ModelType.LANGUAGE, AdapterType.OPENAI_CHAT);
 
         assertThat(ProviderModelResolver.resolve(providerType, persisted)).isEqualTo(persisted);
     }
 
     @Test
     void builtInProviderNormalizesLegacyRerankAdapter() {
-        var providerType = new TestProviderType(true,
-            List.of(AdapterType.DASHSCOPE_NATIVE_RERANK,
-                AdapterType.DASHSCOPE_COMPATIBLE_RERANK));
-        var persisted = new ProviderModelRef("rerank-model", ModelType.RERANK,
-            AdapterType.RERANK);
+        var providerType = new TestProviderType(
+                true, List.of(AdapterType.DASHSCOPE_NATIVE_RERANK, AdapterType.DASHSCOPE_COMPATIBLE_RERANK));
+        var persisted = new ProviderModelRef("rerank-model", ModelType.RERANK, AdapterType.RERANK);
 
         assertThat(ProviderModelResolver.resolve(providerType, persisted).adapterType())
-            .isEqualTo(AdapterType.DASHSCOPE_NATIVE_RERANK);
+                .isEqualTo(AdapterType.DASHSCOPE_NATIVE_RERANK);
     }
 
     @Test
     void unsupportedNonLegacyAdapterIsRejected() {
         var providerType = new TestProviderType(true, List.of(AdapterType.DEEPSEEK_CHAT));
-        var model = new ProviderModelRef("deepseek-chat", ModelType.LANGUAGE,
-            AdapterType.ANTHROPIC_MESSAGES);
+        var model = new ProviderModelRef("deepseek-chat", ModelType.LANGUAGE, AdapterType.ANTHROPIC_MESSAGES);
 
         assertThatThrownBy(() -> ProviderModelResolver.resolve(providerType, model))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("anthropic-messages")
-            .hasMessageContaining("test");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("anthropic-messages")
+                .hasMessageContaining("test");
     }
 
-    private record TestProviderType(boolean builtIn,
-                                    List<AdapterType> adapters) implements AiProviderType {
+    private record TestProviderType(boolean builtIn, List<AdapterType> adapters) implements AiProviderType {
 
         @Override
         public String getProviderType() {

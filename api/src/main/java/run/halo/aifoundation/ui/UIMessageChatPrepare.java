@@ -2,9 +2,7 @@ package run.halo.aifoundation.ui;
 
 import reactor.core.publisher.Mono;
 
-/**
- * Async hook for preparing a UI message chat model request before execution.
- */
+/** Async hook for preparing a UI message chat model request before execution. */
 @FunctionalInterface
 public interface UIMessageChatPrepare<M> {
 

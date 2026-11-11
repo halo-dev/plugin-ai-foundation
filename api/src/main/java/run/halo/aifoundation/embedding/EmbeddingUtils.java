@@ -1,12 +1,9 @@
 package run.halo.aifoundation.embedding;
 
-/**
- * Utility methods for embedding vectors.
- */
+/** Utility methods for embedding vectors. */
 public final class EmbeddingUtils {
 
-    private EmbeddingUtils() {
-    }
+    private EmbeddingUtils() {}
 
     /**
      * Calculates cosine similarity between two embedding vectors.
@@ -14,8 +11,8 @@ public final class EmbeddingUtils {
      * @param left first embedding vector
      * @param right second embedding vector
      * @return cosine similarity
-     * @throws IllegalArgumentException when vectors are null, empty, have different lengths, or
-     *                                  contain a zero-magnitude vector
+     * @throws IllegalArgumentException when vectors are null, empty, have different lengths, or contain a
+     *     zero-magnitude vector
      */
     public static double cosineSimilarity(float[] left, float[] right) {
         validateVectors(left, right);

@@ -39,17 +39,19 @@ class UsageQueryPrecisionTest {
             assertThat(store.summary(query, true).callCount()).isEqualTo(2);
             assertThat(store.summary(query, true).accountedTotalTokens()).isEqualTo(30);
             assertThat(store.breakdown(query, UsageBreakdownDimension.MODEL).items())
-                .singleElement().satisfies(item -> assertThat(item.callCount()).isEqualTo(2));
+                    .singleElement()
+                    .satisfies(item -> assertThat(item.callCount()).isEqualTo(2));
             assertThat(store.trends(query, true, UsageBreakdownDimension.MODEL))
-                .singleElement().satisfies(point -> {
-                    assertThat(point.bucketStart()).isEqualTo(from);
-                    assertThat(point.callCount()).isEqualTo(2);
-                    assertThat(point.byDimension().get("model").callCount()).isEqualTo(2);
-                });
-            var partial = query(from.plusSeconds(1), to.minusSeconds(1), "Asia/Kathmandu",
-                UsageTrendResolution.HOUR);
+                    .singleElement()
+                    .satisfies(point -> {
+                        assertThat(point.bucketStart()).isEqualTo(from);
+                        assertThat(point.callCount()).isEqualTo(2);
+                        assertThat(point.byDimension().get("model").callCount()).isEqualTo(2);
+                    });
+            var partial = query(from.plusSeconds(1), to.minusSeconds(1), "Asia/Kathmandu", UsageTrendResolution.HOUR);
             assertThat(store.summary(partial, true).callCount()).isZero();
-            assertThat(store.breakdown(partial, UsageBreakdownDimension.MODEL).items()).isEmpty();
+            assertThat(store.breakdown(partial, UsageBreakdownDimension.MODEL).items())
+                    .isEmpty();
             assertThat(store.trends(partial, true, null)).isEmpty();
         }
     }
@@ -63,17 +65,17 @@ class UsageQueryPrecisionTest {
             finish(store, at.minusMillis(1));
             finish(store, at);
             finish(store, at.plusSeconds(600));
-            var query = query(at.minusSeconds(1), at.plusSeconds(601), zone,
-                UsageTrendResolution.HOUR);
-            assertThat(store.trends(query, true, null)).satisfiesExactly(
-                point -> {
-                    assertThat(point.bucketStart()).isEqualTo(at.minusSeconds(3600));
-                    assertThat(point.callCount()).isEqualTo(1);
-                },
-                point -> {
-                    assertThat(point.bucketStart()).isEqualTo(at);
-                    assertThat(point.callCount()).isEqualTo(2);
-                });
+            var query = query(at.minusSeconds(1), at.plusSeconds(601), zone, UsageTrendResolution.HOUR);
+            assertThat(store.trends(query, true, null))
+                    .satisfiesExactly(
+                            point -> {
+                                assertThat(point.bucketStart()).isEqualTo(at.minusSeconds(3600));
+                                assertThat(point.callCount()).isEqualTo(1);
+                            },
+                            point -> {
+                                assertThat(point.bucketStart()).isEqualTo(at);
+                                assertThat(point.callCount()).isEqualTo(2);
+                            });
         }
     }
 
@@ -98,11 +100,12 @@ class UsageQueryPrecisionTest {
             assertThat(points.getLast().bucketStart()).isEqualTo(to.minusSeconds(3600));
             var daily = query(from, to, zone.getId(), UsageTrendResolution.DAY);
             assertThat(store.trends(daily, true, UsageBreakdownDimension.MODEL))
-                .singleElement().satisfies(point -> {
-                    assertThat(point.bucketStart()).isEqualTo(from);
-                    assertThat(point.callCount()).isEqualTo(hours);
-                    assertThat(point.byDimension().get("model").callCount()).isEqualTo(hours);
-                });
+                    .singleElement()
+                    .satisfies(point -> {
+                        assertThat(point.bucketStart()).isEqualTo(from);
+                        assertThat(point.callCount()).isEqualTo(hours);
+                        assertThat(point.byDimension().get("model").callCount()).isEqualTo(hours);
+                    });
             assertThat(store.summary(daily, true).callCount()).isEqualTo(hours);
         }
     }
@@ -112,18 +115,17 @@ class UsageQueryPrecisionTest {
         "2026-04-04T14:59:00Z,2026-04-04T15:01:00Z,2026-04-04T14:00:00Z,2026-04-04T15:00:00Z",
         "2026-10-03T15:29:00Z,2026-10-03T15:31:00Z,2026-10-03T14:30:00Z,2026-10-03T15:30:00Z"
     })
-    void fractionalDstTransitionsKeepDistinctPartialHours(String before, String after,
-        String firstBucket, String secondBucket) {
+    void fractionalDstTransitionsKeepDistinctPartialHours(
+            String before, String after, String firstBucket, String secondBucket) {
         try (var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(temp))) {
             store.initialize();
             var from = Instant.parse(before);
             var to = Instant.parse(after).plusSeconds(1);
             finish(store, from);
             finish(store, Instant.parse(after));
-            assertThat(store.trends(query(from, to, "Australia/Lord_Howe",
-                UsageTrendResolution.HOUR), true, null))
-                .extracting(UsageTrendPoint::bucketStart)
-                .containsExactly(Instant.parse(firstBucket), Instant.parse(secondBucket));
+            assertThat(store.trends(query(from, to, "Australia/Lord_Howe", UsageTrendResolution.HOUR), true, null))
+                    .extracting(UsageTrendPoint::bucketStart)
+                    .containsExactly(Instant.parse(firstBucket), Instant.parse(secondBucket));
         }
     }
 
@@ -152,15 +154,26 @@ class UsageQueryPrecisionTest {
     }
 
     private static void finish(SqliteUsageStatisticsStore store, Instant at, NormalizedUsage usage) {
-        var start = new UsageCallStart(at.toString(), 1, at, "plugin", "1", "test", null,
-            "language.generateText", "LANGUAGE", "model", "provider", "openai", "gpt", false);
-        store.finishCall(new UsageCallTerminal(start, start.startedAt().plusSeconds(1),
-            UsageStatus.SUCCEEDED, null, "gpt", 1, 1, 0, true, usage));
+        var start = new UsageCallStart(
+                at.toString(),
+                1,
+                at,
+                "plugin",
+                "1",
+                "test",
+                null,
+                "language.generateText",
+                "LANGUAGE",
+                "model",
+                "provider",
+                "openai",
+                "gpt",
+                false);
+        store.finishCall(new UsageCallTerminal(
+                start, start.startedAt().plusSeconds(1), UsageStatus.SUCCEEDED, null, "gpt", 1, 1, 0, true, usage));
     }
 
-    private static UsageQuery query(Instant from, Instant to, String zone,
-        UsageTrendResolution resolution) {
-        return new UsageQuery(from, to, null, null, null, null, null, null, null, null,
-            resolution, ZoneId.of(zone));
+    private static UsageQuery query(Instant from, Instant to, String zone, UsageTrendResolution resolution) {
+        return new UsageQuery(from, to, null, null, null, null, null, null, null, null, resolution, ZoneId.of(zone));
     }
 }

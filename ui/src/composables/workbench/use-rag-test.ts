@@ -2,7 +2,6 @@ import type { ModelOption, TestRagSource } from '@/api/generated'
 import type { useLanguageGenerationSettings } from '@/composables/workbench/use-language-generation-settings'
 import {
   applyWorkbenchUIMessageSnapshot,
-  buildReasoningOptions,
   createAssistantUIMessage,
   createUserUIMessage,
   testRagUiMessageStreamUrl,
@@ -15,7 +14,7 @@ import {
   haloMessageToWorkbench,
   workbenchMessagesToHalo,
 } from '@/utils/model-test-workbench-messages'
-import { numberOrUndefined, parseStringMapJson } from '@/utils/model-test-workbench-request'
+import { numberOrUndefined } from '@/utils/model-test-workbench-request'
 import {
   DefaultChatTransport,
   useChat,
@@ -107,9 +106,8 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
       return
     }
     ragError.value = ''
-    const headers = parseStringMapJson(settings.chatHeadersText.value)
-    settings.chatHeadersError.value = headers.error || ''
-    if (headers.error) return
+    const parameters = settings.buildValidatedParameters({ tools: false, output: false })
+    if (!parameters) return
     ragMessages.value = [
       {
         id: utils.id.uuid(),
@@ -122,35 +120,28 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
     assistantMessage.uiMessage = createAssistantUIMessage(assistantMessage.id)
     ragMessages.value.push(assistantMessage)
     const assistantMessageId = assistantMessage.id
-    const stopSequences = settings.stopSequencesText.value
-      .split('\n')
-      .map((item) => item.trim())
-      .filter(Boolean)
     const requestBody = {
       query: ragQuery.value.trim(),
-      system: settings.systemPrompt.value.trim() || undefined,
+      system: parameters.systemPrompt.trim() || undefined,
       sources,
       rerankModelName: ragRerankModelName.value,
       topN: numberOrUndefined(ragTopN.value),
-      temperature: numberOrUndefined(settings.temperature.value),
-      topP: numberOrUndefined(settings.topP.value),
-      topK: numberOrUndefined(settings.topK.value),
-      minP: numberOrUndefined(settings.minP.value),
-      presencePenalty: numberOrUndefined(settings.presencePenalty.value),
-      frequencyPenalty: numberOrUndefined(settings.frequencyPenalty.value),
-      repetitionPenalty: numberOrUndefined(settings.repetitionPenalty.value),
-      stopSequences: stopSequences.length ? stopSequences : undefined,
-      logprobs: settings.logprobs.value,
-      topLogprobs: numberOrUndefined(settings.topLogprobs.value),
-      parallelToolCalls: settings.parallelToolCalls.value,
-      maxOutputTokens: numberOrUndefined(settings.maxTokens.value),
-      seed: numberOrUndefined(settings.seed.value),
-      maxRetries: numberOrUndefined(settings.maxRetries.value),
-      headers: headers.value,
-      reasoning: buildReasoningOptions({
-        mode: settings.reasoningMode.value,
-        effort: settings.reasoningEffort.value,
-      }),
+      temperature: parameters.temperature,
+      topP: parameters.topP,
+      topK: parameters.topK,
+      minP: parameters.minP,
+      presencePenalty: parameters.presencePenalty,
+      frequencyPenalty: parameters.frequencyPenalty,
+      repetitionPenalty: parameters.repetitionPenalty,
+      stopSequences: parameters.stopSequences,
+      logprobs: parameters.logprobs,
+      topLogprobs: parameters.topLogprobs,
+      parallelToolCalls: parameters.parallelToolCalls,
+      maxOutputTokens: parameters.maxOutputTokens,
+      seed: parameters.seed,
+      maxRetries: parameters.maxRetries,
+      headers: parameters.headers,
+      reasoning: parameters.reasoning,
       ragOptions: {
         emptyContextPolicy: 'CONTINUE_WITHOUT_CONTEXT',
         rerankFailurePolicy: 'USE_RETRIEVED_ORDER',

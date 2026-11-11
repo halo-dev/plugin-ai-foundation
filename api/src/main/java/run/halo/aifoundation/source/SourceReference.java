@@ -6,36 +6,22 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Display-safe reference to a source used or returned during generation.
- */
+/** Display-safe reference to a source used or returned during generation. */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class SourceReference {
-    /**
-     * Stable source identifier.
-     */
+    /** Stable source identifier. */
     private String id;
-    /**
-     * Source type, such as url, post, page, file, or chunk.
-     */
+    /** Source type, such as url, post, page, file, or chunk. */
     private String sourceType;
-    /**
-     * Display title.
-     */
+    /** Display title. */
     private String title;
-    /**
-     * Optional URL.
-     */
+    /** Optional URL. */
     private String url;
-    /**
-     * Optional relevance score.
-     */
+    /** Optional relevance score. */
     private Double score;
-    /**
-     * Sanitized display metadata. Full retrieved content should not be stored here by default.
-     */
+    /** Sanitized display metadata. Full retrieved content should not be stored here by default. */
     private Map<String, Object> metadata;
 }

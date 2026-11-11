@@ -17,10 +17,9 @@ import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 
 @ProviderContractSource(
-    provider = "ollama",
-    officialDocumentation = "https://docs.ollama.com/api/openai-compatibility#v1-responses",
-    retrievedAt = "2026-08-25"
-)
+        provider = "ollama",
+        officialDocumentation = "https://docs.ollama.com/api/openai-compatibility#v1-responses",
+        retrievedAt = "2026-08-25")
 class OllamaResponsesModelTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -29,8 +28,7 @@ class OllamaResponsesModelTest {
     @SuppressWarnings("unchecked")
     void usesStatelessResponsesEndpoint() throws Exception {
         var body = new AtomicReference<Map<String, Object>>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v1/responses", exchange -> {
             try (exchange) {
                 body.set(OBJECT_MAPPER.readValue(exchange.getRequestBody(), Map.class));
@@ -49,16 +47,18 @@ class OllamaResponsesModelTest {
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
             var options = ChatCompletionsOptions.builder()
-                .baseUrl(baseUrl).endpointPath("/responses").model("qwen3").build();
+                    .baseUrl(baseUrl)
+                    .endpointPath("/responses")
+                    .model("qwen3")
+                    .build();
             var model = new OllamaResponsesModel(options, WebClient.builder());
 
             var response = model.call(new Prompt(new UserMessage("hello"), options));
 
-            assertThat(body.get()).containsEntry("model", "qwen3")
-                .doesNotContainKey("store");
+            assertThat(body.get()).containsEntry("model", "qwen3").doesNotContainKey("store");
             assertThat((java.util.List<Map<String, Object>>) body.get().get("input"))
-                .singleElement().satisfies(item -> assertThat(item)
-                    .containsEntry("role", "user"));
+                    .singleElement()
+                    .satisfies(item -> assertThat(item).containsEntry("role", "user"));
             assertThat(response.getResult().getOutput().getText()).isEqualTo("done");
             assertThat(response.getMetadata().getUsage().getTotalTokens()).isEqualTo(5);
         } finally {

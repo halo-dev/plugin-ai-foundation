@@ -1,7 +1,5 @@
 package run.halo.aifoundation.service.usage;
 
-import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.retain;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
@@ -9,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.retain;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -18,30 +17,54 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.service.audit.CallerPluginInfo;
+import run.halo.aifoundation.service.audit.CallerPluginResolver;
+import run.halo.aifoundation.service.audit.ModelCallContext;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageCallStart;
 import run.halo.aifoundation.service.observation.UsageCallTerminal;
-import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageExecutionRecord;
-import run.halo.aifoundation.service.observation.UsageUnitKind;
-import run.halo.aifoundation.service.observation.UsageStatus;
 import run.halo.aifoundation.service.observation.UsageQuality;
-import run.halo.aifoundation.service.audit.CallerPluginResolver;
-import run.halo.aifoundation.service.audit.CallerPluginInfo;
-import run.halo.aifoundation.service.audit.ModelCallContext;
-import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.service.observation.UsageStatus;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 class UsageRecoveryRegressionTest {
     @TempDir
     Path temp;
 
     private UsageCallStart start(String id, String time) {
-        return new UsageCallStart(id, 1, Instant.parse(time), "plugin", "1", "test", null,
-            "language.generateText", "LANGUAGE", "model", "provider", "openai", "gpt", false);
+        return new UsageCallStart(
+                id,
+                1,
+                Instant.parse(time),
+                "plugin",
+                "1",
+                "test",
+                null,
+                "language.generateText",
+                "LANGUAGE",
+                "model",
+                "provider",
+                "openai",
+                "gpt",
+                false);
     }
+
     private UsageQuery range() {
-        return new UsageQuery(Instant.parse("2025-01-01T00:00:00Z"), Instant.parse("2027-01-01T00:00:00Z"),
-            null, null, null, null, null, null, null, null, null);
+        return new UsageQuery(
+                Instant.parse("2025-01-01T00:00:00Z"),
+                Instant.parse("2027-01-01T00:00:00Z"),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     @Test
@@ -50,10 +73,11 @@ class UsageRecoveryRegressionTest {
         store.initialize();
         try {
             var call = start("partial-batch", "2026-09-10T00:00:00Z");
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> store.writeBatch(java.util.List.of(
-                () -> store.startCall(call),
-                () -> { throw new NoClassDefFoundError("injected-after-first-write"); }
-            ))).isInstanceOf(NoClassDefFoundError.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> store.writeBatch(java.util.List.of(() -> store.startCall(call), () -> {
+                                throw new NoClassDefFoundError("injected-after-first-write");
+                            })))
+                    .isInstanceOf(NoClassDefFoundError.class);
             assertThat(store.getCall(call.id())).isEmpty();
         } finally {
             store.close();
@@ -67,17 +91,28 @@ class UsageRecoveryRegressionTest {
         store.initialize();
         var call = start("interrupted", "2026-09-10T00:00:00Z");
         store.startCall(call);
-        store.recordExecution(new UsageExecutionRecord("execution", call.id(), 1,
-            UsageUnitKind.GENERATION_STEP, 0, 0, call.startedAt(), call.startedAt().plusSeconds(1),
-            UsageStatus.SUCCEEDED, null, "gpt", "gpt",
-            new NormalizedUsage(10L, 5L,null, null, null, null, null, null)));
+        store.recordExecution(new UsageExecutionRecord(
+                "execution",
+                call.id(),
+                1,
+                UsageUnitKind.GENERATION_STEP,
+                0,
+                0,
+                call.startedAt(),
+                call.startedAt().plusSeconds(1),
+                UsageStatus.SUCCEEDED,
+                null,
+                "gpt",
+                "gpt",
+                new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
         store.close(); // All existing writes are durable; only terminal event is absent.
         store = new SqliteUsageStatisticsStore(paths);
         store.initialize();
         store.reconcileAbandoned(Instant.parse("2026-09-11T00:00:00Z"));
         try {
             var detail = store.getCall(call.id()).orElseThrow();
-            assertThat(detail.executions().getFirst().usage().accountedTotalTokens()).isEqualTo(15);
+            assertThat(detail.executions().getFirst().usage().accountedTotalTokens())
+                    .isEqualTo(15);
             assertThat(detail.call().usage().accountedTotalTokens()).isEqualTo(15);
             assertThat(detail.call().usage().quality()).isEqualTo(UsageQuality.PARTIAL);
             assertThat(detail.call().complete()).isFalse();
@@ -102,16 +137,14 @@ class UsageRecoveryRegressionTest {
         try (var store = new SqliteUsageStatisticsStore(paths)) {
             store.initialize();
             store.startCall(call);
-            store.writeHealth(new UsageHealthState(2, 3, 4, previousUntil,
-                previousSince, previousUntil, null, null));
+            store.writeHealth(new UsageHealthState(2, 3, 4, previousUntil, previousSince, previousUntil, null, null));
         }
         var store = new SqliteUsageStatisticsStore(paths);
-        var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class),
-            Clock.fixed(recoveredAt, ZoneOffset.UTC));
+        var service = new UsageStatisticsService(
+                store, mock(CallerPluginResolver.class), Clock.fixed(recoveredAt, ZoneOffset.UTC));
         service.initialize();
         try {
-            assertThat(store.getCall(call.id()).orElseThrow().call().status())
-                .isEqualTo(UsageStatus.ABANDONED);
+            assertThat(store.getCall(call.id()).orElseThrow().call().status()).isEqualTo(UsageStatus.ABANDONED);
             assertThat(service.health().complete()).isFalse();
             assertThat(service.health().incompleteCalls()).isEqualTo(4);
             assertThat(service.health().affectedSince()).isEqualTo(previousSince);
@@ -147,8 +180,8 @@ class UsageRecoveryRegressionTest {
         }
         var recoveredAt = Instant.parse("2026-09-11T00:00:00Z");
         var store = new SqliteUsageStatisticsStore(paths);
-        var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class),
-            Clock.fixed(recoveredAt, ZoneOffset.UTC));
+        var service = new UsageStatisticsService(
+                store, mock(CallerPluginResolver.class), Clock.fixed(recoveredAt, ZoneOffset.UTC));
         service.initialize();
         try {
             assertThat(service.health().complete()).isFalse();
@@ -175,18 +208,19 @@ class UsageRecoveryRegressionTest {
             var call = start("interrupted", "2026-09-10T00:00:00Z");
             store.startCall(call);
             var health = store.readHealth();
-            try (var connection = new org.sqlite.JDBC().connect("jdbc:sqlite:" + paths.database(),
-                new java.util.Properties()); var statement = connection.createStatement()) {
+            try (var connection = new org.sqlite.JDBC()
+                            .connect("jdbc:sqlite:" + paths.database(), new java.util.Properties());
+                    var statement = connection.createStatement()) {
                 statement.executeUpdate("""
                     CREATE TRIGGER fail_recovery BEFORE UPDATE ON ai_calls
                     WHEN NEW.status = 'ABANDONED'
                     BEGIN SELECT RAISE(ABORT, 'injected recovery failure'); END
                     """);
-                org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                    store.reconcileAbandoned(Instant.parse("2026-09-11T00:00:00Z")))
-                    .isInstanceOf(IllegalStateException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(
+                                () -> store.reconcileAbandoned(Instant.parse("2026-09-11T00:00:00Z")))
+                        .isInstanceOf(IllegalStateException.class);
                 assertThat(store.getCall(call.id()).orElseThrow().call().status())
-                    .isEqualTo(UsageStatus.IN_PROGRESS);
+                        .isEqualTo(UsageStatus.IN_PROGRESS);
                 assertThat(store.readHealth()).isEqualTo(health);
                 statement.executeUpdate("DROP TRIGGER fail_recovery");
             }
@@ -202,18 +236,37 @@ class UsageRecoveryRegressionTest {
         try {
             store.startCall(start("terminal-event-lost", "2025-01-01T00:00:00Z"));
             var completed = start("completed", "2025-01-01T01:00:00Z");
-            store.finishCall(new UsageCallTerminal(completed, completed.startedAt().plusSeconds(1),
-                UsageStatus.SUCCEEDED, null, "gpt", 1, 0, 0, true,
-                new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
+            store.finishCall(new UsageCallTerminal(
+                    completed,
+                    completed.startedAt().plusSeconds(1),
+                    UsageStatus.SUCCEEDED,
+                    null,
+                    "gpt",
+                    1,
+                    0,
+                    0,
+                    true,
+                    new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
             retain(store, Clock.fixed(Instant.parse("2026-09-11T00:00:00Z"), ZoneOffset.UTC));
             assertThat(store.getCall(completed.id())).isPresent();
             assertThat(store.getCall("terminal-event-lost")).isPresent();
             assertThat(store.summary(range(), true).callCount()).isEqualTo(2);
-            assertThat(store.trends(range(), true, null).stream().mapToLong(UsageTrendPoint::callCount).sum()).isEqualTo(2);
+            assertThat(store.trends(range(), true, null).stream()
+                            .mapToLong(UsageTrendPoint::callCount)
+                            .sum())
+                    .isEqualTo(2);
             var late = start("terminal-event-lost", "2025-01-01T00:00:00Z");
-            store.finishCall(new UsageCallTerminal(late, Instant.parse("2026-09-11T00:00:00Z"),
-                UsageStatus.SUCCEEDED, null, "gpt", 1, 0, 0, true,
-                new NormalizedUsage(10L, 5L,null, null, null, null, null, null)));
+            store.finishCall(new UsageCallTerminal(
+                    late,
+                    Instant.parse("2026-09-11T00:00:00Z"),
+                    UsageStatus.SUCCEEDED,
+                    null,
+                    "gpt",
+                    1,
+                    0,
+                    0,
+                    true,
+                    new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
             var maintenanceClock = Clock.fixed(Instant.parse("2026-09-12T00:00:00Z"), ZoneOffset.UTC);
             retain(store, maintenanceClock);
             retain(store, maintenanceClock);
@@ -240,7 +293,7 @@ class UsageRecoveryRegressionTest {
         var active = service.beginCall(descriptor());
         var ended = service.beginCall(descriptor());
         ended.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
-            .succeed(new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
+                .succeed(new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
         ended.succeed("gpt", 1);
         service.close(); // Final drain also recovers permanently lost terminals.
         assertThat(service.health().incompleteCalls()).isEqualTo(1);
@@ -255,13 +308,17 @@ class UsageRecoveryRegressionTest {
             assertThat(reopened.readHealth().affectedSince()).isEqualTo(clock.instant());
             assertThat(reopened.readHealth().affectedUntil()).isEqualTo(clock.instant());
             // Runtime recovery is idempotent and never expires an active call by age.
-            reopened.reconcileAbandoned(clock.instant().plusSeconds(172800),
-                java.util.Set.of(active.start().id()));
-            retain(reopened,
-                Clock.fixed(Instant.parse("2027-01-01T00:00:00Z"), ZoneOffset.UTC));
-            assertThat(reopened.getCall(ended.start().id()).orElseThrow().executions()).isEmpty();
-            assertThat(reopened.getCall(active.start().id()).orElseThrow().call().status())
-                .isEqualTo(UsageStatus.IN_PROGRESS);
+            reopened.reconcileAbandoned(
+                    clock.instant().plusSeconds(172800),
+                    java.util.Set.of(active.start().id()));
+            retain(reopened, Clock.fixed(Instant.parse("2027-01-01T00:00:00Z"), ZoneOffset.UTC));
+            assertThat(reopened.getCall(ended.start().id()).orElseThrow().executions())
+                    .isEmpty();
+            assertThat(reopened.getCall(active.start().id())
+                            .orElseThrow()
+                            .call()
+                            .status())
+                    .isEqualTo(UsageStatus.IN_PROGRESS);
             assertThat(reopened.readHealth().incompleteCalls()).isEqualTo(1);
         }
     }
@@ -298,8 +355,11 @@ class UsageRecoveryRegressionTest {
             service.close();
             try (var reopened = new SqliteUsageStatisticsStore(paths)) {
                 reopened.initialize();
-                assertThat(reopened.getCall(ended.start().id()).orElseThrow().call().status())
-                    .isEqualTo(UsageStatus.ABANDONED);
+                assertThat(reopened.getCall(ended.start().id())
+                                .orElseThrow()
+                                .call()
+                                .status())
+                        .isEqualTo(UsageStatus.ABANDONED);
                 var health = reopened.readHealth();
                 reopened.reconcileAbandoned(Instant.now());
                 assertThat(reopened.readHealth()).isEqualTo(health);
@@ -317,10 +377,11 @@ class UsageRecoveryRegressionTest {
         when(store.currentEpoch()).thenReturn(1L);
         when(store.reset()).thenReturn(2L);
         doAnswer(invocation -> {
-            invocation.getArgument(0, java.util.List.class).forEach(action ->
-                ((Runnable) action).run());
-            return null;
-        }).when(store).writeBatch(anyList());
+                    invocation.getArgument(0, java.util.List.class).forEach(action -> ((Runnable) action).run());
+                    return null;
+                })
+                .when(store)
+                .writeBatch(anyList());
         var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class));
         service.initialize();
         try {
@@ -341,8 +402,8 @@ class UsageRecoveryRegressionTest {
         } finally {
             service.close();
         }
-        verify(store, org.mockito.Mockito.never()).reconcileAbandoned(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet());
+        verify(store, org.mockito.Mockito.never())
+                .reconcileAbandoned(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet());
     }
 
     @Test
@@ -355,18 +416,19 @@ class UsageRecoveryRegressionTest {
             var at = ended.startedAt().plusSeconds(60);
             var health = new UsageHealthState(1, 1, 0, null, ended.startedAt(), at, null, null);
             store.writeHealth(health);
-            try (var connection = new org.sqlite.JDBC().connect("jdbc:sqlite:" + paths.database(),
-                new java.util.Properties()); var statement = connection.createStatement()) {
+            try (var connection = new org.sqlite.JDBC()
+                            .connect("jdbc:sqlite:" + paths.database(), new java.util.Properties());
+                    var statement = connection.createStatement()) {
                 statement.executeUpdate("""
                     CREATE TRIGGER fail_runtime_recovery BEFORE UPDATE ON ai_calls
                     WHEN NEW.status = 'ABANDONED'
                     BEGIN SELECT RAISE(ABORT, 'injected recovery failure'); END
                     """);
-                org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                    store.reconcileAbandoned(at, java.util.Set.of()))
-                    .isInstanceOf(IllegalStateException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(
+                                () -> store.reconcileAbandoned(at, java.util.Set.of()))
+                        .isInstanceOf(IllegalStateException.class);
                 assertThat(store.getCall(ended.id()).orElseThrow().call().status())
-                    .isEqualTo(UsageStatus.IN_PROGRESS);
+                        .isEqualTo(UsageStatus.IN_PROGRESS);
                 assertThat(store.readHealth()).isEqualTo(health);
                 statement.executeUpdate("DROP TRIGGER fail_runtime_recovery");
             }
@@ -375,8 +437,7 @@ class UsageRecoveryRegressionTest {
                 active.add("active-" + i);
             }
             store.reconcileAbandoned(at, active); // Exercise the full bound of SQL parameters.
-            assertThat(store.getCall(ended.id()).orElseThrow().call().status())
-                .isEqualTo(UsageStatus.ABANDONED);
+            assertThat(store.getCall(ended.id()).orElseThrow().call().status()).isEqualTo(UsageStatus.ABANDONED);
             store.reconcileAbandoned(at);
             assertThat(store.readHealth()).isEqualTo(health);
         }
@@ -394,16 +455,18 @@ class UsageRecoveryRegressionTest {
         var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class));
         service.initialize();
         var session = service.beginCall(descriptor());
-        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
-            .succeed(NormalizedUsage.missing(), "gpt");
+        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0).succeed(NormalizedUsage.missing(), "gpt");
         service.close();
         assertThat(service.health().incompleteCalls()).isEqualTo(1);
         var reopened = new SqliteUsageStatisticsStore(paths);
         var restarted = new UsageStatisticsService(reopened, mock(CallerPluginResolver.class));
         restarted.initialize();
         try {
-            assertThat(reopened.getCall(session.start().id()).orElseThrow().call().status())
-                .isEqualTo(UsageStatus.ABANDONED);
+            assertThat(reopened.getCall(session.start().id())
+                            .orElseThrow()
+                            .call()
+                            .status())
+                    .isEqualTo(UsageStatus.ABANDONED);
             assertThat(restarted.health().incompleteCalls()).isEqualTo(1);
         } finally {
             restarted.close();
@@ -418,15 +481,16 @@ class UsageRecoveryRegressionTest {
         var health = new UsageHealthState(1, 1, 0, null, call.startedAt(), at, null, null);
         try (var store = new SqliteUsageStatisticsStore(paths)) {
             store.initialize();
-            try (var connection = new org.sqlite.JDBC().connect("jdbc:sqlite:" + paths.database(),
-                new java.util.Properties()); var statement = connection.createStatement()) {
+            try (var connection = new org.sqlite.JDBC()
+                            .connect("jdbc:sqlite:" + paths.database(), new java.util.Properties());
+                    var statement = connection.createStatement()) {
                 statement.executeUpdate("""
                     CREATE TRIGGER fail_health_checkpoint BEFORE UPDATE ON ai_statistics_health
                     BEGIN SELECT RAISE(ABORT, 'injected checkpoint failure'); END
                     """);
-                org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                    store.writeHealth(health, java.util.List.of(call)))
-                    .isInstanceOf(IllegalStateException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(
+                                () -> store.writeHealth(health, java.util.List.of(call)))
+                        .isInstanceOf(IllegalStateException.class);
                 assertThat(store.getCall(call.id())).isEmpty();
                 assertThat(store.readHealth().incompleteCalls()).isZero();
                 statement.executeUpdate("DROP TRIGGER fail_health_checkpoint");
@@ -455,8 +519,7 @@ class UsageRecoveryRegressionTest {
         var once = new java.util.concurrent.atomic.AtomicBoolean();
         var store = new SqliteUsageStatisticsStore(paths) {
             @Override
-            public synchronized void writeHealth(UsageHealthState health,
-                java.util.List<UsageCallStart> incomplete) {
+            public synchronized void writeHealth(UsageHealthState health, java.util.List<UsageCallStart> incomplete) {
                 if (once.compareAndSet(false, true)) {
                     entered.countDown();
                     try {
@@ -471,8 +534,8 @@ class UsageRecoveryRegressionTest {
         };
         var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class));
         service.initialize();
-        var mark = UsageStatisticsService.class.getDeclaredMethod("markIncomplete",
-            run.halo.aifoundation.service.observation.UsageCallSession.class);
+        var mark = UsageStatisticsService.class.getDeclaredMethod(
+                "markIncomplete", run.halo.aifoundation.service.observation.UsageCallSession.class);
         mark.setAccessible(true);
         var checkpoint = UsageStatisticsService.class.getDeclaredMethod("persistHealthIfDirty");
         checkpoint.setAccessible(true);
@@ -481,7 +544,7 @@ class UsageRecoveryRegressionTest {
         var writer = (java.util.concurrent.ThreadPoolExecutor) writerField.get(service);
         var first = service.beginCall(descriptor());
         var second = service.beginCall(descriptor());
-        writer.submit(() -> { }).get(2, TimeUnit.SECONDS);
+        writer.submit(() -> {}).get(2, TimeUnit.SECONDS);
         try {
             mark.invoke(service, first);
             var persisted = writer.submit(() -> {
@@ -517,16 +580,14 @@ class UsageRecoveryRegressionTest {
             }
 
             @Override
-            public synchronized void writeHealth(UsageHealthState health,
-                java.util.List<UsageCallStart> incomplete) {
+            public synchronized void writeHealth(UsageHealthState health, java.util.List<UsageCallStart> incomplete) {
                 if (failHealth.get()) {
                     throw new IllegalStateException("injected checkpoint failure");
                 }
                 super.writeHealth(health, incomplete);
             }
         };
-        var now = new java.util.concurrent.atomic.AtomicReference<>(
-            Instant.parse("2026-01-01T00:00:00Z"));
+        var now = new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
         var clock = mock(Clock.class);
         when(clock.instant()).thenAnswer(ignored -> now.get());
         var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class), clock);
@@ -546,9 +607,9 @@ class UsageRecoveryRegressionTest {
         try {
             var session = service.beginCall(descriptor());
             session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
-                .succeed(new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
+                    .succeed(new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
             session.succeed("gpt", 1);
-            writer.submit(() -> { }).get(3, TimeUnit.SECONDS);
+            writer.submit(() -> {}).get(3, TimeUnit.SECONDS);
             now.set(Instant.parse("2026-10-01T00:00:00Z"));
             writer.submit(maintain).get(3, TimeUnit.SECONDS);
             assertThat(store.getCall(session.start().id())).isPresent();
@@ -573,9 +634,15 @@ class UsageRecoveryRegressionTest {
     }
 
     private UsageCallDescriptor descriptor() {
-        return new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
-            "model", "provider", "openai", "gpt"), "language.generateText", false, null,
-            CallerPluginInfo.builder().pluginName("plugin").detectionSource("test").build());
+        return new UsageCallDescriptor(
+                new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt"),
+                "language.generateText",
+                false,
+                null,
+                CallerPluginInfo.builder()
+                        .pluginName("plugin")
+                        .detectionSource("test")
+                        .build());
     }
 
     @Test
@@ -584,17 +651,25 @@ class UsageRecoveryRegressionTest {
         when(store.currentEpoch()).thenReturn(1L);
         var attempted = new CountDownLatch(1);
         doAnswer(invocation -> {
-            attempted.countDown();
-            throw new NoClassDefFoundError("injected-driver-linkage");
-        })
-            .when(store).writeBatch(anyList());
+                    attempted.countDown();
+                    throw new NoClassDefFoundError("injected-driver-linkage");
+                })
+                .when(store)
+                .writeBatch(anyList());
         var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class));
         service.initialize();
         try {
-            var caller = CallerPluginInfo.builder().pluginName("plugin").version("1")
-                .detectionSource("test").build();
-            var session = service.beginCall(new UsageCallDescriptor(new ModelCallContext(
-                ModelType.LANGUAGE, "model", "provider", "openai", "gpt"), "language.generateText",false, null, caller));
+            var caller = CallerPluginInfo.builder()
+                    .pluginName("plugin")
+                    .version("1")
+                    .detectionSource("test")
+                    .build();
+            var session = service.beginCall(new UsageCallDescriptor(
+                    new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt"),
+                    "language.generateText",
+                    false,
+                    null,
+                    caller));
             assertThat(attempted.await(3, TimeUnit.SECONDS)).isTrue();
             assertThat(service.health().queueDepth()).isZero();
             var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);

@@ -2,17 +2,11 @@ package run.halo.aifoundation.ui;
 
 import java.util.Locale;
 
-/**
- * Chat transport trigger describing how the caller wants to process messages.
- */
+/** Chat transport trigger describing how the caller wants to process messages. */
 public enum UIMessageChatTrigger {
-    /**
-     * A user submitted a new message.
-     */
+    /** A user submitted a new message. */
     SUBMIT_MESSAGE("submit-message"),
-    /**
-     * A caller requests regeneration of an existing assistant message.
-     */
+    /** A caller requests regeneration of an existing assistant message. */
     REGENERATE_MESSAGE("regenerate-message");
 
     private final String value;
@@ -44,7 +38,7 @@ public enum UIMessageChatTrigger {
         var normalized = value.trim().toLowerCase(Locale.ROOT);
         for (var trigger : values()) {
             if (trigger.value.equals(normalized)
-                || trigger.name().toLowerCase(Locale.ROOT).equals(normalized.replace('-', '_'))) {
+                    || trigger.name().toLowerCase(Locale.ROOT).equals(normalized.replace('-', '_'))) {
                 return trigger;
             }
         }

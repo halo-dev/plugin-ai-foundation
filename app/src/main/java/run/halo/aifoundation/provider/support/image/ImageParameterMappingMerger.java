@@ -10,25 +10,22 @@ import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 public final class ImageParameterMappingMerger {
 
     private static final Map<ModelParameter, ImageFields> FIELDS = Map.of(
-        ModelParameter.IMAGE_COUNT,
-        new ImageFields(List.of("n", "batch_size"), List.of("n")),
-        ModelParameter.IMAGE_SIZE,
-        new ImageFields(List.of("size", "image_size", "width", "height"), List.of("size")),
-        ModelParameter.ASPECT_RATIO,
-        new ImageFields(List.of("aspect_ratio"), List.of("aspect_ratio")),
-        ModelParameter.IMAGE_SEED,
-        new ImageFields(List.of("seed"), List.of("seed")),
-        ModelParameter.RESPONSE_FORMAT,
-        new ImageFields(List.of("response_format"), List.of("response_format")),
-        ModelParameter.NEGATIVE_PROMPT,
-        new ImageFields(List.of("negative_prompt"), List.of("negative_prompt"))
-    );
+            ModelParameter.IMAGE_COUNT,
+            new ImageFields(List.of("n", "batch_size"), List.of("n")),
+            ModelParameter.IMAGE_SIZE,
+            new ImageFields(List.of("size", "image_size", "width", "height"), List.of("size")),
+            ModelParameter.ASPECT_RATIO,
+            new ImageFields(List.of("aspect_ratio"), List.of("aspect_ratio")),
+            ModelParameter.IMAGE_SEED,
+            new ImageFields(List.of("seed"), List.of("seed")),
+            ModelParameter.RESPONSE_FORMAT,
+            new ImageFields(List.of("response_format"), List.of("response_format")),
+            ModelParameter.NEGATIVE_PROMPT,
+            new ImageFields(List.of("negative_prompt"), List.of("negative_prompt")));
 
-    private ImageParameterMappingMerger() {
-    }
+    private ImageParameterMappingMerger() {}
 
-    public static Map<String, Object> merge(Map<String, Object> body,
-        ParameterMappingTarget target) {
+    public static Map<String, Object> merge(Map<String, Object> body, ParameterMappingTarget target) {
         var mergedBody = new LinkedHashMap<>(body);
         if (target == null) {
             return mergedBody;
@@ -76,6 +73,5 @@ public final class ImageParameterMappingMerger {
         return null;
     }
 
-    private record ImageFields(List<String> root, List<String> parameters) {
-    }
+    private record ImageFields(List<String> root, List<String> parameters) {}
 }

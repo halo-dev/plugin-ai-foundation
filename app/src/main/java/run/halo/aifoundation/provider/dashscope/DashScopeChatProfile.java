@@ -20,15 +20,11 @@ final class DashScopeChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         var maxTokens = body.remove("max_tokens");
         if (maxTokens != null) {
             body.put("max_completion_tokens", maxTokens);
-        }
-        // Model Studio reports stream usage only when explicitly requested.
-        if (stream) {
-            body.put("stream_options", Map.of("include_usage", true));
         }
     }
 
@@ -45,8 +41,6 @@ final class DashScopeChatProfile implements ChatCompletionsProfile {
         if (mime.startsWith("audio/")) {
             return Map.of("type", "input_audio", "input_audio", Map.of("data", reference));
         }
-        throw new IllegalArgumentException(
-            "DashScope Chat supports image, video, and audio media, received: " + mime);
+        throw new IllegalArgumentException("DashScope Chat supports image, video, and audio media, received: " + mime);
     }
-
 }

@@ -10,18 +10,17 @@ public class StandardRerankResponseDecoder implements RerankResponseDecoder {
 
     @Override
     public RerankResponsePayload decode(Map<String, Object> response, String requestedModel) {
-        return payload(response, requestedModel, responseId(response), results(response),
-            usage(response));
+        return payload(response, requestedModel, responseId(response), results(response), usage(response));
     }
 
-    protected RerankResponsePayload payload(Map<String, Object> response, String requestedModel,
-        String id, List<?> results, RerankUsage usage) {
+    protected RerankResponsePayload payload(
+            Map<String, Object> response, String requestedModel, String id, List<?> results, RerankUsage usage) {
         var model = stringValue(response.get("model"));
         if (model == null) {
             model = requestedModel;
         }
-        return new RerankResponsePayload(id, model, results, usage,
-            responseMetadata(response), providerMetadata(response));
+        return new RerankResponsePayload(
+                id, model, results, usage, responseMetadata(response), providerMetadata(response));
     }
 
     protected List<?> results(Map<String, Object> response) {
@@ -44,9 +43,9 @@ public class StandardRerankResponseDecoder implements RerankResponseDecoder {
             return null;
         }
         return RerankUsage.builder()
-            .inputTokens(inputTokens)
-            .totalTokens(totalTokens)
-            .build();
+                .inputTokens(inputTokens)
+                .totalTokens(totalTokens)
+                .build();
     }
 
     protected Map<String, Object> responseMetadata(Map<String, Object> response) {

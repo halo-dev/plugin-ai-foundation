@@ -36,7 +36,7 @@ class AiProviderReconcilerTest {
 
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Optional.of(provider));
         when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(List.of(model));
+                .thenReturn(List.of(model));
 
         var result = reconciler.reconcile(new Reconciler.Request("openai-prod"));
 
@@ -53,7 +53,7 @@ class AiProviderReconcilerTest {
 
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Optional.of(provider));
         when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(List.of());
+                .thenReturn(List.of());
 
         var result = reconciler.reconcile(new Reconciler.Request("openai-prod"));
 
@@ -75,8 +75,7 @@ class AiProviderReconcilerTest {
         assertThat(result.reEnqueue()).isFalse();
         verify(client, never()).delete(any(AiModel.class));
         verify(client).update(provider);
-        assertThat(provider.getMetadata().getFinalizers())
-            .contains(AiProviderReconciler.FINALIZER_NAME);
+        assertThat(provider.getMetadata().getFinalizers()).contains(AiProviderReconciler.FINALIZER_NAME);
     }
 
     @Test

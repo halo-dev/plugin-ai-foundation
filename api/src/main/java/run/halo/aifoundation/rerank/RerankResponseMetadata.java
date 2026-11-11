@@ -6,9 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Provider response metadata for reranking.
- */
+/** Provider response metadata for reranking. */
 @Data
 @Builder
 @NoArgsConstructor

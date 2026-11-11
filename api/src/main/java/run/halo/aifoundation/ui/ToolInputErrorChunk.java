@@ -10,9 +10,9 @@ import java.util.Map;
  * @param errorText safe input error text
  * @param providerMetadata provider-specific metadata
  */
-public record ToolInputErrorChunk(String toolCallId, String toolName, String errorText,
-                                  Map<String, Object> providerMetadata)
-    implements UIMessageChunk {
+public record ToolInputErrorChunk(
+        String toolCallId, String toolName, String errorText, Map<String, Object> providerMetadata)
+        implements UIMessageChunk {
 
     public ToolInputErrorChunk {
         providerMetadata = providerMetadata == null ? Map.of() : Map.copyOf(providerMetadata);
