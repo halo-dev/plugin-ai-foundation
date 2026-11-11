@@ -83,6 +83,7 @@ models/rerank-usage.ts
 models/rerank-warning.ts
 models/reset-request.ts
 models/selection.ts
+models/test-agent-options.ts
 models/test-completion-stream-request.ts
 models/test-decision-request.ts
 models/test-embedding-request.ts

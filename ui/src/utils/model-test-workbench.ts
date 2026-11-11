@@ -1,5 +1,13 @@
-import type { AiModel, OutputSpec, TestUiMessageChatRequest } from '@/api/generated'
-import { AiModelSpecModelTypeEnum } from '@/api/generated'
+import type {
+  AiModel,
+  OutputSpec,
+  TestAgentOptions,
+  TestUiMessageChatRequest,
+} from '@/api/generated'
+import {
+  AiModelSpecModelTypeEnum,
+  ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator,
+} from '@/api/generated'
 import {
   DefaultChatTransport,
   type DataPartSchemas,
@@ -29,6 +37,72 @@ export interface WorkbenchMessage {
   files?: WorkbenchFileReference[]
   ragInput?: RagInputDiagnostics
   ragDiagnostics?: RagRunDiagnostics
+  agentDiagnostics?: AgentRunDiagnostics
+}
+
+export type AgentProfile = NonNullable<TestAgentOptions['profile']>
+export type AgentStepPolicy = NonNullable<TestAgentOptions['stepPolicy']>
+export type AgentRecoveryScenario = NonNullable<TestAgentOptions['recoveryScenario']>
+
+export interface AgentWorkbenchOptions {
+  enabled: boolean
+  profile: AgentProfile
+  maxSteps: number
+  stepPolicy: AgentStepPolicy
+  serverToolEnabled: boolean
+  browserToolEnabled: boolean
+  externalToolEnabled: boolean
+  approvalRequired: boolean
+  toolInputStreamEnabled: boolean
+  recoveryScenario: AgentRecoveryScenario
+}
+
+export interface AgentStepPreparationDiagnostic {
+  stepIndex?: number
+  activeTools?: string[]
+  policy?: string
+}
+
+export interface AgentToolDiagnostic {
+  toolCallId: string
+  originalToolName?: string
+  resolvedToolName?: string
+  state?: string
+  stepIndex?: number
+  input?: Record<string, unknown>
+  output?: unknown
+  errorText?: string
+}
+
+export interface AgentStepDiagnostic {
+  stepIndex?: number
+  finishReason?: string
+  usage?: Record<string, unknown>
+  warnings?: WorkbenchWarning[]
+  request?: Record<string, unknown>
+  response?: Record<string, unknown>
+}
+
+export interface AgentRunDiagnostics {
+  enabled?: boolean
+  profile?: string
+  effectiveInstructions?: string
+  maximumSteps?: number
+  completedSteps?: number
+  stepPolicy?: string
+  activeTools?: string[]
+  outputMode?: string
+  approvalRequired?: boolean
+  externalToolEnabled?: boolean
+  browserToolEnabled?: boolean
+  recoveryScenario?: string
+  callPreparationCount?: number
+  stepPreparation?: AgentStepPreparationDiagnostic[]
+  steps?: AgentStepDiagnostic[]
+  tools?: AgentToolDiagnostic[]
+  warnings?: WorkbenchWarning[]
+  terminalState?: WorkbenchMessage['state']
+  finalOutput?: unknown
 }
 
 export interface WorkbenchWarning {
@@ -172,6 +246,45 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     content:
       '这是流式工具入参专项测试。你必须且只能调用一次 halo_tool_input_stream_test，不要调用其他工具。参数 title 请填写“AI Foundation 流式工具入参测试”；payload 请完整填写“这是一段用于观察 JSON 工具参数是否按多个增量片段持续到达浏览器与后端回调的测试内容，请保持本句完整，不要缩写。”；sequence 请依次填写 ["start", "delta", "available"]。获得工具结果后，请简要说明 backendLifecycle 中的事件顺序和 deltaCount。',
   },
+  {
+    id: 'agent-runtime-server',
+    icon: 'ri-robot-2-line',
+    title: 'Agent 服务端工具',
+    content: '请调用 halo_test_info，query 填写“agent runtime”，得到结果后继续并给出最终答复。',
+  },
+  {
+    id: 'agent-runtime-approval',
+    icon: 'ri-shield-check-line',
+    title: 'Agent 工具审批',
+    content: '请调用 halo_test_info，query 填写“approval flow”，等待管理员审批后再继续。',
+  },
+  {
+    id: 'agent-runtime-external',
+    icon: 'ri-external-link-line',
+    title: 'Agent 外部工具',
+    content:
+      '请调用 halo_external_test_info，query 填写“external continuation”，等待浏览器提交结果后再继续。',
+  },
+  {
+    id: 'agent-runtime-renamed',
+    icon: 'ri-git-merge-line',
+    title: 'Agent 工具更名恢复',
+    content:
+      '请调用旧工具 halo_legacy_repair_test_info，参数 message 填写“renamed tool recovery”，得到恢复后的结果再回答。',
+  },
+  {
+    id: 'agent-runtime-failed',
+    icon: 'ri-error-warning-line',
+    title: 'Agent 恢复失败',
+    content:
+      '请调用不存在的工具 halo_legacy_repair_test_info，参数 message 填写“failed recovery”，并观察错误与 warning。',
+  },
+  {
+    id: 'agent-runtime-structured',
+    icon: 'ri-braces-line',
+    title: 'Agent 结构化输出',
+    content: '请返回标题为 Halo、摘要为 Agent runtime verified 的结构化结果。',
+  },
 ]
 
 export async function copyToClipboard(text: string): Promise<boolean> {
@@ -202,6 +315,7 @@ export interface ChatParameters {
   reasoning?: ReasoningOptions
   headers?: Record<string, string>
   output?: OutputSpec
+  agent?: TestAgentOptions
 }
 
 export type OutputMode = 'TEXT' | 'OBJECT' | 'ARRAY' | 'CHOICE' | 'JSON'
@@ -333,6 +447,10 @@ export interface UIMessageChunk {
   metadata?: Record<string, unknown>
   providerMetadata?: Record<string, unknown>
   warnings?: WorkbenchWarning[]
+  finishReason?: string
+  usage?: Record<string, unknown>
+  request?: Record<string, unknown>
+  response?: Record<string, unknown>
 }
 
 function workbenchDefinedDataSchema(name: string) {
@@ -476,6 +594,7 @@ export function buildTestUiMessageChatRequest(
     reasoning: parameters.reasoning,
     headers: parameters.headers,
     output: parameters.output,
+    agent: parameters.agent,
   }
 }
 
@@ -532,7 +651,11 @@ export async function readTestUiMessageChatStream(options: {
 }) {
   const requestBody = options.requestBody as Record<string, unknown>
   const transport = new DefaultChatTransport({
-    api: testUiMessageChatStreamUrl(options.modelName, options.streamOptions),
+    api: await testUiMessageChatStreamUrl(
+      options.modelName,
+      options.requestBody,
+      options.streamOptions,
+    ),
     fetch,
   })
   const stream = await transport.sendMessages({
@@ -550,37 +673,27 @@ export async function readTestUiMessageChatStream(options: {
   }
 }
 
-export function testUiMessageChatStreamUrl(modelName: string, options: ChatStreamOptions) {
-  const params = chatStreamQueryParams(options)
-  const query = params.toString()
-  return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-chat/ui-message/stream${query ? `?${query}` : ''}`
+export async function testUiMessageChatStreamUrl(
+  modelName: string,
+  requestBody: TestUiMessageChatRequest,
+  options: ChatStreamOptions,
+) {
+  const request =
+    await ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator().testModelUiMessageChatStream(
+      modelName,
+      requestBody,
+      options.testToolEnabled,
+      options.testToolApprovalEnabled,
+      options.externalTestToolEnabled,
+      options.toolCallRepairEnabled,
+      options.agentTestToolsEnabled,
+      options.toolInputStreamTestEnabled,
+    )
+  return request.url
 }
 
 export function testRagUiMessageStreamUrl(modelName: string) {
   return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-rag/ui-message/stream`
-}
-
-function chatStreamQueryParams(options: ChatStreamOptions) {
-  const params = new URLSearchParams()
-  if (options.testToolEnabled) {
-    params.set('enableTestTool', 'true')
-  }
-  if (options.testToolApprovalEnabled) {
-    params.set('enableTestToolApproval', 'true')
-  }
-  if (options.externalTestToolEnabled) {
-    params.set('enableExternalTestTool', 'true')
-  }
-  if (options.agentTestToolsEnabled) {
-    params.set('enableAgentTestTools', 'true')
-  }
-  if (options.toolCallRepairEnabled) {
-    params.set('enableToolCallRepair', 'true')
-  }
-  if (options.toolInputStreamTestEnabled) {
-    params.set('enableToolInputStreamTest', 'true')
-  }
-  return params
 }
 
 export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: UIMessageChunk) {
@@ -729,6 +842,85 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
   if (chunk.type === 'abort') {
     finishWorkbenchMessage(message, 'stopped')
   }
+}
+
+export function recordAgentRunChunk(
+  current: AgentRunDiagnostics | undefined,
+  chunk: UIMessageChunk,
+): AgentRunDiagnostics | undefined {
+  const backend = agentDiagnosticsFromRequest(chunk.request)
+  const hasAgentEvidence = current?.enabled || backend?.enabled
+  if (!hasAgentEvidence) return current
+
+  const next: AgentRunDiagnostics = {
+    ...current,
+    ...backend,
+    stepPreparation: [...(backend?.stepPreparation || current?.stepPreparation || [])],
+    steps: [...(current?.steps || [])],
+    tools: [...(current?.tools || [])],
+    warnings: [...(current?.warnings || [])],
+  }
+  if (chunk.type === 'finish-step') {
+    const step: AgentStepDiagnostic = {
+      stepIndex: chunk.stepIndex,
+      finishReason: chunk.finishReason,
+      usage: chunk.usage,
+      warnings: chunk.warnings,
+      request: chunk.request,
+      response: chunk.response,
+    }
+    const existingIndex = next.steps!.findIndex((item) => item.stepIndex === step.stepIndex)
+    if (existingIndex >= 0) next.steps![existingIndex] = step
+    else next.steps!.push(step)
+    next.completedSteps = Math.max(next.completedSteps || 0, next.steps!.length)
+    if (chunk.warnings?.length) next.warnings!.push(...chunk.warnings)
+  }
+  if (chunk.toolCallId && isUIMessageToolPartType(chunk.type)) {
+    const existingIndex = next.tools!.findIndex((item) => item.toolCallId === chunk.toolCallId)
+    const existing = existingIndex >= 0 ? next.tools![existingIndex] : undefined
+    const originalToolName = existing?.originalToolName || chunk.toolName
+    const resolvedToolName =
+      existing?.resolvedToolName ||
+      (originalToolName && chunk.toolName && originalToolName !== chunk.toolName
+        ? chunk.toolName
+        : undefined)
+    const tool: AgentToolDiagnostic = {
+      ...existing,
+      toolCallId: chunk.toolCallId,
+      originalToolName,
+      resolvedToolName,
+      state: chunk.state || chunk.type,
+      stepIndex: chunk.stepIndex ?? existing?.stepIndex,
+      input: chunk.input || existing?.input,
+      output: chunk.output ?? existing?.output,
+      errorText: chunk.errorText || existing?.errorText,
+    }
+    if (existingIndex >= 0) next.tools![existingIndex] = tool
+    else next.tools!.push(tool)
+  }
+  if (chunk.type === 'finish') next.terminalState = 'done'
+  if (chunk.type === 'abort') next.terminalState = 'stopped'
+  if (chunk.type === 'error') next.terminalState = 'error'
+  return next
+}
+
+export function finalizeAgentRunDiagnostics(
+  diagnostics: AgentRunDiagnostics | undefined,
+  answerText: string,
+): AgentRunDiagnostics | undefined {
+  if (!diagnostics?.enabled || diagnostics.outputMode === 'TEXT') return diagnostics
+  try {
+    return { ...diagnostics, finalOutput: JSON.parse(answerText.trim()) }
+  } catch {
+    return diagnostics
+  }
+}
+
+function agentDiagnosticsFromRequest(request: unknown): AgentRunDiagnostics | undefined {
+  if (!isPlainRecord(request)) return undefined
+  const metadata = request.metadata
+  if (!isPlainRecord(metadata) || !isPlainRecord(metadata.agentDiagnostics)) return undefined
+  return metadata.agentDiagnostics as AgentRunDiagnostics
 }
 
 export function applyWorkbenchUIMessageSnapshot(

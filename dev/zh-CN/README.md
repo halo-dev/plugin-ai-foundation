@@ -7,23 +7,24 @@ Java 后端的 SDK Core 与浏览器 / Vue 的 SDK UI，示例均以仓库公开
 
 ## 从哪里开始
 
-| 目标                           | 起点                                                                             |
-| ------------------------------ | -------------------------------------------------------------------------------- |
-| 在插件后端调用语言模型         | [SDK Core：快速开始](./sdk-core/getting-started.md)                              |
-| 生成或流式返回文本             | [SDK Core：生成与流式文本](./sdk-core/generating-text.md)                        |
-| 使用结构化输出                 | [SDK Core：生成结构化数据](./sdk-core/generating-structured-data.md)             |
-| 使用服务端工具、多步骤或审批   | [SDK Core：工具调用](./sdk-core/tools-and-tool-calling.md)                       |
-| 生成向量、重排或组合 RAG       | [SDK Core：Embedding、Rerank 与 RAG](./sdk-core/embeddings-reranking-and-rag.md) |
-| 生成或编辑图片                 | [SDK Core：图像生成](./sdk-core/image-generation.md)                             |
-| 在 Vue 中构建聊天界面          | [SDK UI：Chatbot](./sdk-ui/chatbot.md)                                           |
-| 保存、恢复和校验聊天消息       | [SDK UI：消息持久化](./sdk-ui/chatbot-message-persistence.md)                    |
-| 在前端执行工具或处理审批       | [SDK UI：工具交互](./sdk-ui/chatbot-tool-usage.md)                               |
-| 在插件设置中选择模型           | [FormKit：模型选择器](./model-selector.md)                                       |
-| 自定义请求、Transport 或读取流 | [SDK UI：Transport 与读取消息流](./sdk-ui/transport-and-reading-streams.md)      |
-| 查询 SSE wire 格式             | [SDK UI：Stream Protocol](./sdk-ui/stream-protocol.md)                           |
-| 按 Java 类型名查询完整 API     | [SDK Core：公开 API 索引](./sdk-core/api-reference.md)                           |
-| 按 npm 导出名查询完整 API      | [SDK UI：公开导出索引](./sdk-ui/api-reference.md)                                |
-| 在 Halo 插件中完成端到端集成   | [插件集成示例](./plugin-integration-examples.md)                                 |
+| 目标                                | 起点                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------- |
+| 在插件后端调用语言模型              | [SDK Core：快速开始](./sdk-core/getting-started.md)                              |
+| 生成或流式返回文本                  | [SDK Core：生成与流式文本](./sdk-core/generating-text.md)                        |
+| 使用结构化输出                      | [SDK Core：生成结构化数据](./sdk-core/generating-structured-data.md)             |
+| 使用服务端工具、多步骤或审批        | [SDK Core：工具调用](./sdk-core/tools-and-tool-calling.md)                       |
+| 定义可复用 Agent 与 UI Message 端点 | [SDK Core：Agent 运行时](./sdk-core/agents.md)                                   |
+| 生成向量、重排或组合 RAG            | [SDK Core：Embedding、Rerank 与 RAG](./sdk-core/embeddings-reranking-and-rag.md) |
+| 生成或编辑图片                      | [SDK Core：图像生成](./sdk-core/image-generation.md)                             |
+| 在 Vue 中构建聊天界面               | [SDK UI：Chatbot](./sdk-ui/chatbot.md)                                           |
+| 保存、恢复和校验聊天消息            | [SDK UI：消息持久化](./sdk-ui/chatbot-message-persistence.md)                    |
+| 在前端执行工具或处理审批            | [SDK UI：工具交互](./sdk-ui/chatbot-tool-usage.md)                               |
+| 在插件设置中选择模型                | [FormKit：模型选择器](./model-selector.md)                                       |
+| 自定义请求、Transport 或读取流      | [SDK UI：Transport 与读取消息流](./sdk-ui/transport-and-reading-streams.md)      |
+| 查询 SSE wire 格式                  | [SDK UI：Stream Protocol](./sdk-ui/stream-protocol.md)                           |
+| 按 Java 类型名查询完整 API          | [SDK Core：公开 API 索引](./sdk-core/api-reference.md)                           |
+| 按 npm 导出名查询完整 API           | [SDK UI：公开导出索引](./sdk-ui/api-reference.md)                                |
+| 在 Halo 插件中完成端到端集成        | [插件集成示例](./plugin-integration-examples.md)                                 |
 
 ## SDK Core
 
@@ -33,6 +34,7 @@ Java 后端的 SDK Core 与浏览器 / Vue 的 SDK UI，示例均以仓库公开
 - 从 Halo 管理的模型资源解析语言、Embedding、Rerank 和图像生成模型。
 - 非流式与流式文本生成、多轮消息、多模态输入和推理内容。
 - JSON Schema 结构化输出、工具执行、工具审批、工具修复与多步骤控制。
+- 不可变 Agent 定义、类型化调用准备、默认有界步骤与 UI Message Agent 入口。
 - Embedding、余弦相似度、Rerank、调用方自有检索和 RAG middleware。
 - 请求级或模型级 middleware、取消、超时、生命周期事件、warning 与错误。
 - 把模型 stream 转为供前端消费的 Halo UI Message stream。

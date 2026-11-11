@@ -15,6 +15,7 @@ import RiFileLine from '~icons/ri/file-line'
 import RiImageLine from '~icons/ri/image-line'
 import RiRestartLine from '~icons/ri/restart-line'
 import RiUserLine from '~icons/ri/user-line'
+import AgentRunDiagnostics from './AgentRunDiagnostics.vue'
 import ToolInputStreamDiagnostics from './ToolInputStreamDiagnostics.vue'
 
 const props = defineProps<{
@@ -225,6 +226,11 @@ function filePreviewUrl(file: WorkbenchFileReference) {
         <div v-if="message.role === 'assistant' && message.toolInputStreamDiagnostics?.length">
           <ToolInputStreamDiagnostics :diagnostics="message.toolInputStreamDiagnostics" />
         </div>
+
+        <AgentRunDiagnostics
+          v-if="message.role === 'assistant' && message.agentDiagnostics"
+          :diagnostics="message.agentDiagnostics"
+        />
 
         <div
           v-if="message.role === 'assistant' && message.toolEvents?.length"

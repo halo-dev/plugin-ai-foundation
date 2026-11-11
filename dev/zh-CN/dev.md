@@ -6,6 +6,9 @@
 
 > 本文是便于全文搜索的 SDK Core 单页参考。按任务阅读时，建议从
 > [开发者文档首页](./README.md) 或 [SDK Core 主题文档](./sdk-core/README.md) 开始。
+>
+> 可复用定义、类型化调用准备、工具恢复和 UI Message Agent 端点请阅读
+> [Agent 运行时](./sdk-core/agents.md)。Agent 不包含持久化、调度、长期记忆或业务工具。
 
 ## 1. 接入插件
 

@@ -9,7 +9,9 @@ import {
   buildTestUiMessageChatRequest,
   createUserUIMessage,
   filterEnabledChatModels,
+  finalizeAgentRunDiagnostics,
   readTestUiMessageChatStream,
+  recordAgentRunChunk,
   testRagUiMessageStreamUrl,
   testUiMessageChatStreamUrl,
   workbenchDataPartSchemas,
@@ -100,6 +102,13 @@ describe('buildTestUiMessageChatRequest', () => {
         maxOutputTokens: 128,
         reasoning: buildReasoningOptions({ mode: 'ENABLED' }),
         output: { type: 'JSON' } as OutputSpec,
+        agent: {
+          enabled: true,
+          profile: 'CONCISE',
+          maxSteps: 8,
+          stepPolicy: 'SERVER_THEN_ALL',
+          recoveryScenario: 'RENAMED_TOOL',
+        },
       }),
     ).toMatchObject({
       trigger: 'submit-message',
@@ -117,6 +126,13 @@ describe('buildTestUiMessageChatRequest', () => {
       maxOutputTokens: 128,
       reasoning: { mode: 'ENABLED' },
       output: { type: 'JSON' },
+      agent: {
+        enabled: true,
+        profile: 'CONCISE',
+        maxSteps: 8,
+        stepPolicy: 'SERVER_THEN_ALL',
+        recoveryScenario: 'RENAMED_TOOL',
+      },
       messages: [
         {
           id: 'user-1',
@@ -238,6 +254,80 @@ describe('buildTestUiMessageChatRequest', () => {
   })
 })
 
+describe('agent run diagnostics', () => {
+  it('merges backend policy, step usage, warnings, and recovered tool identity', () => {
+    let diagnostics = recordAgentRunChunk(
+      { enabled: true, tools: [], steps: [], warnings: [] },
+      {
+        type: 'tool-input-start',
+        toolCallId: 'call_1',
+        toolName: 'halo_legacy_repair_test_info',
+        state: 'input-streaming',
+      },
+    )
+    diagnostics = recordAgentRunChunk(diagnostics, {
+      type: 'tool-call',
+      toolCallId: 'call_1',
+      toolName: 'halo_repair_test_info',
+      state: 'input-available',
+      input: { query: 'Halo' },
+      stepIndex: 0,
+    })
+    diagnostics = recordAgentRunChunk(diagnostics, {
+      type: 'finish-step',
+      stepIndex: 0,
+      finishReason: 'TOOL_CALLS',
+      usage: { inputTokens: 12, outputTokens: 4 },
+      warnings: [{ code: 'tool-call-repaired', message: 'Recovered tool name' }],
+      request: {
+        metadata: {
+          agentDiagnostics: {
+            enabled: true,
+            profile: 'CONCISE',
+            effectiveInstructions: 'Be concise.',
+            maximumSteps: 20,
+            completedSteps: 1,
+            activeTools: ['halo_repair_test_info'],
+            callPreparationCount: 1,
+            stepPreparation: [
+              { stepIndex: 0, activeTools: ['halo_repair_test_info'], policy: 'ALL_TOOLS' },
+            ],
+          },
+        },
+      },
+    })
+    diagnostics = recordAgentRunChunk(diagnostics, { type: 'finish' })
+
+    expect(diagnostics).toMatchObject({
+      profile: 'CONCISE',
+      effectiveInstructions: 'Be concise.',
+      maximumSteps: 20,
+      completedSteps: 1,
+      callPreparationCount: 1,
+      terminalState: 'done',
+      tools: [
+        {
+          toolCallId: 'call_1',
+          originalToolName: 'halo_legacy_repair_test_info',
+          resolvedToolName: 'halo_repair_test_info',
+          input: { query: 'Halo' },
+        },
+      ],
+      steps: [{ stepIndex: 0, finishReason: 'TOOL_CALLS' }],
+      warnings: [{ code: 'tool-call-repaired' }],
+    })
+  })
+
+  it('renders a separately parsed final structured value only for agent structured output', () => {
+    expect(
+      finalizeAgentRunDiagnostics({ enabled: true, outputMode: 'OBJECT' }, '{"title":"Halo"}'),
+    ).toMatchObject({ finalOutput: { title: 'Halo' } })
+    expect(
+      finalizeAgentRunDiagnostics({ enabled: true, outputMode: 'TEXT' }, '{"title":"Halo"}'),
+    ).not.toHaveProperty('finalOutput')
+  })
+})
+
 describe('buildReasoningOptions', () => {
   it('builds typed reasoning payloads', () => {
     expect(buildReasoningOptions({ mode: 'DEFAULT' })).toBeUndefined()
@@ -276,17 +366,21 @@ describe('buildOutputSpec', () => {
 })
 
 describe('testUiMessageChatStreamUrl', () => {
-  it('uses the UI Message stream path with the shared console flags', () => {
-    expect(
-      testUiMessageChatStreamUrl('model/name', {
-        testToolEnabled: true,
-        externalTestToolEnabled: true,
-        agentTestToolsEnabled: true,
-        toolCallRepairEnabled: true,
-        toolInputStreamTestEnabled: true,
-      }),
-    ).toBe(
-      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/ui-message/stream?enableTestTool=true&enableExternalTestTool=true&enableAgentTestTools=true&enableToolCallRepair=true&enableToolInputStreamTest=true',
+  it('uses the generated UI Message endpoint binding with shared console flags', async () => {
+    await expect(
+      testUiMessageChatStreamUrl(
+        'model/name',
+        { id: 'chat', messages: [] },
+        {
+          testToolEnabled: true,
+          externalTestToolEnabled: true,
+          agentTestToolsEnabled: true,
+          toolCallRepairEnabled: true,
+          toolInputStreamTestEnabled: true,
+        },
+      ),
+    ).resolves.toBe(
+      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/ui-message/stream?enableTestTool=true&enableExternalTestTool=true&enableToolCallRepair=true&enableAgentTestTools=true&enableToolInputStreamTest=true',
     )
   })
 })

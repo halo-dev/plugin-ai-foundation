@@ -1,14 +1,17 @@
-import type { ModelOption } from '@/api/generated'
+import type { ModelOption, TestUiMessageChatRequest } from '@/api/generated'
 import type { useLanguageGenerationSettings } from '@/composables/workbench/use-language-generation-settings'
 import type { WorkbenchTestMode } from '@/composables/workbench/use-workbench-models'
 import {
   applyWorkbenchUIMessageSnapshot,
   createAssistantUIMessage,
   createUserUIMessage,
+  finalizeAgentRunDiagnostics,
+  recordAgentRunChunk,
   testUiMessageChatStreamUrl,
   workbenchDataPartSchemas,
   workbenchMessageMetadataSchema,
   type ExamplePrompt,
+  type UIMessageChunk,
   type UIMessagePart,
   type WorkbenchMessage,
   type WorkbenchWarning,
@@ -58,23 +61,66 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     transport: new ObservingChatTransport(
       {
         api: '',
-        prepareSendMessagesRequest: ({ body }) => {
+        prepareSendMessagesRequest: async ({ body }) => {
           if (!activeModelName) throw new Error('未选择模型')
           return {
-            api: testUiMessageChatStreamUrl(activeModelName, settings.streamOptions()),
+            api: await testUiMessageChatStreamUrl(
+              activeModelName,
+              body as TestUiMessageChatRequest,
+              settings.streamOptions(),
+            ),
             body,
           }
         },
       },
-      (chunk) => recordActiveToolInputChunk(chunk),
+      (chunk) => {
+        recordActiveToolInputChunk(chunk)
+        recordActiveAgentChunk(chunk)
+      },
     ),
     generateId: () => activeWorkbenchId || utils.id.uuid(),
-    sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
-    maxAutomaticSteps: 5,
+    sendAutomaticallyWhen: async ({ messages: nextMessages }) => {
+      if (!(await lastAssistantMessageHasCompletedToolContinuations({ messages: nextMessages }))) {
+        return false
+      }
+      if (!settings.agentModeEnabled.value) return true
+      const latestAssistant = [...nextMessages]
+        .reverse()
+        .find((message) => message.role === 'assistant')
+      if (
+        latestAssistant?.parts.some(
+          (part) => part.type === 'text' && 'text' in part && String(part.text || '').trim(),
+        )
+      ) {
+        return false
+      }
+      let lastUserIndex = -1
+      for (let index = nextMessages.length - 1; index >= 0; index--) {
+        if (nextMessages[index]?.role === 'user') {
+          lastUserIndex = index
+          break
+        }
+      }
+      const completedToolContinuations = nextMessages
+        .slice(lastUserIndex + 1)
+        .flatMap((message) => message.parts)
+        .filter(
+          (part) =>
+            part.type.startsWith('tool-') &&
+            'state' in part &&
+            ['output-available', 'output-error', 'output-denied'].includes(String(part.state)),
+        ).length
+      return completedToolContinuations < Math.max(1, settings.agentMaxSteps.value)
+    },
+    maxAutomaticSteps: 20,
     messageMetadataSchema: workbenchMessageMetadataSchema,
     dataPartSchemas: workbenchDataPartSchemas,
     onToolCall: (part) => {
-      if (!settings.agentTestToolsEnabled.value || !isWorkbenchAgentTool(part)) return
+      if (
+        !(settings.agentTestToolsEnabled.value || settings.agentBrowserToolEnabled.value) ||
+        !isWorkbenchAgentTool(part)
+      )
+        return
       const context = {
         selectedModel: selectedModel.value,
         testMode: testMode.value,
@@ -128,6 +174,16 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     )
   }
 
+  function recordActiveAgentChunk(chunk: Parameters<typeof recordToolInputStreamChunk>[1]) {
+    if (!activeWorkbenchId) return
+    const message = messages.value.find((item) => item.id === activeWorkbenchId)
+    if (!message) return
+    message.agentDiagnostics = recordAgentRunChunk(
+      message.agentDiagnostics,
+      chunk as unknown as UIMessageChunk,
+    )
+  }
+
   async function sendMessage(content?: string) {
     const text = (content ?? input.value).trim()
     const files = [...chatFiles.value]
@@ -164,6 +220,7 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
       assistantMessage.uiMessage?.id || assistantMessage.id,
     )
     resetAssistantMessage(assistantMessage)
+    initializeAgentDiagnostics(assistantMessage, parameters)
     if (!targetMessage) messages.value.push(assistantMessage)
 
     activeModelName = modelName
@@ -210,6 +267,7 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     uiChat.setMessages(workbenchMessagesToHalo(messages.value))
     targetMessage.uiMessage = createAssistantUIMessage(messageId)
     resetAssistantMessage(targetMessage)
+    initializeAgentDiagnostics(targetMessage, parameters)
     activeModelName = model.name
     activeWorkbenchId = targetMessage.id
     activeParameters = parameters
@@ -236,6 +294,7 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     message.reasoningState = undefined
     message.toolEvents = undefined
     message.toolInputStreamDiagnostics = undefined
+    message.agentDiagnostics = undefined
     message.transientData = undefined
     message.warnings = undefined
     message.state = 'streaming'
@@ -430,7 +489,39 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     const message = messages.value.find((item) => item.id === messageId)
     if (message?.state !== 'streaming') return
     message.state = state
+    if (message.agentDiagnostics) {
+      message.agentDiagnostics.terminalState = state
+      message.agentDiagnostics = finalizeAgentRunDiagnostics(
+        message.agentDiagnostics,
+        message.content,
+      )
+    }
     if (message.reasoningState === 'streaming') message.reasoningState = 'done'
+  }
+
+  function initializeAgentDiagnostics(
+    message: WorkbenchMessage,
+    parameters: ReturnType<typeof settings.buildParameters>,
+  ) {
+    if (!parameters.agent.enabled) return
+    message.agentDiagnostics = {
+      enabled: true,
+      profile: parameters.agent.profile,
+      maximumSteps: parameters.agent.maxSteps,
+      stepPolicy: parameters.agent.stepPolicy,
+      activeTools: [],
+      outputMode: parameters.output?.type || 'TEXT',
+      approvalRequired: parameters.agent.approvalRequired,
+      externalToolEnabled: parameters.agent.externalToolEnabled,
+      browserToolEnabled: parameters.agent.browserToolEnabled,
+      recoveryScenario: parameters.agent.recoveryScenario,
+      callPreparationCount: 0,
+      completedSteps: 0,
+      stepPreparation: [],
+      steps: [],
+      tools: [],
+      warnings: [],
+    }
   }
 
   function parseExternalToolResult(value: string): { value?: unknown; error?: string } {
@@ -463,6 +554,7 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
       reasoning: parameters.reasoning,
       headers: parameters.headers,
       output: parameters.output,
+      agent: parameters.agent,
     }
   }
 
@@ -480,6 +572,9 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
       .find((item) => item.state === 'streaming')
     if (streamingMessage) {
       streamingMessage.state = 'stopped'
+      if (streamingMessage.agentDiagnostics) {
+        streamingMessage.agentDiagnostics.terminalState = 'stopped'
+      }
       if (streamingMessage.reasoningState === 'streaming') streamingMessage.reasoningState = 'done'
     }
     resetActiveRequest()
@@ -495,6 +590,31 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
 
   function applyExamplePrompt(prompt: ExamplePrompt) {
     input.value = prompt.content
+    if (prompt.id.startsWith('agent-runtime-')) {
+      settings.agentModeEnabled.value = true
+      settings.agentProfile.value = 'BALANCED'
+      settings.agentMaxSteps.value = 20
+      settings.agentStepPolicy.value = 'ALL_TOOLS'
+      settings.agentServerToolEnabled.value = true
+      settings.agentBrowserToolEnabled.value = false
+      settings.agentExternalToolEnabled.value = false
+      settings.agentApprovalRequired.value = false
+      settings.agentToolInputStreamEnabled.value = false
+      settings.agentRecoveryScenario.value =
+        prompt.id === 'agent-runtime-renamed'
+          ? 'RENAMED_TOOL'
+          : prompt.id === 'agent-runtime-failed'
+            ? 'FAILED_RECOVERY'
+            : 'NONE'
+      settings.outputMode.value = prompt.id === 'agent-runtime-structured' ? 'OBJECT' : 'TEXT'
+      if (prompt.id === 'agent-runtime-approval') {
+        settings.agentApprovalRequired.value = true
+      }
+      if (prompt.id === 'agent-runtime-external') {
+        settings.agentExternalToolEnabled.value = true
+      }
+      return
+    }
     if (prompt.id === 'tool-input-stream-test') {
       settings.testToolEnabled.value = false
       settings.testToolApprovalEnabled.value = false

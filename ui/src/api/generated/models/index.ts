@@ -64,6 +64,7 @@ export * from './rerank-usage';
 export * from './rerank-warning';
 export * from './reset-request';
 export * from './selection';
+export * from './test-agent-options';
 export * from './test-completion-stream-request';
 export * from './test-decision-request';
 export * from './test-embedding-request';
