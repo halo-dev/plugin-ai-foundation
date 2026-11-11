@@ -9,58 +9,43 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import run.halo.aifoundation.message.ModelMessage;
 
-/**
- * Provider-neutral context passed to a tool call repair callback.
- */
+/** Provider-neutral context passed to a tool call repair callback. */
 @Data
 @NoArgsConstructor
 public class ToolCallRepairContext {
-    /**
-     * Typed reason the tool call entered recovery.
-     */
+    /** Typed reason the tool call entered recovery. */
     private ToolCallFailureKind failureKind;
-    /**
-     * Original invalid tool call produced by the model.
-     */
+    /** Original invalid tool call produced by the model. */
     private ToolCall toolCall;
-    /**
-     * Matching request-scoped tool definition.
-     */
+    /** Matching request-scoped tool definition. */
     private ToolDefinition tool;
-    /**
-     * Complete request-scoped tool set currently available to the model.
-     */
+    /** Complete request-scoped tool set currently available to the model. */
     private List<ToolDefinition> availableTools;
-    /**
-     * Human-readable validation error from the original input validation failure.
-     */
+    /** Human-readable validation error from the original input validation failure. */
     private String validationError;
-    /**
-     * JSON-path-like location that was validated.
-     */
+    /** JSON-path-like location that was validated. */
     private String validationPath;
-    /**
-     * Zero-based model invocation step that produced the tool call.
-     */
+    /** Zero-based model invocation step that produced the tool call. */
     private Integer stepIndex;
-    /**
-     * Provider-neutral messages sent to the model for the step that produced this tool call.
-     */
+    /** Provider-neutral messages sent to the model for the step that produced this tool call. */
     private List<ModelMessage> messages;
-    /**
-     * Caller request context. This data is not added to model prompts.
-     */
+    /** Caller request context. This data is not added to model prompts. */
     private Map<String, Object> requestContext;
-    /**
-     * Provider metadata from the tool call and surrounding step.
-     */
+    /** Provider metadata from the tool call and surrounding step. */
     private Map<String, Object> providerMetadata;
 
     @Builder
-    private ToolCallRepairContext(ToolCallFailureKind failureKind, ToolCall toolCall,
-        ToolDefinition tool, List<ToolDefinition> availableTools, String validationError,
-        String validationPath, Integer stepIndex, List<ModelMessage> messages,
-        Map<String, Object> requestContext, Map<String, Object> providerMetadata) {
+    private ToolCallRepairContext(
+            ToolCallFailureKind failureKind,
+            ToolCall toolCall,
+            ToolDefinition tool,
+            List<ToolDefinition> availableTools,
+            String validationError,
+            String validationPath,
+            Integer stepIndex,
+            List<ModelMessage> messages,
+            Map<String, Object> requestContext,
+            Map<String, Object> providerMetadata) {
         this.failureKind = failureKind;
         this.toolCall = toolCall;
         this.tool = tool;

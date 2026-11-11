@@ -4,12 +4,9 @@ import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 public record ImageGenerationModelRuntimeConfiguration(
-    ModelRuntimeContext context,
-    ModelCapabilities modelCapabilities
-) {
+        ModelRuntimeContext context, ModelCapabilities modelCapabilities) {
 
     public ImageGenerationModelRuntimeConfiguration {
-        modelCapabilities = modelCapabilities != null
-            ? modelCapabilities : ModelCapabilities.empty();
+        modelCapabilities = modelCapabilities != null ? modelCapabilities : ModelCapabilities.empty();
     }
 }

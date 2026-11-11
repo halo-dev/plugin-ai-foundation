@@ -1,11 +1,18 @@
-import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
+import type {
+  AiModel,
+  AiProvider,
+  DefaultParameterMappingInfo,
+  ProviderTypeInfo,
+} from '@/api/generated'
 import {
+  AiModelSpecAdapterTypeEnum,
   AiModelSpecDiscoveryConfidenceEnum,
   AiModelSpecDiscoverySourceEnum,
   AiModelSpecModelTypeEnum,
 } from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/use-models-fetch'
 import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
+import { reconcileModelCapabilities } from './model-capability-changes'
 
 export function findProviderTypeForModel(
   model: AiModel,
@@ -24,12 +31,23 @@ export function modelTypeOptionsForProviderType(providerType: ProviderTypeInfo |
   return MODEL_TYPE_OPTIONS.filter((item) => supportedTypes.includes(item.value))
 }
 
-export function modelFeatureOptionsForProviderType(providerType: ProviderTypeInfo | undefined) {
-  if (!providerType) {
+export function modelFeatureOptionsForProviderType(
+  providerType: ProviderTypeInfo | undefined,
+  adapterType?: string,
+) {
+  const supportedFeatures = modelSupportedFeaturesForProviderType(providerType, adapterType)
+  if (!supportedFeatures) {
     return [...MODEL_FEATURE_OPTIONS]
   }
-  const supportedFeatures = providerType.supportedFeatures || []
   return MODEL_FEATURE_OPTIONS.filter((item) => supportedFeatures.includes(item.value))
+}
+
+export function modelSupportedFeaturesForProviderType(
+  providerType: ProviderTypeInfo | undefined,
+  adapterType?: string,
+) {
+  const adapter = providerType?.adapters?.find((item) => item.adapterType === adapterType)
+  return adapter?.supportedFeatures ?? providerType?.supportedFeatures
 }
 
 export function defaultModelTypeForProviderType(
@@ -41,12 +59,66 @@ export function defaultModelTypeForProviderType(
   return matched?.value || options[0]?.value || AiModelSpecModelTypeEnum.Language
 }
 
+export interface ModelAdapterOption {
+  value: AiModelSpecAdapterTypeEnum
+  label: string
+  description?: string
+  recommended: boolean
+}
+
+export function adapterOptionsForProviderType(
+  providerType: ProviderTypeInfo | undefined,
+  modelType: string,
+): ModelAdapterOption[] {
+  if (!providerType) {
+    return []
+  }
+  if (providerType.adapters?.length) {
+    return providerType.adapters
+      .filter((adapter) => adapter.modelType === modelType && adapter.adapterType)
+      .map((adapter) => ({
+        value: adapter.adapterType as AiModelSpecAdapterTypeEnum,
+        label: `${adapter.displayName || adapter.adapterType}${adapter.recommended ? '（推荐）' : ''}`,
+        description: adapter.description,
+        recommended: adapter.recommended === true,
+      }))
+  }
+  return []
+}
+
+export function defaultAdapterForProviderType(
+  providerType: ProviderTypeInfo | undefined,
+  modelType: string,
+  candidate?: string,
+) {
+  const options = adapterOptionsForProviderType(providerType, modelType)
+  return (
+    options.find((option) => option.value === candidate)?.value ||
+    options.find((option) => option.recommended)?.value ||
+    options[0]?.value
+  )
+}
+
+export function defaultParameterMappingsForAdapter(
+  providerType: ProviderTypeInfo | undefined,
+  adapterType?: string,
+): Record<string, DefaultParameterMappingInfo> | undefined {
+  const adapter = providerType?.adapters?.find((item) => item.adapterType === adapterType)
+  const defaults = providerType?.defaultParameterMappings
+  const overrides = adapter?.defaultParameterMappingOverrides
+  if (!overrides) {
+    return defaults
+  }
+  return { ...defaults, ...overrides }
+}
+
 export function filterModelFeaturesForProviderType(
   providerType: ProviderTypeInfo | undefined,
   features: string[] = [],
+  adapterType?: string,
 ) {
   const allowedFeatures = new Set<string>(
-    modelFeatureOptionsForProviderType(providerType).map((item) => item.value),
+    modelFeatureOptionsForProviderType(providerType, adapterType).map((item) => item.value),
   )
   return features.filter((feature) => allowedFeatures.has(feature)) as NonNullable<
     AiModel['spec']['features']
@@ -55,11 +127,14 @@ export function filterModelFeaturesForProviderType(
 
 export interface DiscoveredModelProfileOverride {
   modelType?: AiModel['spec']['modelType']
+  adapterType?: AiModel['spec']['adapterType']
   features?: NonNullable<AiModel['spec']['features']>
+  parameterConstraints?: AiModel['spec']['parameterConstraints']
 }
 
 export interface DiscoveredModelProfile {
   modelType: AiModel['spec']['modelType']
+  adapterType?: AiModel['spec']['adapterType']
   features: NonNullable<AiModel['spec']['features']>
 }
 
@@ -81,14 +156,25 @@ export function discoveredModelProfileForProviderType(
   model: DiscoveredModel,
   existing?: DiscoveredModelProfile,
 ): DiscoveredModelProfile {
+  const modelType = defaultModelTypeForProviderType(
+    providerType,
+    existing?.modelType || model.modelType,
+  )
+  const candidateAdapter = existing?.adapterType || model.adapterType
+  const adapterOptions = adapterOptionsForProviderType(providerType, modelType)
+  const adapterType =
+    adapterOptions.find((option) => option.value === candidateAdapter)?.value ||
+    (adapterOptions.length === 0 && modelType === model.modelType
+      ? model.adapterType
+      : undefined) ||
+    (adapterOptions.length === 1 ? adapterOptions[0].value : undefined)
   return {
-    modelType: defaultModelTypeForProviderType(
-      providerType,
-      existing?.modelType || model.modelType,
-    ),
+    modelType,
+    ...(adapterType ? { adapterType } : {}),
     features: filterModelFeaturesForProviderType(
       providerType,
       existing?.features || model.features || [],
+      adapterType,
     ),
   }
 }
@@ -173,8 +259,11 @@ export function createModelFromDiscovered(
   providerName: string,
   model: DiscoveredModel,
   override?: DiscoveredModelProfileOverride,
+  providerType?: ProviderTypeInfo,
 ): AiModel {
   const modelType = override?.modelType || model.modelType || AiModelSpecModelTypeEnum.Language
+  const adapterType =
+    override?.adapterType || (modelType === model.modelType ? model.adapterType : undefined)
   const spec = {
     providerName,
     modelId: model.modelId,
@@ -184,8 +273,10 @@ export function createModelFromDiscovered(
     features: override?.features || model.features || [],
     discoverySource: model.source || AiModelSpecDiscoverySourceEnum.Rule,
     discoveryConfidence: model.confidence || AiModelSpecDiscoveryConfidenceEnum.Low,
-    ...(model.adapterType ? { adapterType: model.adapterType } : {}),
+    ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
+    catalogParameters: model.catalogParameters,
+    parameterConstraints: override?.parameterConstraints,
   } as AiModel['spec']
 
   return {
@@ -194,7 +285,10 @@ export function createModelFromDiscovered(
     metadata: {
       name: '',
     },
-    spec,
+    spec: reconcileModelCapabilities(model, spec, {
+      importing: true,
+      supportedFeatures: modelSupportedFeaturesForProviderType(providerType, adapterType),
+    }),
   }
 }
 

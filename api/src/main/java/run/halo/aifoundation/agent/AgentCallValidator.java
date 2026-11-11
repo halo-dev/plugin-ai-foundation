@@ -8,8 +8,6 @@ package run.halo.aifoundation.agent;
 @FunctionalInterface
 public interface AgentCallValidator<O> {
 
-    /**
-     * Validates the supplied options. Throw an exception to reject the call.
-     */
+    /** Validates the supplied options. Throw an exception to reject the call. */
     void validate(O options);
 }

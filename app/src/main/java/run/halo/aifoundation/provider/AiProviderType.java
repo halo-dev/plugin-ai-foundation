@@ -7,19 +7,24 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.lang.Nullable;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
+import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.support.ProviderModelResolver;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
-import run.halo.aifoundation.provider.mapping.ModelParameter;
-import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
-import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 
 public interface AiProviderType {
 
@@ -98,34 +103,53 @@ public interface AiProviderType {
     }
 
     default List<ModelFeature> getSupportedFeatures() {
-        if (!getSupportedModelTypes().contains(ModelType.LANGUAGE)) {
-            return List.of();
-        }
-        return List.of(
-            ModelFeature.STREAMING,
-            ModelFeature.VISION,
-            ModelFeature.AUDIO_INPUT,
-            ModelFeature.TOOL_CALL,
-            ModelFeature.STRUCTURED_OUTPUT,
-            ModelFeature.REASONING
-        );
+        return List.of();
     }
 
-    default java.util.Map<ModelParameter, DefaultParameterMapping>
-        getDefaultParameterMappings() {
+    default List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
+        if (adapterType == null
+                || adapterType.getModelType() != ModelType.LANGUAGE
+                || !getSupportedAdapterTypes().contains(adapterType)) {
+            return List.of();
+        }
+        return getSupportedFeatures();
+    }
+
+    default java.util.Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         return ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes());
+    }
+
+    default java.util.Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
+            AdapterType adapterType) {
+        return getDefaultParameterMappings();
     }
 
     // ── Behavior ──────────────────────────────────────────────
 
+    default DecisionCapability decisionCapabilities() {
+        return null;
+    }
+
+    default ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey, ProviderModelRef model) {
+        return null;
+    }
+
     ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId);
+
+    default ChatModel buildChatModel(AiProvider provider, String apiKey, ProviderModelRef model) {
+        return buildChatModel(provider, apiKey, model.modelId());
+    }
 
     default LanguageModelProviderOptions languageModelProviderOptions() {
         return LanguageModelProviderOptions.defaults();
     }
 
+    default LanguageModelProviderOptions languageModelProviderOptions(AdapterType adapterType) {
+        return languageModelProviderOptions();
+    }
+
     default EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return EmbeddingModelProviderOptions.defaults(getProviderType());
+        return EmbeddingModelProviderOptions.defaults();
     }
 
     @Nullable
@@ -133,20 +157,32 @@ public interface AiProviderType {
         return null;
     }
 
+    default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, ProviderModelRef model) {
+        return buildEmbeddingModel(provider, apiKey, model.modelId());
+    }
+
     default RerankingModelProviderOptions rerankingModelProviderOptions() {
         return RerankingModelProviderOptions.defaults();
     }
 
     @Nullable
-    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
         return null;
     }
 
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, ProviderModelRef model) {
+        return buildRerankingClient(provider, apiKey, model.modelId());
+    }
+
     @Nullable
-    default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
+    default ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
         return null;
+    }
+
+    default ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, ProviderModelRef model) {
+        return buildImageGenerationClient(provider, apiKey, model.modelId());
     }
 
     Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey);
@@ -157,6 +193,14 @@ public interface AiProviderType {
 
     default Optional<AdapterType> recommendAdapterType(ModelType modelType) {
         return AdapterType.firstFor(getSupportedAdapterTypes(), modelType);
+    }
+
+    default ProviderModelRef resolveModel(ProviderModelRef model) {
+        return ProviderModelResolver.resolve(this, model);
+    }
+
+    default void validateNativeModelOptions(ProviderModelRef model) {
+        NativeModelOptionsValidator.validate(model.nativeOptions());
     }
 
     default int maxEmbeddingsPerCall() {

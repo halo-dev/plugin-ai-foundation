@@ -13,13 +13,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
 import reactor.core.publisher.Flux;
+import run.halo.aifoundation.extension.AiProvider;
 import run.halo.app.extension.AbstractExtension;
-import run.halo.app.extension.GroupVersionKind;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.extension.Secret;
-import run.halo.aifoundation.extension.AiProvider;
 
 @ExtendWith(MockitoExtension.class)
 class ProviderCacheInvalidationWatcherTest {
@@ -54,7 +53,7 @@ class ProviderCacheInvalidationWatcherTest {
         secret.setMetadata(metadata);
 
         when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(Flux.empty());
+                .thenReturn(Flux.empty());
 
         watcher.onUpdate(null, secret);
 
@@ -111,7 +110,7 @@ class ProviderCacheInvalidationWatcherTest {
         provider3.getSpec().setApiKeySecretName("other-secret");
 
         when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(Flux.just(provider1, provider2, provider3));
+                .thenReturn(Flux.just(provider1, provider2, provider3));
 
         watcher.onDelete(secret);
 
@@ -152,7 +151,7 @@ class ProviderCacheInvalidationWatcherTest {
         provider3.getSpec().setApiKeySecretName("other-secret");
 
         when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(Flux.just(provider1, provider2, provider3));
+                .thenReturn(Flux.just(provider1, provider2, provider3));
 
         watcher.onUpdate(null, secret);
 
@@ -197,6 +196,5 @@ class ProviderCacheInvalidationWatcherTest {
         return extension;
     }
 
-    static class TestExtension extends AbstractExtension {
-    }
+    static class TestExtension extends AbstractExtension {}
 }

@@ -9,7 +9,6 @@ The system SHALL provide a console endpoint `POST /models/{name}/test-chat/strea
 - **WHEN** a client sends `POST /models/{name}/test-chat/stream` with a valid text generation request body
 - **THEN** the endpoint returns `200 OK` with `Content-Type: text/event-stream`
 - **AND** the endpoint sets `X-Halo-AI-Stream-Protocol: text-v1`
-- **AND** the endpoint SHALL NOT set `x-vercel-ai-ui-message-stream`
 - **AND** the endpoint passes the request into `LanguageModel.streamText()`
 - **AND** each emitted `TextStreamPart` is serialized as a JSON `data:` line in the SSE stream
 - **AND** the stream may include message lifecycle, step lifecycle, text, tool call, tool result, tool error, finish, raw diagnostic, and error part types
@@ -33,7 +32,6 @@ The test-chat streaming endpoint SHALL emit Halo-owned reasoning stream parts wh
 - **WHEN** `LanguageModel.streamText()` emits reasoning content
 - **THEN** the SSE response SHALL serialize reasoning start, reasoning delta, and reasoning end parts as JSON `data:` lines
 - **AND** the endpoint SHALL keep `X-Halo-AI-Stream-Protocol: text-v1`
-- **AND** the endpoint SHALL NOT set `x-vercel-ai-ui-message-stream`
 
 #### Scenario: Reasoning remains separate from answer text
 - **WHEN** a stream contains both reasoning deltas and text deltas
@@ -146,4 +144,3 @@ The model test workbench SHALL continue rendering the full Halo stream while str
 #### Scenario: Tool input delta event
 - **WHEN** the UI receives tool input delta events before a tool call
 - **THEN** the parser MUST keep the final tool call display associated with the same tool call id
-

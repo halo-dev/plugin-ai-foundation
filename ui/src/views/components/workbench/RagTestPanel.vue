@@ -71,7 +71,7 @@ function addSource(sources: TestRagSource[]) {
           <label class=":uno: text-xs text-slate-600 font-medium">Rerank</label>
           <select
             :value="rerankModelName || ''"
-            class=":uno: h-9 w-full text-sm text-slate-800 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+            class=":uno: h-9 w-full text-sm text-slate-800 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !pl-2 !pr-10 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
             :disabled="disabled || isLoading"
             @change="
               $emit(

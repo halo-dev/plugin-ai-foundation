@@ -22,14 +22,12 @@ import tools.jackson.databind.json.JsonMapper;
 
 public final class LanguageModelStructuredOutputHandler {
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
-    private static final TypeReference<Object> OBJECT_TYPE = new TypeReference<>() {
-    };
+    private static final TypeReference<Object> OBJECT_TYPE = new TypeReference<>() {};
 
     private final LanguageModelResponseMapper responseMapper;
     private final JsonWriter jsonWriter;
 
-    public LanguageModelStructuredOutputHandler(LanguageModelResponseMapper responseMapper,
-        JsonWriter jsonWriter) {
+    public LanguageModelStructuredOutputHandler(LanguageModelResponseMapper responseMapper, JsonWriter jsonWriter) {
         this.responseMapper = responseMapper;
         this.jsonWriter = jsonWriter;
     }
@@ -42,25 +40,25 @@ public final class LanguageModelStructuredOutputHandler {
         if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
             return null;
         }
-        var base = "Return only the requested structured output. Do not wrap it in Markdown or "
-            + "explanatory prose.";
-        var instruction = switch (output.getType()) {
-            case OBJECT -> base + " Return a JSON object that matches this JSON Schema: "
-                + jsonWriter.write(output.getSchema());
-            case ARRAY -> base + " Return a JSON array. Each element must match this JSON Schema: "
-                + jsonWriter.write(output.getElementSchema());
-            case CHOICE -> base + " Return exactly one of these string choices: "
-                + String.join(", ", output.getChoices());
-            case JSON -> base + " Return valid JSON.";
-            case TEXT -> null;
-        };
+        var base = "Return only the requested structured output. Do not wrap it in Markdown or " + "explanatory prose.";
+        var instruction =
+                switch (output.getType()) {
+                    case OBJECT ->
+                        base + " Return a JSON object that matches this JSON Schema: "
+                                + jsonWriter.write(output.getSchema());
+                    case ARRAY ->
+                        base + " Return a JSON array. Each element must match this JSON Schema: "
+                                + jsonWriter.write(output.getElementSchema());
+                    case CHOICE ->
+                        base + " Return exactly one of these string choices: " + String.join(", ", output.getChoices());
+                    case JSON -> base + " Return valid JSON.";
+                    case TEXT -> null;
+                };
         if (!includeExample) {
             return instruction;
         }
         var example = exampleForOutput(output);
-        return example != null
-            ? instruction + " Example: " + jsonWriter.write(example)
-            : instruction;
+        return example != null ? instruction + " Example: " + jsonWriter.write(example) : instruction;
     }
 
     private Object exampleForOutput(OutputSpec output) {
@@ -70,9 +68,10 @@ public final class LanguageModelStructuredOutputHandler {
                 var element = exampleForSchema(output.getElementSchema());
                 yield element != null ? List.of(element) : List.of();
             }
-            case CHOICE -> output.getChoices() != null && !output.getChoices().isEmpty()
-                ? output.getChoices().getFirst()
-                : null;
+            case CHOICE ->
+                output.getChoices() != null && !output.getChoices().isEmpty()
+                        ? output.getChoices().getFirst()
+                        : null;
             case JSON -> Map.of();
             case TEXT -> null;
         };
@@ -100,7 +99,10 @@ public final class LanguageModelStructuredOutputHandler {
         }
         var type = schema.get("type");
         if (type instanceof List<?> types) {
-            type = types.stream().filter(value -> !"null".equals(value)).findFirst().orElse(null);
+            type = types.stream()
+                    .filter(value -> !"null".equals(value))
+                    .findFirst()
+                    .orElse(null);
         }
         if ("object".equals(type) || schema.get("properties") instanceof Map<?, ?>) {
             var example = new LinkedHashMap<String, Object>();
@@ -141,41 +143,40 @@ public final class LanguageModelStructuredOutputHandler {
         var outputText = outputText(output, text);
         traceParseInput(output, text, outputText, diagnosticId);
         try {
-            var structuredOutput = switch (output.getType()) {
-                case JSON -> new StructuredOutput(JSON_MAPPER.readValue(outputText, OBJECT_TYPE),
-                    outputText);
-                case OBJECT -> {
-                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
-                    if (!(value instanceof Map<?, ?> map)) {
-                        throw validationError(
-                            "Structured output validation failed: expected JSON object", "$");
-                    }
-                    var sanitized = responseMapper.sanitizeValue(map);
-                    validateJsonValue(sanitized, output.getSchema(), "$");
-                    yield new StructuredOutput(sanitized, outputText);
-                }
-                case ARRAY -> {
-                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
-                    if (!(value instanceof List<?> list)) {
-                        throw validationError(
-                            "Structured output validation failed: expected JSON array", "$");
-                    }
-                    for (var i = 0; i < list.size(); i++) {
-                        validateJsonValue(list.get(i), output.getElementSchema(), "$[" + i + "]");
-                    }
-                    yield new StructuredOutput(responseMapper.sanitizeValue(list), outputText);
-                }
-                case CHOICE -> {
-                    var choice = normalizeChoice(outputText);
-                    if (output.getChoices() == null || !output.getChoices().contains(choice)) {
-                        throw validationError(
-                            "Structured output validation failed: expected one of "
-                                + output.getChoices(), "$");
-                    }
-                    yield new StructuredOutput(choice, outputText);
-                }
-                case TEXT -> new StructuredOutput(text, text);
-            };
+            var structuredOutput =
+                    switch (output.getType()) {
+                        case JSON -> new StructuredOutput(JSON_MAPPER.readValue(outputText, OBJECT_TYPE), outputText);
+                        case OBJECT -> {
+                            var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
+                            if (!(value instanceof Map<?, ?> map)) {
+                                throw validationError("Structured output validation failed: expected JSON object", "$");
+                            }
+                            var sanitized = responseMapper.sanitizeValue(map);
+                            validateJsonValue(sanitized, output.getSchema(), "$");
+                            yield new StructuredOutput(sanitized, outputText);
+                        }
+                        case ARRAY -> {
+                            var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
+                            if (!(value instanceof List<?> list)) {
+                                throw validationError("Structured output validation failed: expected JSON array", "$");
+                            }
+                            for (var i = 0; i < list.size(); i++) {
+                                validateJsonValue(list.get(i), output.getElementSchema(), "$[" + i + "]");
+                            }
+                            yield new StructuredOutput(responseMapper.sanitizeValue(list), outputText);
+                        }
+                        case CHOICE -> {
+                            var choice = normalizeChoice(outputText);
+                            if (output.getChoices() == null
+                                    || !output.getChoices().contains(choice)) {
+                                throw validationError(
+                                        "Structured output validation failed: expected one of " + output.getChoices(),
+                                        "$");
+                            }
+                            yield new StructuredOutput(choice, outputText);
+                        }
+                        case TEXT -> new StructuredOutput(text, text);
+                    };
             traceParseSuccess(output, structuredOutput, diagnosticId);
             return structuredOutput;
         } catch (StructuredOutputValidationException e) {
@@ -183,44 +184,58 @@ public final class LanguageModelStructuredOutputHandler {
             throw e;
         } catch (JacksonException e) {
             var validationError = new StructuredOutputValidationException(
-                "Structured output validation failed: output is not valid JSON", e,
-                null, null, "$", null, null, null);
+                    "Structured output validation failed: output is not valid JSON",
+                    e,
+                    null,
+                    null,
+                    "$",
+                    null,
+                    null,
+                    null);
             traceParseFailure(output, outputText, diagnosticId, "json-parse", validationError);
             throw validationError;
         }
     }
 
-    private void traceParseInput(OutputSpec output, String text, String outputText,
-        String diagnosticId) {
-        AiFoundationDiagnostics.trace("structured-output-input", diagnosticId,
-            () -> AiFoundationDiagnostics.fields(
-                "outputType", output.getType(),
-                "strict", output.getStrict(),
-                "schema", outputSchema(output),
-                "modelText", text,
-                "extractedText", outputText));
+    private void traceParseInput(OutputSpec output, String text, String outputText, String diagnosticId) {
+        AiFoundationDiagnostics.trace(
+                "structured-output-input",
+                diagnosticId,
+                () -> AiFoundationDiagnostics.fields(
+                        "outputType", output.getType(),
+                        "strict", output.getStrict(),
+                        "schema", outputSchema(output),
+                        "modelText", text,
+                        "extractedText", outputText));
     }
 
-    private void traceParseSuccess(OutputSpec output, StructuredOutput structuredOutput,
-        String diagnosticId) {
-        AiFoundationDiagnostics.trace("structured-output-success", diagnosticId,
-            () -> AiFoundationDiagnostics.fields(
-                "outputType", output.getType(),
-                "parsedValue", jsonWriter.write(structuredOutput.output()),
-                "outputText", structuredOutput.outputText()));
+    private void traceParseSuccess(OutputSpec output, StructuredOutput structuredOutput, String diagnosticId) {
+        AiFoundationDiagnostics.trace(
+                "structured-output-success",
+                diagnosticId,
+                () -> AiFoundationDiagnostics.fields(
+                        "outputType", output.getType(),
+                        "parsedValue", jsonWriter.write(structuredOutput.output()),
+                        "outputText", structuredOutput.outputText()));
     }
 
-    private void traceParseFailure(OutputSpec output, String outputText, String diagnosticId,
-        String stage, StructuredOutputValidationException error) {
-        AiFoundationDiagnostics.trace("structured-output-failure", diagnosticId,
-            () -> AiFoundationDiagnostics.fields(
-                "outputType", output.getType(),
-                "strict", output.getStrict(),
-                "schema", outputSchema(output),
-                "stage", stage,
-                "validationPath", error.getValidationPath(),
-                "outputText", outputText,
-                "message", error.getMessage()));
+    private void traceParseFailure(
+            OutputSpec output,
+            String outputText,
+            String diagnosticId,
+            String stage,
+            StructuredOutputValidationException error) {
+        AiFoundationDiagnostics.trace(
+                "structured-output-failure",
+                diagnosticId,
+                () -> AiFoundationDiagnostics.fields(
+                        "outputType", output.getType(),
+                        "strict", output.getStrict(),
+                        "schema", outputSchema(output),
+                        "stage", stage,
+                        "validationPath", error.getValidationPath(),
+                        "outputText", outputText,
+                        "message", error.getMessage()));
     }
 
     private String outputSchema(OutputSpec output) {
@@ -234,8 +249,8 @@ public final class LanguageModelStructuredOutputHandler {
 
     public Flux<Object> partialOutputStream(GenerateTextRequest request, Flux<String> textStream) {
         if (!hasStructuredOutput(request)
-            || (request.getOutput().getType() != OutputType.OBJECT
-            && request.getOutput().getType() != OutputType.JSON)) {
+                || (request.getOutput().getType() != OutputType.OBJECT
+                        && request.getOutput().getType() != OutputType.JSON)) {
             return Flux.empty();
         }
         return Flux.defer(() -> {
@@ -259,72 +274,89 @@ public final class LanguageModelStructuredOutputHandler {
         });
     }
 
-    public StructuredOutputValidationException enrich(StructuredOutputValidationException error,
-        OutputSpec output, String outputText, Integer stepIndex, LanguageModelUsage usage,
-        GenerationResponseMetadata response) {
-        return enrich(error, output, outputText, stepIndex, usage, response, FinishReason.UNKNOWN,
-            null);
+    public StructuredOutputValidationException enrich(
+            StructuredOutputValidationException error,
+            OutputSpec output,
+            String outputText,
+            Integer stepIndex,
+            LanguageModelUsage usage,
+            GenerationResponseMetadata response) {
+        return enrich(error, output, outputText, stepIndex, usage, response, FinishReason.UNKNOWN, null);
     }
 
-    public StructuredOutputValidationException enrich(StructuredOutputValidationException error,
-        OutputSpec output, String outputText, Integer stepIndex, LanguageModelUsage usage,
-        GenerationResponseMetadata response, FinishReason finishReason, String rawFinishReason) {
+    public StructuredOutputValidationException enrich(
+            StructuredOutputValidationException error,
+            OutputSpec output,
+            String outputText,
+            Integer stepIndex,
+            LanguageModelUsage usage,
+            GenerationResponseMetadata response,
+            FinishReason finishReason,
+            String rawFinishReason) {
         if (isExplicitAbnormalFinish(finishReason)) {
             var termination = new StructuredOutputTerminationException(
-                terminationMessage(finishReason, rawFinishReason), error,
-                output != null ? output.getType() : error.getOutputType(),
-                error.getOutputText() != null ? error.getOutputText() : outputText,
-                error.getValidationPath(), stepIndex, usage, response, finishReason,
-                rawFinishReason);
-            AiFoundationDiagnostics.warnStructuredOutputFailure(termination, finishReason,
-                rawFinishReason);
+                    terminationMessage(finishReason, rawFinishReason),
+                    error,
+                    output != null ? output.getType() : error.getOutputType(),
+                    error.getOutputText() != null ? error.getOutputText() : outputText,
+                    error.getValidationPath(),
+                    stepIndex,
+                    usage,
+                    response,
+                    finishReason,
+                    rawFinishReason);
+            AiFoundationDiagnostics.warnStructuredOutputFailure(termination, finishReason, rawFinishReason);
             traceTermination(termination, response);
             return termination;
         }
-        var validationError = new StructuredOutputValidationException(error.getMessage(), error,
-            output != null ? output.getType() : error.getOutputType(),
-            error.getOutputText() != null ? error.getOutputText() : outputText,
-            error.getValidationPath(), stepIndex, usage, response);
-        AiFoundationDiagnostics.warnStructuredOutputFailure(validationError, finishReason,
-            rawFinishReason);
+        var validationError = new StructuredOutputValidationException(
+                error.getMessage(),
+                error,
+                output != null ? output.getType() : error.getOutputType(),
+                error.getOutputText() != null ? error.getOutputText() : outputText,
+                error.getValidationPath(),
+                stepIndex,
+                usage,
+                response);
+        AiFoundationDiagnostics.warnStructuredOutputFailure(validationError, finishReason, rawFinishReason);
         return validationError;
     }
 
     private boolean isExplicitAbnormalFinish(FinishReason finishReason) {
-        return finishReason != null
-            && finishReason != FinishReason.STOP
-            && finishReason != FinishReason.UNKNOWN;
+        return finishReason != null && finishReason != FinishReason.STOP && finishReason != FinishReason.UNKNOWN;
     }
 
     private String terminationMessage(FinishReason finishReason, String rawFinishReason) {
         return switch (finishReason) {
-            case LENGTH -> "Structured output generation reached the output token limit before a "
-                + "valid result was produced";
-            case CONTENT_FILTER -> "Structured output generation was stopped by the provider content "
-                + "filter before a valid result was produced";
-            case TOOL_CALLS -> "Structured output generation stopped for tool calls before a final "
-                + "valid result was produced";
-            case ERROR -> "Structured output generation ended with a provider error before a valid "
-                + "result was produced";
-            case OTHER -> "Structured output generation stopped with provider finish reason '"
-                + (rawFinishReason != null && !rawFinishReason.isBlank()
-                    ? rawFinishReason : "other")
-                + "' before a valid result was produced";
+            case LENGTH ->
+                "Structured output generation reached the output token limit before a " + "valid result was produced";
+            case CONTENT_FILTER ->
+                "Structured output generation was stopped by the provider content "
+                        + "filter before a valid result was produced";
+            case TOOL_CALLS ->
+                "Structured output generation stopped for tool calls before a final " + "valid result was produced";
+            case ERROR ->
+                "Structured output generation ended with a provider error before a valid " + "result was produced";
+            case OTHER ->
+                "Structured output generation stopped with provider finish reason '"
+                        + (rawFinishReason != null && !rawFinishReason.isBlank() ? rawFinishReason : "other")
+                        + "' before a valid result was produced";
             default -> "Structured output generation stopped before a valid result was produced";
         };
     }
 
-    private void traceTermination(StructuredOutputTerminationException error,
-        GenerationResponseMetadata response) {
-        AiFoundationDiagnostics.trace("structured-output-termination", diagnosticId(response),
-            () -> AiFoundationDiagnostics.fields(
-                "outputType", error.getOutputType(),
-                "finishReason", error.getFinishReason(),
-                "rawFinishReason", error.getRawFinishReason(),
-                "validationPath", error.getValidationPath(),
-                "outputText", error.getOutputText(),
-                "usage", error.getUsage(),
-                "message", error.getMessage()));
+    private void traceTermination(StructuredOutputTerminationException error, GenerationResponseMetadata response) {
+        AiFoundationDiagnostics.trace(
+                "structured-output-termination",
+                diagnosticId(response),
+                () -> AiFoundationDiagnostics.fields(
+                        "outputType", error.getOutputType(),
+                        "finishReason", error.getFinishReason(),
+                        "rawFinishReason", error.getRawFinishReason(),
+                        "validationPath", error.getValidationPath(),
+                        "outputText", error.getOutputText(),
+                        "usage", error.getUsage(),
+                        "message", error.getMessage()));
     }
 
     private String diagnosticId(GenerationResponseMetadata response) {
@@ -345,26 +377,19 @@ public final class LanguageModelStructuredOutputHandler {
         if (type instanceof String typeName) {
             validateJsonType(value, typeName, path);
         } else if (type instanceof Collection<?> typeNames
-            && typeNames.stream().map(String::valueOf)
-                .noneMatch(typeName -> matchesJsonType(value, typeName))) {
+                && typeNames.stream().map(String::valueOf).noneMatch(typeName -> matchesJsonType(value, typeName))) {
             throw validationError(
-                "Structured output validation failed: " + path + " must match one of "
-                    + typeNames,
-                path);
+                    "Structured output validation failed: " + path + " must match one of " + typeNames, path);
         }
         var enumValues = schema.get("enum");
         if (enumValues instanceof Collection<?> values && !values.contains(value)) {
-            throw validationError(
-                "Structured output validation failed: " + path + " must be one of " + values,
-                path);
+            throw validationError("Structured output validation failed: " + path + " must be one of " + values, path);
         }
         var nullableNull = value == null && hasSchemaType(type, "null");
-        if (!nullableNull
-            && (hasSchemaType(type, "object") || schema.containsKey("properties"))) {
+        if (!nullableNull && (hasSchemaType(type, "object") || schema.containsKey("properties"))) {
             validateObjectValue(value, schema, path);
         }
-        if (!nullableNull
-            && (hasSchemaType(type, "array") || schema.containsKey("items"))) {
+        if (!nullableNull && (hasSchemaType(type, "array") || schema.containsKey("items"))) {
             validateArrayValue(value, schema, path);
         }
     }
@@ -376,33 +401,27 @@ public final class LanguageModelStructuredOutputHandler {
         }
         if (!(anyOf instanceof Collection<?> alternatives) || alternatives.isEmpty()) {
             throw validationError(
-                "Structured output validation failed: " + path
-                    + " has an invalid anyOf schema",
-                path);
+                    "Structured output validation failed: " + path + " has an invalid anyOf schema", path);
         }
         for (var alternative : alternatives) {
             if (!(alternative instanceof Map<?, ?> alternativeSchema)) {
                 continue;
             }
             try {
-                validateJsonValue(value,
-                    (Map<String, Object>) responseMapper.sanitizeValue(alternativeSchema), path);
+                validateJsonValue(value, (Map<String, Object>) responseMapper.sanitizeValue(alternativeSchema), path);
                 return;
             } catch (StructuredOutputValidationException ignored) {
                 // Try the next alternative before reporting the union failure.
             }
         }
         throw validationError(
-            "Structured output validation failed: " + path
-                + " does not match any allowed schema",
-            path);
+                "Structured output validation failed: " + path + " does not match any allowed schema", path);
     }
 
     @SuppressWarnings("unchecked")
     private void validateObjectValue(Object value, Map<String, Object> schema, String path) {
         if (!(value instanceof Map<?, ?> map)) {
-            throw validationError(
-                "Structured output validation failed: " + path + " must be an object", path);
+            throw validationError("Structured output validation failed: " + path + " must be an object", path);
         }
         var required = schema.get("required");
         if (required instanceof Collection<?> requiredFields) {
@@ -416,9 +435,10 @@ public final class LanguageModelStructuredOutputHandler {
                     continue;
                 }
                 if (entry.getValue() instanceof Map<?, ?> propertySchema) {
-                    validateJsonValue(map.get(key),
-                        (Map<String, Object>) responseMapper.sanitizeValue(propertySchema),
-                        path + "." + key);
+                    validateJsonValue(
+                            map.get(key),
+                            (Map<String, Object>) responseMapper.sanitizeValue(propertySchema),
+                            path + "." + key);
                 }
             }
         }
@@ -428,8 +448,8 @@ public final class LanguageModelStructuredOutputHandler {
         for (var field : requiredFields) {
             if (!map.containsKey(field)) {
                 throw validationError(
-                    "Structured output validation failed: missing required field "
-                        + path + "." + field, path + "." + field);
+                        "Structured output validation failed: missing required field " + path + "." + field,
+                        path + "." + field);
             }
         }
     }
@@ -437,39 +457,55 @@ public final class LanguageModelStructuredOutputHandler {
     @SuppressWarnings("unchecked")
     private void validateArrayValue(Object value, Map<String, Object> schema, String path) {
         if (!(value instanceof List<?> list)) {
-            throw validationError(
-                "Structured output validation failed: " + path + " must be an array", path);
+            throw validationError("Structured output validation failed: " + path + " must be an array", path);
         }
         var items = schema.get("items");
         if (items instanceof Map<?, ?> itemSchema) {
             for (var i = 0; i < list.size(); i++) {
-                validateJsonValue(list.get(i),
-                    (Map<String, Object>) responseMapper.sanitizeValue(itemSchema),
-                    path + "[" + i + "]");
+                validateJsonValue(
+                        list.get(i),
+                        (Map<String, Object>) responseMapper.sanitizeValue(itemSchema),
+                        path + "[" + i + "]");
             }
         }
     }
 
     private String outputText(OutputSpec output, String text) {
         var trimmed = stripMarkdownFence(text);
-        var objectText = structuredSlice(trimmed, '{', '}',
-            output.getType() == OutputType.OBJECT
-                || output.getType() == OutputType.JSON && trimmed.startsWith("{"));
+        var objectText = structuredSlice(trimmed, '{', '}', expectsObject(output, trimmed));
         if (objectText != null) {
             return objectText;
         }
-        var arrayText = structuredSlice(trimmed, '[', ']',
-            output.getType() == OutputType.ARRAY
-                || output.getType() == OutputType.JSON && trimmed.startsWith("["));
+        var arrayText = structuredSlice(trimmed, '[', ']', expectsArray(output, trimmed));
         return arrayText != null ? arrayText : trimmed;
+    }
+
+    private boolean expectsObject(OutputSpec output, String text) {
+        if (output.getType() == OutputType.OBJECT) {
+            return true;
+        }
+        if (output.getType() != OutputType.JSON) {
+            return false;
+        }
+        return text.startsWith("{");
+    }
+
+    private boolean expectsArray(OutputSpec output, String text) {
+        if (output.getType() == OutputType.ARRAY) {
+            return true;
+        }
+        if (output.getType() != OutputType.JSON) {
+            return false;
+        }
+        return text.startsWith("[");
     }
 
     private String stripMarkdownFence(String text) {
         var trimmed = text != null ? text.trim() : "";
         if (trimmed.startsWith("```")) {
             return trimmed.replaceFirst("^```[a-zA-Z0-9_-]*\\s*", "")
-                .replaceFirst("\\s*```$", "")
-                .trim();
+                    .replaceFirst("\\s*```$", "")
+                    .trim();
         }
         return trimmed;
     }
@@ -499,8 +535,7 @@ public final class LanguageModelStructuredOutputHandler {
 
     private void validateJsonType(Object value, String type, String path) {
         if (!matchesJsonType(value, type)) {
-            throw validationError(
-                "Structured output validation failed: " + path + " must be " + type, path);
+            throw validationError("Structured output validation failed: " + path + " must be " + type, path);
         }
     }
 
@@ -518,21 +553,18 @@ public final class LanguageModelStructuredOutputHandler {
     }
 
     private boolean hasSchemaType(Object type, String expected) {
-        return expected.equals(type)
-            || type instanceof Collection<?> types && types.contains(expected);
+        return expected.equals(type) || type instanceof Collection<?> types && types.contains(expected);
     }
 
-    private StructuredOutputValidationException validationError(String message,
-        String validationPath) {
-        return new StructuredOutputValidationException(message, null, null, null, validationPath,
-            null, null, null);
+    private StructuredOutputValidationException validationError(String message, String validationPath) {
+        return new StructuredOutputValidationException(message, null, null, null, validationPath, null, null, null);
     }
 
     private boolean hasStructuredOutput(GenerateTextRequest request) {
         return request != null
-            && request.getOutput() != null
-            && request.getOutput().getType() != null
-            && request.getOutput().getType() != OutputType.TEXT;
+                && request.getOutput() != null
+                && request.getOutput().getType() != null
+                && request.getOutput().getType() != OutputType.TEXT;
     }
 
     private static boolean hasText(String value) {
@@ -619,13 +651,15 @@ public final class LanguageModelStructuredOutputHandler {
                 if (c == '}' || c == ']') {
                     depth--;
                     if (depth == 0) {
-                        addCompletedElement(elements, trimmed.substring(elementStart, i).trim());
+                        addCompletedElement(
+                                elements, trimmed.substring(elementStart, i).trim());
                         return elements;
                     }
                     continue;
                 }
                 if (c == ',' && depth == 1) {
-                    addCompletedElement(elements, trimmed.substring(elementStart, i).trim());
+                    addCompletedElement(
+                            elements, trimmed.substring(elementStart, i).trim());
                     elementStart = i + 1;
                 }
             }

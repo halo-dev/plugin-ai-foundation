@@ -10,5 +10,4 @@ import run.halo.aifoundation.chat.LanguageModel;
  * @param request current generation request
  */
 public record LanguageModelStreamContext(LanguageModel model, GenerateTextRequest request)
-    implements LanguageModelRequestContext {
-}
+        implements LanguageModelRequestContext {}

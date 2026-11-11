@@ -197,6 +197,10 @@ await chat.sendMessage(
 transport 会先合并 transport 级别配置与单次配置，最后写入 chat request 的
 `id`、`messages`、`trigger` 和 `messageId`；这四个字段不会被额外 body 覆盖。
 
+对于 `submit-message` 请求，只有最后一条 assistant 消息的最新 step 至少包含一个工具 part，
+且该 step 的全部工具 part 都已具备继续条件（例如已有工具结果或审批响应）时，后端才会续写该消息，
+并在响应流中复用其 id。已经包含最终文本的普通 assistant 消息会开始一条新的响应消息。
+
 ## 发送文件
 
 ```ts

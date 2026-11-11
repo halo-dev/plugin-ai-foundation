@@ -7,9 +7,9 @@ import run.halo.aifoundation.control.CancellationSource;
 /**
  * Request-scoped lifecycle callbacks for text generation.
  *
- * <p>Callbacks are observers: an exception thrown by a callback is captured as a
- * {@link GenerationWarning} and does not fail an otherwise successful generation. Use
- * {@link CancellationSource} when callback code needs to stop the generation explicitly.
+ * <p>Callbacks are observers: an exception thrown by a callback is captured as a {@link GenerationWarning} and does not
+ * fail an otherwise successful generation. Use {@link CancellationSource} when callback code needs to stop the
+ * generation explicitly.
  *
  * <pre>{@code
  * var lifecycle = new GenerationLifecycle() {

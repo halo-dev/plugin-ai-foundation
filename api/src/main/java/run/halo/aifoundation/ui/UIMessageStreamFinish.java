@@ -10,10 +10,11 @@ import java.util.List;
  * @param isContinuation whether the response replaced the last assistant message
  * @param terminal terminal finish, error, or abort state
  */
-public record UIMessageStreamFinish<M>(List<UIMessage<M>> messages,
-                                       UIMessage<M> responseMessage,
-                                       boolean isContinuation,
-                                       UIMessageStreamTerminal terminal) {
+public record UIMessageStreamFinish<M>(
+        List<UIMessage<M>> messages,
+        UIMessage<M> responseMessage,
+        boolean isContinuation,
+        UIMessageStreamTerminal terminal) {
     public UIMessageStreamFinish {
         messages = List.copyOf(messages);
     }

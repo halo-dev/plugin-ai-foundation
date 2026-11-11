@@ -10,6 +10,7 @@ export const MODEL_TYPE_OPTIONS = [
   { label: 'Embedding', value: AiModelSpecModelTypeEnum.Embedding },
   { label: 'Rerank', value: AiModelSpecModelTypeEnum.Rerank },
   { label: '图像生成', value: AiModelSpecModelTypeEnum.ImageGeneration },
+  { label: '决策模型', value: AiModelSpecModelTypeEnum.Decision },
 ] as const
 
 export const MODEL_FEATURE_OPTIONS = [

@@ -11,8 +11,7 @@ import java.util.Map;
  * @param stepIndex optional generation step index
  * @param metadata optional error metadata
  */
-public record ErrorChunk(String errorText, Integer stepIndex, Map<String, Object> metadata)
-    implements UIMessageChunk {
+public record ErrorChunk(String errorText, Integer stepIndex, Map<String, Object> metadata) implements UIMessageChunk {
     @Override
     public String type() {
         return UIMessageChunkType.ERROR;

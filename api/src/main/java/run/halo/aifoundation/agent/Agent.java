@@ -13,8 +13,8 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.chat.LanguageModel;
-import run.halo.aifoundation.chat.PreparedStep;
 import run.halo.aifoundation.chat.PrepareStepCallback;
+import run.halo.aifoundation.chat.PreparedStep;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.chat.StreamTextResult;
@@ -35,8 +35,8 @@ import run.halo.aifoundation.tool.ToolChoice;
 import run.halo.aifoundation.tool.ToolDefinition;
 
 /**
- * Immutable reusable agent that composes one effective request and delegates execution to a
- * provider-neutral {@link LanguageModel}.
+ * Immutable reusable agent that composes one effective request and delegates execution to a provider-neutral
+ * {@link LanguageModel}.
  *
  * @param <O> typed per-call options
  */
@@ -47,51 +47,39 @@ public final class Agent<O> {
     private final AgentOptions<O> definition;
 
     private Agent(AgentOptions<O> definition) {
-        this.definition = snapshot(Objects.requireNonNull(definition,
-            "definition must not be null"));
+        this.definition = snapshot(Objects.requireNonNull(definition, "definition must not be null"));
         if (this.definition.getModel() == null) {
             throw new IllegalArgumentException("agent model must not be null");
         }
     }
 
-    /**
-     * Creates a typed agent from a complete immutable definition.
-     */
+    /** Creates a typed agent from a complete immutable definition. */
     public static <O> Agent<O> create(AgentOptions<O> definition) {
         return new Agent<>(definition);
     }
 
-    /**
-     * Creates a no-options agent with the default bounded step policy.
-     */
+    /** Creates a no-options agent with the default bounded step policy. */
     public static Agent<Void> create(LanguageModel model, String instructions) {
-        return create(AgentOptions.forModel(model)
-            .instructions(instructions)
-            .build());
+        return create(AgentOptions.forModel(model).instructions(instructions).build());
     }
 
-    /**
-     * Returns a defensive snapshot of this agent's definition.
-     */
+    /** Returns a defensive snapshot of this agent's definition. */
     public AgentOptions<O> options() {
         return snapshot(definition);
     }
 
-    /**
-     * Generates a normalized terminal result through the configured model.
-     */
+    /** Generates a normalized terminal result through the configured model. */
     public Mono<GenerateTextResult> generate(AgentCall<O> call) {
-        return prepare(call).flatMap(prepared ->
-            prepared.getModel().generateText(prepared.getRequest()));
+        return prepare(call).flatMap(prepared -> prepared.getModel().generateText(prepared.getRequest()));
     }
 
     /**
-     * Streams through the configured model while sharing one preparation and provider execution
-     * across all result projections.
+     * Streams through the configured model while sharing one preparation and provider execution across all result
+     * projections.
      */
     public StreamTextResult stream(AgentCall<O> call) {
-        return LanguageModelMiddlewares.defer(prepare(call)
-            .map(prepared -> prepared.getModel().streamText(prepared.getRequest())));
+        return LanguageModelMiddlewares.defer(
+                prepare(call).map(prepared -> prepared.getModel().streamText(prepared.getRequest())));
     }
 
     private Mono<PreparedAgentCall> prepare(AgentCall<O> source) {
@@ -101,25 +89,23 @@ public final class Agent<O> {
             validateOptions(call.getOptions());
             checkCancellation(call);
             var builder = requestBuilder(call);
-            var context = new AgentCallPrepareContext<>(call, call.getOptions(),
-                definition.getModel(), builder);
+            var context = new AgentCallPrepareContext<>(call, call.getOptions(), definition.getModel(), builder);
             Mono<PreparedAgentCall> prepared;
             try {
                 prepared = definition.getPrepareCall() == null
-                    ? Mono.just(context.prepared())
-                    : definition.getPrepareCall().prepare(context);
+                        ? Mono.just(context.prepared())
+                        : definition.getPrepareCall().prepare(context);
             } catch (Throwable error) {
                 return Mono.error(preparationFailure(error));
             }
             if (prepared == null) {
-                return Mono.error(new AgentCallException(AgentCallPhase.PREPARATION,
-                    "Agent call preparation returned null"));
+                return Mono.error(
+                        new AgentCallException(AgentCallPhase.PREPARATION, "Agent call preparation returned null"));
             }
-            return prepared
-                .switchIfEmpty(Mono.error(new AgentCallException(AgentCallPhase.PREPARATION,
-                    "Agent call preparation returned no prepared call")))
-                .map(this::validatedPreparedCall)
-                .onErrorMap(this::preparationFailure);
+            return prepared.switchIfEmpty(Mono.error(new AgentCallException(
+                            AgentCallPhase.PREPARATION, "Agent call preparation returned no prepared call")))
+                    .map(this::validatedPreparedCall)
+                    .onErrorMap(this::preparationFailure);
         });
     }
 
@@ -130,14 +116,14 @@ public final class Agent<O> {
         if (error instanceof AiGenerationCancelledException cancelled) {
             throw cancelled;
         }
-        return new AgentCallException(AgentCallPhase.PREPARATION,
-            "Agent call preparation failed: " + safeMessage(error), error);
+        return new AgentCallException(
+                AgentCallPhase.PREPARATION, "Agent call preparation failed: " + safeMessage(error), error);
     }
 
     private PreparedAgentCall validatedPreparedCall(PreparedAgentCall prepared) {
         if (prepared == null || prepared.getModel() == null || prepared.getRequest() == null) {
-            throw new AgentCallException(AgentCallPhase.PREPARATION,
-                "Agent call preparation produced incomplete state");
+            throw new AgentCallException(
+                    AgentCallPhase.PREPARATION, "Agent call preparation produced incomplete state");
         }
         var callToken = prepared.getRequest().getCancellationToken();
         if (callToken != null) {
@@ -150,8 +136,8 @@ public final class Agent<O> {
         var hasPrompt = call.getPrompt() != null && !call.getPrompt().isBlank();
         var hasMessages = call.getMessages() != null && !call.getMessages().isEmpty();
         if (hasPrompt == hasMessages) {
-            throw new AgentCallException(AgentCallPhase.VALIDATION,
-                "Agent call must contain either a prompt or messages, but not both");
+            throw new AgentCallException(
+                    AgentCallPhase.VALIDATION, "Agent call must contain either a prompt or messages, but not both");
         }
     }
 
@@ -164,8 +150,8 @@ public final class Agent<O> {
         } catch (AgentCallException error) {
             throw error;
         } catch (Throwable error) {
-            throw new AgentCallException(AgentCallPhase.VALIDATION,
-                "Agent call options are invalid: " + safeMessage(error), error);
+            throw new AgentCallException(
+                    AgentCallPhase.VALIDATION, "Agent call options are invalid: " + safeMessage(error), error);
         }
     }
 
@@ -181,37 +167,37 @@ public final class Agent<O> {
         var middleware = new ArrayList<>(definition.getMiddleware());
         middleware.addAll(call.getMiddleware());
         var builder = GenerateTextRequest.builder()
-            .system(definition.getInstructions())
-            .maxOutputTokens(definition.getMaxOutputTokens())
-            .temperature(definition.getTemperature())
-            .topP(definition.getTopP())
-            .topK(definition.getTopK())
-            .minP(definition.getMinP())
-            .presencePenalty(definition.getPresencePenalty())
-            .frequencyPenalty(definition.getFrequencyPenalty())
-            .repetitionPenalty(definition.getRepetitionPenalty())
-            .logprobs(definition.getLogprobs())
-            .topLogprobs(definition.getTopLogprobs())
-            .parallelToolCalls(definition.getParallelToolCalls())
-            .stopSequences(definition.getStopSequences())
-            .seed(definition.getSeed())
-            .maxRetries(definition.getMaxRetries())
-            .reasoning(copy(definition.getReasoning()))
-            .headers(merge(definition.getHeaders(), call.getHeaders()))
-            .metadata(merge(definition.getMetadata(), call.getMetadata()))
-            .context(merge(definition.getContext(), call.getContext()))
-            .output(copy(definition.getOutput()))
-            .tools(copyTools(definition.getTools()))
-            .toolChoice(copy(definition.getToolChoice()))
-            .stopWhen(definition.getStopWhen() != null
-                ? definition.getStopWhen()
-                : StopCondition.stepCountIs(DEFAULT_MAX_STEPS))
-            .prepareStep(withActiveTools(definition.getActiveTools(),
-                definition.getPrepareStep()))
-            .lifecycle(composite(lifecycle))
-            .toolCallRepair(definition.getToolCallRepair())
-            .cancellationToken(call.getCancellationToken())
-            .timeouts(merge(definition.getTimeouts(), call.getTimeouts()));
+                .system(definition.getInstructions())
+                .maxOutputTokens(definition.getMaxOutputTokens())
+                .temperature(definition.getTemperature())
+                .topP(definition.getTopP())
+                .topK(definition.getTopK())
+                .minP(definition.getMinP())
+                .presencePenalty(definition.getPresencePenalty())
+                .frequencyPenalty(definition.getFrequencyPenalty())
+                .repetitionPenalty(definition.getRepetitionPenalty())
+                .logprobs(definition.getLogprobs())
+                .topLogprobs(definition.getTopLogprobs())
+                .parallelToolCalls(definition.getParallelToolCalls())
+                .stopSequences(definition.getStopSequences())
+                .seed(definition.getSeed())
+                .maxRetries(definition.getMaxRetries())
+                .reasoning(copy(definition.getReasoning()))
+                .headers(merge(definition.getHeaders(), call.getHeaders()))
+                .metadata(merge(definition.getMetadata(), call.getMetadata()))
+                .context(merge(definition.getContext(), call.getContext()))
+                .output(copy(definition.getOutput()))
+                .tools(copyTools(definition.getTools()))
+                .toolChoice(copy(definition.getToolChoice()))
+                .stopWhen(
+                        definition.getStopWhen() != null
+                                ? definition.getStopWhen()
+                                : StopCondition.stepCountIs(DEFAULT_MAX_STEPS))
+                .prepareStep(withActiveTools(definition.getActiveTools(), definition.getPrepareStep()))
+                .lifecycle(composite(lifecycle))
+                .toolCallRepair(definition.getToolCallRepair())
+                .cancellationToken(call.getCancellationToken())
+                .timeouts(merge(definition.getTimeouts(), call.getTimeouts()));
         if (!middleware.isEmpty()) {
             builder.middleware(middleware.toArray(LanguageModelMiddleware[]::new));
         }
@@ -223,8 +209,7 @@ public final class Agent<O> {
         return builder;
     }
 
-    private PrepareStepCallback withActiveTools(List<String> activeTools,
-        PrepareStepCallback delegate) {
+    private PrepareStepCallback withActiveTools(List<String> activeTools, PrepareStepCallback delegate) {
         if (activeTools == null && delegate == null) {
             return null;
         }
@@ -246,26 +231,25 @@ public final class Agent<O> {
             return PreparedStep.builder().activeTools(activeTools).build();
         }
         return PreparedStep.builder()
-            .messages(source.getMessages() == null ? null : List.copyOf(source.getMessages()))
-            .toolChoice(copy(source.getToolChoice()))
-            .activeTools(activeTools)
-            .maxOutputTokens(source.getMaxOutputTokens())
-            .temperature(source.getTemperature())
-            .topP(source.getTopP())
-            .topK(source.getTopK())
-            .minP(source.getMinP())
-            .presencePenalty(source.getPresencePenalty())
-            .frequencyPenalty(source.getFrequencyPenalty())
-            .repetitionPenalty(source.getRepetitionPenalty())
-            .logprobs(source.getLogprobs())
-            .topLogprobs(source.getTopLogprobs())
-            .parallelToolCalls(source.getParallelToolCalls())
-            .stopSequences(source.getStopSequences() == null
-                ? null : List.copyOf(source.getStopSequences()))
-            .seed(source.getSeed())
-            .maxRetries(source.getMaxRetries())
-            .stopWhen(source.getStopWhen())
-            .build();
+                .messages(source.getMessages() == null ? null : List.copyOf(source.getMessages()))
+                .toolChoice(copy(source.getToolChoice()))
+                .activeTools(activeTools)
+                .maxOutputTokens(source.getMaxOutputTokens())
+                .temperature(source.getTemperature())
+                .topP(source.getTopP())
+                .topK(source.getTopK())
+                .minP(source.getMinP())
+                .presencePenalty(source.getPresencePenalty())
+                .frequencyPenalty(source.getFrequencyPenalty())
+                .repetitionPenalty(source.getRepetitionPenalty())
+                .logprobs(source.getLogprobs())
+                .topLogprobs(source.getTopLogprobs())
+                .parallelToolCalls(source.getParallelToolCalls())
+                .stopSequences(source.getStopSequences() == null ? null : List.copyOf(source.getStopSequences()))
+                .seed(source.getSeed())
+                .maxRetries(source.getMaxRetries())
+                .stopWhen(source.getStopWhen())
+                .build();
     }
 
     private GenerationLifecycle composite(List<GenerationLifecycle> lifecycle) {
@@ -316,46 +300,44 @@ public final class Agent<O> {
         };
     }
 
-    private Mono<Void> invoke(List<GenerationLifecycle> lifecycle,
-        Function<GenerationLifecycle, Mono<Void>> callback) {
+    private Mono<Void> invoke(List<GenerationLifecycle> lifecycle, Function<GenerationLifecycle, Mono<Void>> callback) {
         return Flux.fromIterable(lifecycle)
-            .concatMap(value -> Mono.defer(() -> callback.apply(value)))
-            .then();
+                .concatMap(value -> Mono.defer(() -> callback.apply(value)))
+                .then();
     }
 
     private GenerateTextRequest copyRequest(GenerateTextRequest source) {
         var builder = GenerateTextRequest.builder()
-            .system(source.getSystem())
-            .prompt(source.getPrompt())
-            .messages(source.getMessages() == null ? null : List.copyOf(source.getMessages()))
-            .maxOutputTokens(source.getMaxOutputTokens())
-            .temperature(source.getTemperature())
-            .topP(source.getTopP())
-            .topK(source.getTopK())
-            .minP(source.getMinP())
-            .presencePenalty(source.getPresencePenalty())
-            .frequencyPenalty(source.getFrequencyPenalty())
-            .repetitionPenalty(source.getRepetitionPenalty())
-            .logprobs(source.getLogprobs())
-            .topLogprobs(source.getTopLogprobs())
-            .parallelToolCalls(source.getParallelToolCalls())
-            .stopSequences(source.getStopSequences() == null
-                ? null : List.copyOf(source.getStopSequences()))
-            .seed(source.getSeed())
-            .maxRetries(source.getMaxRetries())
-            .reasoning(copy(source.getReasoning()))
-            .headers(immutableMap(source.getHeaders()))
-            .metadata(immutableMap(source.getMetadata()))
-            .context(immutableMap(source.getContext()))
-            .output(copy(source.getOutput()))
-            .tools(copyTools(source.getTools()))
-            .toolChoice(copy(source.getToolChoice()))
-            .stopWhen(source.getStopWhen())
-            .prepareStep(source.getPrepareStep())
-            .lifecycle(source.getLifecycle())
-            .toolCallRepair(source.getToolCallRepair())
-            .cancellationToken(source.getCancellationToken())
-            .timeouts(source.getTimeouts());
+                .system(source.getSystem())
+                .prompt(source.getPrompt())
+                .messages(source.getMessages() == null ? null : List.copyOf(source.getMessages()))
+                .maxOutputTokens(source.getMaxOutputTokens())
+                .temperature(source.getTemperature())
+                .topP(source.getTopP())
+                .topK(source.getTopK())
+                .minP(source.getMinP())
+                .presencePenalty(source.getPresencePenalty())
+                .frequencyPenalty(source.getFrequencyPenalty())
+                .repetitionPenalty(source.getRepetitionPenalty())
+                .logprobs(source.getLogprobs())
+                .topLogprobs(source.getTopLogprobs())
+                .parallelToolCalls(source.getParallelToolCalls())
+                .stopSequences(source.getStopSequences() == null ? null : List.copyOf(source.getStopSequences()))
+                .seed(source.getSeed())
+                .maxRetries(source.getMaxRetries())
+                .reasoning(copy(source.getReasoning()))
+                .headers(immutableMap(source.getHeaders()))
+                .metadata(immutableMap(source.getMetadata()))
+                .context(immutableMap(source.getContext()))
+                .output(copy(source.getOutput()))
+                .tools(copyTools(source.getTools()))
+                .toolChoice(copy(source.getToolChoice()))
+                .stopWhen(source.getStopWhen())
+                .prepareStep(source.getPrepareStep())
+                .lifecycle(source.getLifecycle())
+                .toolCallRepair(source.getToolCallRepair())
+                .cancellationToken(source.getCancellationToken())
+                .timeouts(source.getTimeouts());
         if (source.getMiddleware() != null && !source.getMiddleware().isEmpty()) {
             builder.middleware(source.getMiddleware().toArray(LanguageModelMiddleware[]::new));
         }
@@ -364,33 +346,33 @@ public final class Agent<O> {
 
     private static <O> AgentOptions<O> snapshot(AgentOptions<O> source) {
         return source.toBuilder()
-            .tools(copyTools(source.getTools()))
-            .activeTools(copyNullableList(source.getActiveTools()))
-            .toolChoice(copy(source.getToolChoice()))
-            .output(copy(source.getOutput()))
-            .reasoning(copy(source.getReasoning()))
-            .stopSequences(copyList(source.getStopSequences()))
-            .headers(immutableMap(source.getHeaders()))
-            .metadata(immutableMap(source.getMetadata()))
-            .context(immutableMap(source.getContext()))
-            .middleware(copyList(source.getMiddleware()))
-            .lifecycle(copyList(source.getLifecycle()))
-            .build();
+                .tools(copyTools(source.getTools()))
+                .activeTools(copyNullableList(source.getActiveTools()))
+                .toolChoice(copy(source.getToolChoice()))
+                .output(copy(source.getOutput()))
+                .reasoning(copy(source.getReasoning()))
+                .stopSequences(copyList(source.getStopSequences()))
+                .headers(immutableMap(source.getHeaders()))
+                .metadata(immutableMap(source.getMetadata()))
+                .context(immutableMap(source.getContext()))
+                .middleware(copyList(source.getMiddleware()))
+                .lifecycle(copyList(source.getLifecycle()))
+                .build();
     }
 
     private static <O> AgentCall<O> snapshot(AgentCall<O> source) {
         return AgentCall.<O>builder()
-            .prompt(source.getPrompt())
-            .messages(source.getMessages())
-            .options(source.getOptions())
-            .metadata(source.getMetadata())
-            .context(source.getContext())
-            .headers(source.getHeaders())
-            .cancellationToken(source.getCancellationToken())
-            .timeouts(source.getTimeouts())
-            .lifecycle(source.getLifecycle())
-            .middleware(source.getMiddleware())
-            .build();
+                .prompt(source.getPrompt())
+                .messages(source.getMessages())
+                .options(source.getOptions())
+                .metadata(source.getMetadata())
+                .context(source.getContext())
+                .headers(source.getHeaders())
+                .cancellationToken(source.getCancellationToken())
+                .timeouts(source.getTimeouts())
+                .lifecycle(source.getLifecycle())
+                .middleware(source.getMiddleware())
+                .build();
     }
 
     private static List<ToolDefinition> copyTools(List<ToolDefinition> source) {
@@ -405,47 +387,57 @@ public final class Agent<O> {
             return null;
         }
         return ToolDefinition.builder()
-            .name(source.getName())
-            .description(source.getDescription())
-            .inputSchema(deepMap(source.getInputSchema()))
-            .outputSchema(deepMap(source.getOutputSchema()))
-            .inputExamples(source.getInputExamples() == null ? null
-                : source.getInputExamples().stream().map(Agent::deepMap).toList())
-            .strict(source.getStrict())
-            .approvalPolicy(source.getApprovalPolicy())
-            .onInputStart(source.getOnInputStart())
-            .onInputDelta(source.getOnInputDelta())
-            .onInputAvailable(source.getOnInputAvailable())
-            .executor(source.getExecutor())
-            .build();
+                .name(source.getName())
+                .description(source.getDescription())
+                .inputSchema(deepMap(source.getInputSchema()))
+                .outputSchema(deepMap(source.getOutputSchema()))
+                .inputExamples(
+                        source.getInputExamples() == null
+                                ? null
+                                : source.getInputExamples().stream()
+                                        .map(Agent::deepMap)
+                                        .toList())
+                .strict(source.getStrict())
+                .approvalPolicy(source.getApprovalPolicy())
+                .onInputStart(source.getOnInputStart())
+                .onInputDelta(source.getOnInputDelta())
+                .onInputAvailable(source.getOnInputAvailable())
+                .executor(source.getExecutor())
+                .build();
     }
 
     private static ToolChoice copy(ToolChoice source) {
-        return source == null ? null : ToolChoice.builder()
-            .type(source.getType())
-            .toolName(source.getToolName())
-            .build();
+        return source == null
+                ? null
+                : ToolChoice.builder()
+                        .type(source.getType())
+                        .toolName(source.getToolName())
+                        .build();
     }
 
     private static ReasoningOptions copy(ReasoningOptions source) {
-        return source == null ? null : ReasoningOptions.builder()
-            .mode(source.getMode())
-            .effort(source.getEffort())
-            .build();
+        return source == null
+                ? null
+                : ReasoningOptions.builder()
+                        .mode(source.getMode())
+                        .effort(source.getEffort())
+                        .build();
     }
 
     private static OutputSpec copy(OutputSpec source) {
-        return source == null ? null : OutputSpec.builder()
-            .type(source.getType())
-            .name(source.getName())
-            .description(source.getDescription())
-            .schema(deepMap(source.getSchema()))
-            .elementSchema(deepMap(source.getElementSchema()))
-            .choices(copyList(source.getChoices()))
-            .strict(source.getStrict())
-            .outputClass(source.getOutputClass())
-            .elementClass(source.getElementClass())
-            .build();
+        return source == null
+                ? null
+                : OutputSpec.builder()
+                        .type(source.getType())
+                        .name(source.getName())
+                        .description(source.getDescription())
+                        .schema(deepMap(source.getSchema()))
+                        .elementSchema(deepMap(source.getElementSchema()))
+                        .choices(copyList(source.getChoices()))
+                        .strict(source.getStrict())
+                        .outputClass(source.getOutputClass())
+                        .elementClass(source.getElementClass())
+                        .build();
     }
 
     private static GenerationTimeouts merge(GenerationTimeouts base, GenerationTimeouts call) {
@@ -456,13 +448,10 @@ public final class Agent<O> {
             return call;
         }
         return GenerationTimeouts.builder()
-            .totalTimeout(call.getTotalTimeout() != null
-                ? call.getTotalTimeout() : base.getTotalTimeout())
-            .stepTimeout(call.getStepTimeout() != null
-                ? call.getStepTimeout() : base.getStepTimeout())
-            .toolTimeout(call.getToolTimeout() != null
-                ? call.getToolTimeout() : base.getToolTimeout())
-            .build();
+                .totalTimeout(call.getTotalTimeout() != null ? call.getTotalTimeout() : base.getTotalTimeout())
+                .stepTimeout(call.getStepTimeout() != null ? call.getStepTimeout() : base.getStepTimeout())
+                .toolTimeout(call.getToolTimeout() != null ? call.getToolTimeout() : base.getToolTimeout())
+                .build();
     }
 
     private static <K, V> Map<K, V> merge(Map<K, V> base, Map<K, V> call) {
@@ -508,7 +497,8 @@ public final class Agent<O> {
             return Collections.unmodifiableMap(copy);
         }
         if (value instanceof List<?> list) {
-            return Collections.unmodifiableList(list.stream().map(Agent::deepValue).toList());
+            return Collections.unmodifiableList(
+                    list.stream().map(Agent::deepValue).toList());
         }
         return value;
     }

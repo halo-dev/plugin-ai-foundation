@@ -1,8 +1,6 @@
 package run.halo.aifoundation.rag;
 
-/**
- * Behavior for retrieval or reranking failures.
- */
+/** Behavior for retrieval or reranking failures. */
 public enum RagFailurePolicy {
     FAIL,
     USE_EMPTY_CONTEXT,

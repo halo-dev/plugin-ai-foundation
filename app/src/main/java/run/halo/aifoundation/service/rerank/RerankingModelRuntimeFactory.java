@@ -3,13 +3,19 @@ package run.halo.aifoundation.service.rerank;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.rerank.RerankingModel;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 @Component
 public class RerankingModelRuntimeFactory {
 
-    public RerankingModel create(ProviderRerankingClient client,
-        RerankingModelRuntimeConfiguration configuration) {
-        return new RerankingModelImpl(client, configuration.providerOptions(),
-            configuration.context());
+    private final UsageExecutionObserver usageExecutionObserver;
+
+    public RerankingModelRuntimeFactory(UsageExecutionObserver usageExecutionObserver) {
+        this.usageExecutionObserver = usageExecutionObserver;
+    }
+
+    public RerankingModel create(ProviderRerankingClient client, RerankingModelRuntimeConfiguration configuration) {
+        return new RerankingModelImpl(
+                client, configuration.providerOptions(), configuration.context(), usageExecutionObserver);
     }
 }

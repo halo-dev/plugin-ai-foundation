@@ -11,9 +11,9 @@ import java.util.Map;
  * @param input tool input awaiting approval
  * @param providerMetadata provider-specific metadata
  */
-public record ToolApprovalRequestChunk(String approvalId, String toolCallId, String toolName,
-                                       Object input, Map<String, Object> providerMetadata)
-    implements UIMessageChunk {
+public record ToolApprovalRequestChunk(
+        String approvalId, String toolCallId, String toolName, Object input, Map<String, Object> providerMetadata)
+        implements UIMessageChunk {
 
     public ToolApprovalRequestChunk {
         providerMetadata = providerMetadata == null ? Map.of() : Map.copyOf(providerMetadata);

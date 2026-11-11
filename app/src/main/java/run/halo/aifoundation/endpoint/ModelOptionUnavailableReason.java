@@ -24,9 +24,8 @@ public enum ModelOptionUnavailableReason {
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static ModelOptionUnavailableReason fromValue(String value) {
         return Arrays.stream(values())
-            .filter(reason -> reason.value.equals(value))
-            .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Unsupported unavailable reason: " + value));
+                .filter(reason -> reason.value.equals(value))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported unavailable reason: " + value));
     }
 }

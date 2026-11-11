@@ -5,9 +5,7 @@ import lombok.Value;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
 
-/**
- * Effective model and request produced by one-time agent call preparation.
- */
+/** Effective model and request produced by one-time agent call preparation. */
 @Value
 public class PreparedAgentCall {
     LanguageModel model;

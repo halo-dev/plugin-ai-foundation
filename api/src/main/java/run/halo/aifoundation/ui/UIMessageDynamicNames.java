@@ -3,15 +3,12 @@ package run.halo.aifoundation.ui;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/**
- * Validation and formatting helpers for dynamic UI message part names.
- */
+/** Validation and formatting helpers for dynamic UI message part names. */
 public final class UIMessageDynamicNames {
 
     private static final Pattern DYNAMIC_IDENTIFIER = Pattern.compile("^[A-Za-z][A-Za-z0-9_-]*$");
 
-    private UIMessageDynamicNames() {
-    }
+    private UIMessageDynamicNames() {}
 
     /**
      * Creates a dynamic data type.

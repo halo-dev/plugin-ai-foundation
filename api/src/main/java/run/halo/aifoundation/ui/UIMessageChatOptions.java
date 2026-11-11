@@ -1,19 +1,19 @@
 package run.halo.aifoundation.ui;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import reactor.core.publisher.Mono;
 import run.halo.aifoundation.agent.Agent;
 import run.halo.aifoundation.agent.AgentCall;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
 import run.halo.aifoundation.control.CancellationToken;
-import reactor.core.publisher.Mono;
 
 /**
  * Options for the framework-neutral UI message chat handler.
@@ -27,25 +27,19 @@ public final class UIMessageChatOptions<M> {
     private List<UIMessage<M>> messages;
     private UIMessageChatRequest<M> chatRequest;
     private UIMessage<M> message;
+    private boolean messageConfigured;
     private Supplier<M> metadataSupplier = () -> null;
     private Supplier<String> messageIdGenerator = () -> "msg_" + UUID.randomUUID();
     private Function<UIMessageChunk, String> serializer;
-    private Consumer<GenerateTextRequest.GenerateTextRequestBuilder> requestCustomizer =
-        builder -> {
-        };
+    private Consumer<GenerateTextRequest.GenerateTextRequestBuilder> requestCustomizer = builder -> {};
     private UIMessageChatPrepare<M> prepareHandler = context -> Mono.empty();
     private boolean prepareCustomized;
     private final List<LanguageModelMiddleware> middleware = new ArrayList<>();
-    private Consumer<UIMessageValidationOptions<M>> validationCustomizer = options -> {
-    };
-    private Consumer<UIMessageConversionOptions<M>> conversionCustomizer = options -> {
-    };
-    private Consumer<UIMessageStreamFinish<M>> finishHandler = finish -> {
-    };
-    private Function<Throwable, String> errorHandler = error -> UIMessageStreamOptions
-        .DEFAULT_ERROR_TEXT;
-    private Consumer<Throwable> readErrorHandler = error -> {
-    };
+    private Consumer<UIMessageValidationOptions<M>> validationCustomizer = options -> {};
+    private Consumer<UIMessageConversionOptions<M>> conversionCustomizer = options -> {};
+    private Consumer<UIMessageStreamFinish<M>> finishHandler = finish -> {};
+    private Function<Throwable, String> errorHandler = error -> UIMessageStreamOptions.DEFAULT_ERROR_TEXT;
+    private Consumer<Throwable> readErrorHandler = error -> {};
     private CancellationToken cancellationToken;
     private boolean terminateOnError;
 
@@ -63,8 +57,8 @@ public final class UIMessageChatOptions<M> {
     /**
      * Selects a typed agent and its endpoint-owned call options for this chat response.
      *
-     * <p>Use either {@link #model(LanguageModel)} or this method, not both. The options value is
-     * passed to {@link AgentCall} after UI messages have been validated and converted.
+     * <p>Use either {@link #model(LanguageModel)} or this method, not both. The options value is passed to
+     * {@link AgentCall} after UI messages have been validated and converted.
      *
      * @param agent reusable agent
      * @param callOptions typed call options derived by the endpoint
@@ -73,8 +67,7 @@ public final class UIMessageChatOptions<M> {
      */
     public <O> UIMessageChatOptions<M> agent(Agent<O> agent, O callOptions) {
         this.agent = Objects.requireNonNull(agent, "agent must not be null");
-        this.agentExecution = (messages, source, middleware) -> agent.stream(
-            AgentCall.<O>builder()
+        this.agentExecution = (messages, source, middleware) -> agent.stream(AgentCall.<O>builder()
                 .messages(messages)
                 .options(callOptions)
                 .metadata(source.getMetadata())
@@ -82,16 +75,13 @@ public final class UIMessageChatOptions<M> {
                 .headers(source.getHeaders())
                 .cancellationToken(cancellationToken)
                 .timeouts(source.getTimeouts())
-                .lifecycle(source.getLifecycle() == null
-                    ? List.of() : List.of(source.getLifecycle()))
+                .lifecycle(source.getLifecycle() == null ? List.of() : List.of(source.getLifecycle()))
                 .middleware(middleware)
                 .build());
         return this;
     }
 
-    /**
-     * Selects a no-options agent for this chat response.
-     */
+    /** Selects a no-options agent for this chat response. */
     public UIMessageChatOptions<M> agent(Agent<Void> agent) {
         return agent(agent, null);
     }
@@ -130,6 +120,7 @@ public final class UIMessageChatOptions<M> {
      */
     public UIMessageChatOptions<M> message(UIMessage<M> message) {
         this.message = message;
+        this.messageConfigured = true;
         return this;
     }
 
@@ -140,8 +131,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> metadataSupplier(Supplier<M> metadataSupplier) {
-        this.metadataSupplier = Objects.requireNonNull(metadataSupplier,
-            "metadataSupplier must not be null");
+        this.metadataSupplier = Objects.requireNonNull(metadataSupplier, "metadataSupplier must not be null");
         return this;
     }
 
@@ -152,8 +142,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> generateMessageId(Supplier<String> generator) {
-        this.messageIdGenerator = Objects.requireNonNull(generator,
-            "generator must not be null");
+        this.messageIdGenerator = Objects.requireNonNull(generator, "generator must not be null");
         return this;
     }
 
@@ -171,16 +160,14 @@ public final class UIMessageChatOptions<M> {
     /**
      * Customizes the underlying model request.
      *
-     * <p>The customizer must not set prompt, messages, or cancellation token because
-     * those are owned by the UI message handler.
+     * <p>The customizer must not set prompt, messages, or cancellation token because those are owned by the UI message
+     * handler.
      *
      * @param customizer model request customizer
      * @return this options object
      */
-    public UIMessageChatOptions<M> request(
-        Consumer<GenerateTextRequest.GenerateTextRequestBuilder> customizer) {
-        this.requestCustomizer = Objects.requireNonNull(customizer,
-            "customizer must not be null");
+    public UIMessageChatOptions<M> request(Consumer<GenerateTextRequest.GenerateTextRequestBuilder> customizer) {
+        this.requestCustomizer = Objects.requireNonNull(customizer, "customizer must not be null");
         return this;
     }
 
@@ -219,10 +206,8 @@ public final class UIMessageChatOptions<M> {
      * @param customizer validation option customizer
      * @return this options object
      */
-    public UIMessageChatOptions<M> validation(
-        Consumer<UIMessageValidationOptions<M>> customizer) {
-        this.validationCustomizer = Objects.requireNonNull(customizer,
-            "customizer must not be null");
+    public UIMessageChatOptions<M> validation(Consumer<UIMessageValidationOptions<M>> customizer) {
+        this.validationCustomizer = Objects.requireNonNull(customizer, "customizer must not be null");
         return this;
     }
 
@@ -232,10 +217,8 @@ public final class UIMessageChatOptions<M> {
      * @param customizer conversion option customizer
      * @return this options object
      */
-    public UIMessageChatOptions<M> conversion(
-        Consumer<UIMessageConversionOptions<M>> customizer) {
-        this.conversionCustomizer = Objects.requireNonNull(customizer,
-            "customizer must not be null");
+    public UIMessageChatOptions<M> conversion(Consumer<UIMessageConversionOptions<M>> customizer) {
+        this.conversionCustomizer = Objects.requireNonNull(customizer, "customizer must not be null");
         return this;
     }
 
@@ -268,8 +251,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> onReadError(Consumer<Throwable> readErrorHandler) {
-        this.readErrorHandler = Objects.requireNonNull(readErrorHandler,
-            "readErrorHandler must not be null");
+        this.readErrorHandler = Objects.requireNonNull(readErrorHandler, "readErrorHandler must not be null");
         return this;
     }
 
@@ -280,8 +262,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> cancellationToken(CancellationToken cancellationToken) {
-        this.cancellationToken = Objects.requireNonNull(cancellationToken,
-            "cancellationToken must not be null");
+        this.cancellationToken = Objects.requireNonNull(cancellationToken, "cancellationToken must not be null");
         return this;
     }
 
@@ -318,6 +299,10 @@ public final class UIMessageChatOptions<M> {
 
     UIMessage<M> message() {
         return message;
+    }
+
+    boolean messageConfigured() {
+        return messageConfigured;
     }
 
     Supplier<M> metadataSupplier() {
@@ -379,8 +364,8 @@ public final class UIMessageChatOptions<M> {
     @FunctionalInterface
     interface UIMessageAgentExecution {
         run.halo.aifoundation.chat.StreamTextResult stream(
-            List<run.halo.aifoundation.message.ModelMessage> messages,
-            GenerateTextRequest source,
-            List<LanguageModelMiddleware> middleware);
+                List<run.halo.aifoundation.message.ModelMessage> messages,
+                GenerateTextRequest source,
+                List<LanguageModelMiddleware> middleware);
     }
 }

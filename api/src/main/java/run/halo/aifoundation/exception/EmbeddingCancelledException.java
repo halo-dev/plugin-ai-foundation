@@ -1,8 +1,6 @@
 package run.halo.aifoundation.exception;
 
-/**
- * Raised when an embedding request is cancelled through a cancellation token.
- */
+/** Raised when an embedding request is cancelled through a cancellation token. */
 public class EmbeddingCancelledException extends AiFoundationException {
 
     public EmbeddingCancelledException(String message) {

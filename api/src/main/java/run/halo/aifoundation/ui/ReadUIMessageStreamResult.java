@@ -21,8 +21,8 @@ public final class ReadUIMessageStreamResult<M> {
      * @param responseMessage final aggregated assistant response
      * @param finish terminal finish, error, or abort state
      */
-    public ReadUIMessageStreamResult(Flux<UIMessage<M>> messages,
-        Mono<UIMessage<M>> responseMessage, Mono<UIMessageStreamTerminal> finish) {
+    public ReadUIMessageStreamResult(
+            Flux<UIMessage<M>> messages, Mono<UIMessage<M>> responseMessage, Mono<UIMessageStreamTerminal> finish) {
         this.messages = messages;
         this.responseMessage = responseMessage;
         this.finish = finish;

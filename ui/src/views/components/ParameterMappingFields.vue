@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   DefaultParameterMappingInfo,
+  ModelParameterConstraints,
   ModelParameterDefinitionInfo,
   ModelParameterMappings,
   ParameterMappingTemplateInfo,
@@ -25,6 +26,7 @@ const INHERIT_CHOICE = '__inherit__'
 const CUSTOM_FIELD_CHOICE = '__custom_field__'
 const REASONING_CUSTOM_CHOICE = '__reasoning_custom__'
 const UNSUPPORTED_CHOICE = '__unsupported__'
+const EXISTING_SUPPORT_CHOICE = '__existing_support__'
 const REASONING_INTENTS = [
   { key: 'enabled', label: '开启', defaultValue: 'enabled' },
   { key: 'disabled', label: '关闭', defaultValue: 'disabled' },
@@ -42,9 +44,12 @@ const props = defineProps<{
   templates?: ParameterMappingTemplateInfo[]
   defaults?: Record<string, DefaultParameterMappingInfo>
   inheritedMappings?: ModelParameterMappings
+  effectiveMappings?: ModelParameterMappings
+  resolvedInheritance?: boolean
 }>()
 
 const mappings = defineModel<ModelParameterMappings>()
+const constraints = defineModel<ModelParameterConstraints>('constraints')
 const showAdditionalMappings = shallowRef(false)
 
 const definitions = computed(() =>
@@ -73,14 +78,61 @@ function selection(definition: ParameterDefinition) {
 
 function hasExplicitSelection(definition: ParameterDefinition) {
   const current = selection(definition)
-  return Boolean(current && current.mode !== 'INHERIT')
+  return Boolean(current && current.mode !== 'INHERIT') || supportOverride(definition) !== undefined
 }
 
 function mode(definition: ParameterDefinition) {
+  if (supportOverride(definition) === false) return 'UNSUPPORTED'
   return selection(definition)?.mode || 'INHERIT'
 }
 
+function supportOverride(definition: ParameterDefinition) {
+  if (props.context !== 'model' || definition.domain !== 'language') return undefined
+  switch (definition.parameter) {
+    case 'TEMPERATURE':
+      return constraints.value?.temperature
+    case 'TOP_P':
+      return constraints.value?.topP
+    case 'TOP_K':
+      return constraints.value?.topK
+    case 'REASONING':
+      return constraints.value?.reasoning?.supported
+  }
+}
+
+function clearSupportOverride(definition: ParameterDefinition) {
+  if (props.context !== 'model' || definition.domain !== 'language') return
+  const reasoning = constraints.value?.reasoning
+  const hasReasoningOverride =
+    definition.parameter === 'REASONING' &&
+    (reasoning?.toggle !== undefined || reasoning?.efforts !== undefined)
+  if (supportOverride(definition) === undefined && !hasReasoningOverride) return
+  const next = { ...constraints.value }
+  switch (definition.parameter) {
+    case 'TEMPERATURE':
+      delete next.temperature
+      break
+    case 'TOP_P':
+      delete next.topP
+      break
+    case 'TOP_K':
+      delete next.topK
+      break
+    case 'REASONING': {
+      const reasoning = { ...next.reasoning }
+      delete reasoning.supported
+      delete reasoning.toggle
+      delete reasoning.efforts
+      if (Object.keys(reasoning).length) next.reasoning = reasoning
+      else delete next.reasoning
+      break
+    }
+  }
+  constraints.value = Object.keys(next).length ? next : undefined
+}
+
 function resolvedSelection(definition: ParameterDefinition) {
+  if (props.effectiveMappings) return readSelection(props.effectiveMappings, definition)
   return effectiveSelection(
     props.context,
     definition,
@@ -91,6 +143,9 @@ function resolvedSelection(definition: ParameterDefinition) {
 }
 
 function mappingChoice(definition: ParameterDefinition) {
+  const support = supportOverride(definition)
+  if (support === false) return UNSUPPORTED_CHOICE
+  if (support === true) return EXISTING_SUPPORT_CHOICE
   const current = selection(definition)
   if (!current || current.mode === 'INHERIT') return INHERIT_CHOICE
   if (current.mode === 'UNSUPPORTED') return UNSUPPORTED_CHOICE
@@ -101,21 +156,27 @@ function mappingChoice(definition: ParameterDefinition) {
 
 function mappingOptions(definition: ParameterDefinition) {
   const templates = templatesForParameter(props.templates, definition, props.adapterType)
+  const existingSupport =
+    supportOverride(definition) === true
+      ? [{ value: EXISTING_SUPPORT_CHOICE, label: '支持（保留当前映射）' }]
+      : []
   if (definition.parameter === 'REASONING') {
     return [
       {
         value: INHERIT_CHOICE,
-        label: props.context === 'provider' ? '使用内置默认' : '继承 Provider',
+        label: props.context === 'provider' ? '使用内置默认' : '使用继承配置',
       },
-      ...(templates.length ? [{ value: REASONING_CUSTOM_CHOICE, label: '自定义五档映射' }] : []),
+      ...existingSupport,
+      ...(templates.length ? [{ value: REASONING_CUSTOM_CHOICE, label: '自定义推理映射' }] : []),
       { value: UNSUPPORTED_CHOICE, label: '标记为不支持' },
     ]
   }
   return [
     {
       value: INHERIT_CHOICE,
-      label: props.context === 'provider' ? '使用内置默认' : '继承 Provider',
+      label: props.context === 'provider' ? '使用内置默认' : '使用继承配置',
     },
+    ...existingSupport,
     ...templates.flatMap((template) =>
       template.id && template.displayName
         ? [{ value: template.id, label: template.displayName }]
@@ -128,6 +189,8 @@ function mappingOptions(definition: ParameterDefinition) {
 
 function updateMappingChoice(definition: ParameterDefinition, value: unknown) {
   const choice = String(value)
+  if (choice === mappingChoice(definition) || choice === EXISTING_SUPPORT_CHOICE) return
+  clearSupportOverride(definition)
   if (choice === INHERIT_CHOICE) {
     mappings.value = writeSelection(mappings.value, definition, undefined)
     return
@@ -209,6 +272,8 @@ function setReasoningState(
 ) {
   const current = selection(definition)
   if (current?.mode !== 'TEMPLATE') return
+  if (JSON.stringify(current.reasoningMapping?.[intent]) === JSON.stringify(value)) return
+  clearSupportOverride(definition)
   mappings.value = writeSelection(mappings.value, definition, {
     ...current,
     reasoningMapping: {
@@ -223,6 +288,7 @@ function toggleReasoningState(
   intent: ReasoningIntent,
   enabled: unknown,
 ) {
+  if (Boolean(enabled) === Boolean(reasoningState(definition, intent))) return
   if (!enabled) {
     setReasoningState(definition, intent, undefined)
     return
@@ -263,9 +329,14 @@ function updateReasoningState(
 }
 
 function cloneReasoningMapping(value?: ReasoningMapping): ReasoningMapping {
-  return Object.fromEntries(
-    REASONING_INTENTS.flatMap(({ key }) => (value?.[key] ? [[key, { ...value[key] }]] : [])),
-  ) as ReasoningMapping
+  return JSON.parse(JSON.stringify(value || {})) as ReasoningMapping
+}
+
+function reasoningDescription(value?: ReasoningValueMapping): string {
+  if (!value) return '未配置'
+  return [value, ...(value.additionalValues || [])]
+    .map((item) => `${item.field} = ${item.value}`)
+    .join('，')
 }
 
 function templateDescriptor(definition: ParameterDefinition, template?: string) {
@@ -284,15 +355,23 @@ function defaultCustomField(descriptor?: ParameterMappingTemplateInfo) {
 }
 
 function effectiveLabel(definition: ParameterDefinition) {
-  const effective = effectiveSelection(
-    props.context,
-    definition,
-    mappings.value,
-    props.inheritedMappings,
-    props.defaults,
-  )
+  if (supportOverride(definition) === false) return '模型覆盖 · 不支持'
+  const effective = props.effectiveMappings
+    ? {
+        selection: readSelection(props.effectiveMappings, definition),
+        source: '当前生效',
+      }
+    : effectiveSelection(
+        props.context,
+        definition,
+        mappings.value,
+        props.inheritedMappings,
+        props.defaults,
+      )
+  if (props.resolvedInheritance && effective.source === '继承 Provider')
+    effective.source = '继承配置'
   if (effective.selection?.mode === 'UNSUPPORTED') return `${effective.source} · 不支持`
-  if (definition.parameter === 'REASONING') return `${effective.source} · 五档映射`
+  if (definition.parameter === 'REASONING') return `${effective.source} · 推理映射`
   const template = props.templates?.find((item) => item.id === effective.selection?.template)
   return `${effective.source} · ${effective.selection?.field || template?.displayName || effective.selection?.template || '未声明'}`
 }
@@ -308,7 +387,12 @@ function effectiveLabel(definition: ParameterDefinition) {
       <div class=":uno: flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div class=":uno: text-sm text-gray-800 font-medium">{{ definition.displayName }}</div>
-          <div class=":uno: mt-0.5 text-xs text-gray-500">{{ definition.description }}</div>
+          <div
+            v-if="definition.parameter !== 'REASONING'"
+            class=":uno: mt-0.5 text-xs text-gray-500"
+          >
+            {{ definition.description }}
+          </div>
         </div>
         <span class=":uno: shrink-0 rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-600">
           {{ effectiveLabel(definition) }}
@@ -354,9 +438,6 @@ function effectiveLabel(definition: ParameterDefinition) {
           <div class=":uno: mb-3 flex items-start justify-between gap-4">
             <div>
               <div class=":uno: text-sm text-gray-800 font-medium">{{ intent.label }}</div>
-              <div class=":uno: mt-0.5 text-xs text-gray-500">
-                仅在调用方选择“{{ intent.label }}”时发送这组字段和值
-              </div>
             </div>
             <FormKit
               type="checkbox"
@@ -433,6 +514,16 @@ function effectiveLabel(definition: ParameterDefinition) {
               @input="updateReasoningState(definition, intent.key, 'value', $event)"
             />
           </div>
+          <p
+            v-if="reasoningState(definition, intent.key)?.additionalValues?.length"
+            class=":uno: mt-2 break-all text-xs text-gray-500"
+          >
+            附加字段：{{
+              reasoningState(definition, intent.key)
+                ?.additionalValues?.map(reasoningDescription)
+                .join('，')
+            }}
+          </p>
         </div>
       </div>
     </VCard>

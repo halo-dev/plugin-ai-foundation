@@ -7,35 +7,23 @@ import java.util.Optional;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**
- * Source of a capability domain snapshot.
- */
+/** Source of a capability domain snapshot. */
 @Getter
 @RequiredArgsConstructor
 public enum CapabilitySource {
-    /**
-     * Capability data came directly from provider model metadata.
-     */
+    /** Capability data came directly from provider model metadata. */
     REMOTE("remote"),
 
-    /**
-     * Capability data came from AI Foundation's built-in provider or adapter knowledge.
-     */
+    /** Capability data came from AI Foundation's built-in provider or adapter knowledge. */
     BUILT_IN("built-in"),
 
-    /**
-     * Capability data was supplied or overridden by an administrator.
-     */
+    /** Capability data was supplied or overridden by an administrator. */
     MANUAL("manual"),
 
-    /**
-     * Capability source is not known.
-     */
+    /** Capability source is not known. */
     UNKNOWN("unknown");
 
-    /**
-     * Stable serialized value used in resource specs, API payloads, and selector filters.
-     */
+    /** Stable serialized value used in resource specs, API payloads, and selector filters. */
     private final String value;
 
     @JsonValue
@@ -52,9 +40,7 @@ public enum CapabilitySource {
      */
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static CapabilitySource fromValue(String value) {
-        return find(value)
-            .orElseThrow(() -> new IllegalArgumentException("Unsupported capability source: "
-                + value));
+        return find(value).orElseThrow(() -> new IllegalArgumentException("Unsupported capability source: " + value));
     }
 
     /**
@@ -68,8 +54,7 @@ public enum CapabilitySource {
             return Optional.empty();
         }
         return Arrays.stream(values())
-            .filter(source -> source.value.equals(value))
-            .findFirst();
+                .filter(source -> source.value.equals(value))
+                .findFirst();
     }
-
 }

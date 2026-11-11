@@ -21,7 +21,7 @@ public class InMemoryCallerPluginObservationRegistry implements CallerPluginObse
     @Override
     public List<CallerPluginInfo> list() {
         return callers.values().stream()
-            .sorted(Comparator.comparing(CallerPluginInfo::getPluginName))
-            .toList();
+                .sorted(Comparator.comparing(CallerPluginInfo::getPluginName))
+                .toList();
     }
 }

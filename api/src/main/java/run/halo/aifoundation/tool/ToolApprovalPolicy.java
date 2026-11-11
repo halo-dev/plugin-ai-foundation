@@ -6,40 +6,26 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Provider-neutral approval policy for a request-scoped tool.
- */
+/** Provider-neutral approval policy for a request-scoped tool. */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class ToolApprovalPolicy {
 
-    /**
-     * Built-in approval modes.
-     */
+    /** Built-in approval modes. */
     public enum Mode {
-        /**
-         * Execute the tool without approval.
-         */
+        /** Execute the tool without approval. */
         NEVER,
-        /**
-         * Always require approval before executor invocation.
-         */
+        /** Always require approval before executor invocation. */
         ALWAYS,
-        /**
-         * Use {@link #predicate} to decide from validated call context.
-         */
+        /** Use {@link #predicate} to decide from validated call context. */
         DYNAMIC
     }
 
-    /**
-     * Approval mode. {@code null} is treated as {@link Mode#NEVER}.
-     */
+    /** Approval mode. {@code null} is treated as {@link Mode#NEVER}. */
     private Mode mode;
-    /**
-     * Dynamic approval predicate. Java-only and intentionally not serialized.
-     */
+    /** Dynamic approval predicate. Java-only and intentionally not serialized. */
     private transient ToolApprovalPredicate predicate;
 
     public static ToolApprovalPolicy never() {
@@ -55,9 +41,9 @@ public class ToolApprovalPolicy {
             throw new IllegalArgumentException("tool approval predicate must not be null");
         }
         return ToolApprovalPolicy.builder()
-            .mode(Mode.DYNAMIC)
-            .predicate(predicate)
-            .build();
+                .mode(Mode.DYNAMIC)
+                .predicate(predicate)
+                .build();
     }
 
     public boolean requiresApproval(ToolExecutionContext context) {
@@ -67,8 +53,7 @@ public class ToolApprovalPolicy {
             case ALWAYS -> true;
             case DYNAMIC -> {
                 if (predicate == null) {
-                    throw new IllegalArgumentException(
-                        "dynamic tool approval policy requires predicate");
+                    throw new IllegalArgumentException("dynamic tool approval policy requires predicate");
                 }
                 yield predicate.needsApproval(context);
             }

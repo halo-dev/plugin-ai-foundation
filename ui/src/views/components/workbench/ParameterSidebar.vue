@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { ModelParameterProfile } from '@/api/generated'
 import type {
   AgentProfile,
   AgentRecoveryScenario,
@@ -17,6 +18,8 @@ type ImageResponseFormat = 'DEFAULT' | 'URL' | 'BASE64'
 
 defineProps<{
   mode: 'chat' | 'embedding' | 'rerank' | 'image'
+  parameterProfile?: ModelParameterProfile
+  parameterError?: string
   systemPrompt?: string
   temperature?: number
   topP?: number
@@ -166,6 +169,8 @@ const emit = defineEmits<{
         />
 
         <ChatParameterPanel
+          :parameter-profile="parameterProfile"
+          :parameter-error="parameterError"
           :system-prompt="systemPrompt"
           :temperature="temperature"
           :top-p="topP"

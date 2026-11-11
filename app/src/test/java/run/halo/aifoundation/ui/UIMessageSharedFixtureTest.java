@@ -15,15 +15,14 @@ class UIMessageSharedFixtureTest {
     void javaReaderReducesSharedFixtures(String name) {
         var fixture = UIMessageFixtureReader.read(name);
         var chunks = fixture.chunks().stream()
-            .map(UIMessageTransportCodec::chunkFromMap)
-            .toList();
+                .map(UIMessageTransportCodec::chunkFromMap)
+                .toList();
         var result = UIMessageStreamReader.read(new UIMessageStream(Flux.fromIterable(chunks)));
 
         var message = result.responseMessage().block();
         var terminal = result.finish().block();
 
-        assertThat(UIMessageTransportCodec.messageToMap(message))
-            .isEqualTo(fixture.expectedMessage());
+        assertThat(UIMessageTransportCodec.messageToMap(message)).isEqualTo(fixture.expectedMessage());
         assertThat(terminalToMap(terminal)).containsAllEntriesOf(fixture.expectedTerminal());
     }
 

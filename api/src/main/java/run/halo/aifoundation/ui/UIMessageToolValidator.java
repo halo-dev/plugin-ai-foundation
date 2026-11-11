@@ -17,6 +17,6 @@ public interface UIMessageToolValidator<M> {
      * @param context validation context
      * @return validation issues, or an empty list when valid
      */
-    List<UIMessageValidationIssue> validate(UIMessage<M> message, UIMessagePart part,
-        UIMessageValidationContext<M> context);
+    List<UIMessageValidationIssue> validate(
+            UIMessage<M> message, UIMessagePart part, UIMessageValidationContext<M> context);
 }

@@ -1,5 +1,7 @@
 packages:
   - .
   - packages/*
-onlyBuiltDependencies:
-  - vue-demi
+allowBuilds:
+  '@parcel/watcher': true
+  core-js: true
+  vue-demi: true

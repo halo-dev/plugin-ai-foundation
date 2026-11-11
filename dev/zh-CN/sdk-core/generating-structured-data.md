@@ -5,6 +5,10 @@
 结构化输出通过 `GenerateTextRequest.output` 声明。SDK 会解析并校验最终结果；不要仅在 prompt
 中要求“返回 JSON”后自行猜测结构。
 
+本文中的 `StructuredOutputSchemaException` 和 `StructuredOutputTerminationException` 从
+1.0.1 起提供。使用这些异常类型时，Java SDK 依赖和 AI Foundation 插件最低版本均需设置为
+1.0.1 或更高版本；基础结构化输出用法仍可使用 1.0.0。
+
 ## 生成对象
 
 ```java

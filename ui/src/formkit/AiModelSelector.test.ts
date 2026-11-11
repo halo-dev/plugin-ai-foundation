@@ -1,15 +1,17 @@
 import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
-import { afterEach, beforeEach, describe, expect, it, rstest } from '@rstest/core'
+import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
+import { createMemoryHistory, createRouter, RouterLink } from 'vue-router'
 import AiModelSelector from './AiModelSelector.vue'
 
-rstest.mock('@/composables/use-model-options-fetch', () => ({
-  useModelOptionsFetch: rstest.fn(),
+vi.mock('@/composables/use-model-options-fetch', () => ({
+  useModelOptionsFetch: vi.fn(),
 }))
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   VLoading: { template: '<div>Loading</div>' },
 }))
 
@@ -35,6 +37,7 @@ describe('AiModelSelector', () => {
         providerName: 'openai',
         providerDisplayName: 'OpenAI Production',
         providerTypeDisplayName: 'OpenAI',
+        features: ['tool-call'],
       }),
       modelOption({
         name: 'disabled-model',
@@ -48,7 +51,7 @@ describe('AiModelSelector', () => {
       }),
     ]
     isLoading.value = false
-    rstest.mocked(useModelOptionsFetch).mockReturnValue({
+    vi.mocked(useModelOptionsFetch).mockReturnValue({
       data: modelOptions,
       isLoading,
     } as ReturnType<typeof useModelOptionsFetch>)
@@ -59,7 +62,7 @@ describe('AiModelSelector', () => {
       wrapper.unmount()
     }
     document.body.innerHTML = ''
-    rstest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('selects an available model and updates the controlled value', async () => {
@@ -71,6 +74,17 @@ describe('AiModelSelector', () => {
     expect(wrapper.emitted('update:modelValue')).toContainEqual(['openai-gpt-4o'])
     expect(wrapper.get('[role="combobox"]').text()).toContain('GPT-4o')
     expect(document.querySelector('[role="listbox"]')).toBeNull()
+  })
+
+  it('keeps a global styling hook on the teleported content', async () => {
+    const wrapper = mountSelector()
+
+    await openSelector(wrapper)
+    const listbox = document.querySelector<HTMLElement>('[role="listbox"]')
+
+    expect(listbox).not.toBeNull()
+    expect(listbox?.classList.contains('ai-model-selector__content')).toBe(true)
+    expect(wrapper.element.contains(listbox)).toBe(false)
   })
 
   it('clears a selected model with undefined', async () => {
@@ -130,11 +144,56 @@ describe('AiModelSelector', () => {
     await wrapper.setProps({ modelValue: undefined })
     expect(wrapper.get('[role="combobox"]').text()).toContain('请选择模型')
   })
+
+  it('keeps models missing required features selectable with a warning', async () => {
+    const wrapper = mountSelector({ requiredFeatures: 'tool-call' })
+
+    expect(vi.mocked(useModelOptionsFetch).mock.calls[0]?.[0]).not.toHaveProperty(
+      'requiredFeatures',
+    )
+
+    await openSelector(wrapper)
+
+    expect(getOptions()).toHaveLength(3)
+    expect(getOption('DeepSeek Chat').textContent).toContain(
+      '当前模型不支持工具调用，可能无法正常使用',
+    )
+    expect(getOption('GPT-4o').textContent).not.toContain('当前模型不支持')
+    expect(getOption('Disabled Model').textContent).not.toContain('当前模型不支持')
+
+    await selectOption('DeepSeek Chat')
+
+    expect(wrapper.emitted('update:modelValue')).toContainEqual(['deepseek-chat'])
+  })
+
+  it('links to the model management page from the dropdown footer', async () => {
+    const wrapper = mountSelector()
+
+    await openSelector(wrapper)
+    const link = wrapper.findComponent(RouterLink)
+
+    expect(link.exists()).toBe(true)
+    expect(link.props('to')).toEqual({ name: AI_FOUNDATION_ROUTE_NAMES.MODELS })
+    expect(link.text()).toContain('管理模型')
+  })
 })
 
 function mountSelector(props: Record<string, unknown> = {}) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: '/ai-foundation/models',
+        name: AI_FOUNDATION_ROUTE_NAMES.MODELS,
+        component: { template: '<div />' },
+      },
+    ],
+  })
   const wrapper = mount(AiModelSelector, {
     attachTo: document.body,
+    global: {
+      plugins: [router],
+    },
     props: {
       ...props,
       'onUpdate:modelValue': (value: string | undefined) => {
@@ -214,6 +273,7 @@ function modelOption({
   providerDisplayName,
   providerTypeDisplayName,
   available = true,
+  features,
   unavailableReason,
 }: {
   name: string
@@ -223,6 +283,7 @@ function modelOption({
   providerDisplayName: string
   providerTypeDisplayName: string
   available?: boolean
+  features?: ModelOption['features']
   unavailableReason?: ModelOption['unavailableReason']
 }): ModelOption {
   return {
@@ -230,7 +291,7 @@ function modelOption({
     displayName,
     modelId,
     modelType: 'language',
-    features: [],
+    features: features ?? [],
     available,
     unavailableReason,
     provider: {

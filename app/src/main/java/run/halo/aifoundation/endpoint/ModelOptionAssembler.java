@@ -1,95 +1,140 @@
 package run.halo.aifoundation.endpoint;
 
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.capability.CapabilityMatchResult;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
+import run.halo.aifoundation.service.model.ModelResolution;
 
 @Component
 final class ModelOptionAssembler {
 
     private final ModelCapabilityService capabilityService;
     private final ModelCapabilityMatcher capabilityMatcher;
+    private final EffectiveParameterMappingResolver parameterMappingResolver;
 
-    ModelOptionAssembler(ModelCapabilityService capabilityService,
-        ModelCapabilityMatcher capabilityMatcher) {
+    ModelOptionAssembler(
+            ModelCapabilityService capabilityService,
+            ModelCapabilityMatcher capabilityMatcher,
+            EffectiveParameterMappingResolver parameterMappingResolver) {
         this.capabilityService = capabilityService;
         this.capabilityMatcher = capabilityMatcher;
+        this.parameterMappingResolver = parameterMappingResolver;
     }
 
-    List<ModelOption> toOptions(List<AiModel> models, Map<String, AiProvider> providers,
-        Map<String, AiProviderType> providerTypes, ModelOptionQuery query) {
+    List<ModelOption> toOptions(
+            List<AiModel> models,
+            Map<String, AiProvider> providers,
+            Map<String, AiProviderType> providerTypes,
+            ModelOptionQuery query) {
         return models.stream()
-            .map(model -> toOption(model, providers.get(model.getSpec().getProviderName()),
-                providerTypes, query))
-            .filter(query::matches)
-            .sorted(optionComparator())
-            .toList();
+                .map(model -> toOption(model, providers.get(model.getSpec().getProviderName()), providerTypes, query))
+                .filter(query::matches)
+                .sorted(optionComparator())
+                .toList();
     }
 
-    private ModelOption toOption(AiModel model, AiProvider provider,
-        Map<String, AiProviderType> providerTypes, ModelOptionQuery query) {
+    private ModelOption toOption(
+            AiModel model, AiProvider provider, Map<String, AiProviderType> providerTypes, ModelOptionQuery query) {
         var spec = model.getSpec();
         var providerType = providerType(provider, providerTypes);
         var capabilities = capabilityService.effectiveCapabilities(model, providerType);
         var capabilityMatch = capabilityMatcher.match(capabilities, query.requiredCapabilities());
         var unavailableReason = unavailableReason(model, provider, capabilityMatch);
         return ModelOption.builder()
-            .name(model.getMetadata().getName())
-            .modelId(spec.getModelId())
-            .displayName(displayName(spec.getDisplayName(), spec.getModelId()))
-            .modelType(spec.getModelType())
-            .features(spec.getFeatures() == null ? List.of() : spec.getFeatures())
-            .capabilities(capabilities)
-            .capabilitySources(capabilities.getSources())
-            .enabled(spec.isEnabled())
-            .available(unavailableReason == null)
-            .unavailableReason(unavailableReason)
-            .unavailableDetails(unavailableDetails(capabilityMatch))
-            .provider(toProviderSummary(spec.getProviderName(), provider, providerTypes))
-            .build();
+                .name(model.getMetadata().getName())
+                .modelId(spec.getModelId())
+                .displayName(displayName(spec.getDisplayName(), spec.getModelId()))
+                .modelType(spec.getModelType())
+                .features(effectiveFeatures(model, provider, providerType))
+                .capabilities(capabilities)
+                .capabilitySources(capabilities.getSources())
+                .enabled(spec.isEnabled())
+                .available(unavailableReason == null)
+                .unavailableReason(unavailableReason)
+                .unavailableDetails(unavailableDetails(capabilityMatch))
+                .provider(toProviderSummary(spec.getProviderName(), provider, providerTypes))
+                .build();
     }
 
-    private ModelOptionProvider toProviderSummary(String referencedProviderName,
-        AiProvider provider, Map<String, AiProviderType> providerTypes) {
+    private List<ModelFeature> effectiveFeatures(AiModel model, AiProvider provider, AiProviderType providerType) {
+        var spec = model.getSpec();
+        var features = new LinkedHashSet<>(spec.getFeatures() == null ? List.<ModelFeature>of() : spec.getFeatures());
+        if (spec.getModelType() == ModelType.LANGUAGE && provider != null && providerType != null) {
+            // Model selection and runtime validation must use the same effective constraints.
+            var constraints = parameterMappingResolver.resolveConstraints(
+                    new ModelResolution(model, provider, providerType, null));
+            applyFeature(features, ModelFeature.TOOL_CALL, constraints.getToolCalling());
+            applyFeature(features, ModelFeature.STRUCTURED_OUTPUT, constraints.getStructuredOutput());
+            if (constraints.getReasoning() != null) {
+                applyFeature(
+                        features,
+                        ModelFeature.REASONING,
+                        constraints.getReasoning().getSupported());
+            }
+        }
+        return List.copyOf(features);
+    }
+
+    private void applyFeature(Set<ModelFeature> features, ModelFeature feature, Boolean supported) {
+        if (Boolean.TRUE.equals(supported)) {
+            features.add(feature);
+        } else if (Boolean.FALSE.equals(supported)) {
+            features.remove(feature);
+        }
+    }
+
+    private ModelOptionProvider toProviderSummary(
+            String referencedProviderName, AiProvider provider, Map<String, AiProviderType> providerTypes) {
         if (provider == null) {
             return ModelOptionProvider.builder()
-                .name(referencedProviderName)
-                .displayName(referencedProviderName)
-                .enabled(false)
-                .build();
+                    .name(referencedProviderName)
+                    .displayName(referencedProviderName)
+                    .enabled(false)
+                    .build();
         }
         var spec = provider.getSpec();
         var providerType = spec.getProviderType();
         var type = providerTypes.get(providerType);
         var status = provider.getStatus();
         return ModelOptionProvider.builder()
-            .name(provider.getMetadata().getName())
-            .displayName(displayName(spec.getDisplayName(), provider.getMetadata().getName()))
-            .providerType(providerType)
-            .providerTypeDisplayName(type == null ? providerType : type.getDisplayName())
-            .iconUrl(type == null ? null : type.getIconUrl())
-            .enabled(spec.isEnabled())
-            .phase(status == null || status.getPhase() == null ? null : status.getPhase().name())
-            .lastCheckedAt(status == null || status.getLastCheckedAt() == null
-                ? null : status.getLastCheckedAt().toString())
-            .build();
+                .name(provider.getMetadata().getName())
+                .displayName(displayName(
+                        spec.getDisplayName(), provider.getMetadata().getName()))
+                .providerType(providerType)
+                .providerTypeDisplayName(type == null ? providerType : type.getDisplayName())
+                .iconUrl(type == null ? null : type.getIconUrl())
+                .enabled(spec.isEnabled())
+                .phase(
+                        status == null || status.getPhase() == null
+                                ? null
+                                : status.getPhase().name())
+                .lastCheckedAt(
+                        status == null || status.getLastCheckedAt() == null
+                                ? null
+                                : status.getLastCheckedAt().toString())
+                .build();
     }
 
     private ModelOptionUnavailableReason unavailableReason(AiModel model, AiProvider provider) {
         return unavailableReason(model, provider, CapabilityMatchResult.success());
     }
 
-    private ModelOptionUnavailableReason unavailableReason(AiModel model, AiProvider provider,
-        CapabilityMatchResult capabilityMatch) {
+    private ModelOptionUnavailableReason unavailableReason(
+            AiModel model, AiProvider provider, CapabilityMatchResult capabilityMatch) {
         if (!model.getSpec().isEnabled()) {
             return ModelOptionUnavailableReason.MODEL_DISABLED;
         }
@@ -105,15 +150,13 @@ final class ModelOptionAssembler {
         return null;
     }
 
-    private List<ModelOptionUnavailableDetail> unavailableDetails(
-        CapabilityMatchResult capabilityMatch) {
+    private List<ModelOptionUnavailableDetail> unavailableDetails(CapabilityMatchResult capabilityMatch) {
         if (capabilityMatch == null || capabilityMatch.matched()) {
             return List.of();
         }
         return capabilityMatch.issues().stream()
-            .map(issue -> new ModelOptionUnavailableDetail(issue.path(), issue.expected(),
-                issue.actual()))
-            .toList();
+                .map(issue -> new ModelOptionUnavailableDetail(issue.path(), issue.expected(), issue.actual()))
+                .toList();
     }
 
     private AiProviderType providerType(AiProvider provider, Map<String, AiProviderType> types) {
@@ -128,10 +171,10 @@ final class ModelOptionAssembler {
     }
 
     private Comparator<ModelOption> optionComparator() {
-        return Comparator
-            .comparing((ModelOption option) -> sortable(option.getProvider().getDisplayName()))
-            .thenComparing(option -> sortable(option.getDisplayName()))
-            .thenComparing(option -> sortable(option.getName()));
+        return Comparator.comparing(
+                        (ModelOption option) -> sortable(option.getProvider().getDisplayName()))
+                .thenComparing(option -> sortable(option.getDisplayName()))
+                .thenComparing(option -> sortable(option.getName()));
     }
 
     private String sortable(String value) {

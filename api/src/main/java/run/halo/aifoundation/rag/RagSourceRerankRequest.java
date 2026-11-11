@@ -6,9 +6,7 @@ import lombok.Builder;
 import lombok.Value;
 import run.halo.aifoundation.source.RetrievedSource;
 
-/**
- * Request passed to an optional source reranker.
- */
+/** Request passed to an optional source reranker. */
 @Value
 @Builder
 public class RagSourceRerankRequest {

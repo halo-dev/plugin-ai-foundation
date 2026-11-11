@@ -21,41 +21,40 @@ public final class GenerationMessageHistoryAssembler {
     private final boolean reasoningHistorySupported;
     private final LanguageModelMessageMapper messageMapper;
 
-    public GenerationMessageHistoryAssembler(String providerType,
-        boolean reasoningHistorySupported, LanguageModelMessageMapper messageMapper) {
+    public GenerationMessageHistoryAssembler(
+            String providerType, boolean reasoningHistorySupported, LanguageModelMessageMapper messageMapper) {
         this.providerType = providerType;
         this.reasoningHistorySupported = reasoningHistorySupported;
         this.messageMapper = messageMapper;
     }
 
-    public GenerationResponseMetadata withToolCalls(GenerationResponseMetadata response,
-        String text, List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
+    public GenerationResponseMetadata withToolCalls(
+            GenerationResponseMetadata response, String text, List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
         var messages = messageMapper.responseMessages(text, reasoning, toolCalls);
         if (response == null) {
             return sanitize(GenerationResponseMetadata.builder()
-                .messages(messages)
-                .metadata(Map.of("providerType", providerType))
-                .build());
+                    .messages(messages)
+                    .metadata(Map.of("providerType", providerType))
+                    .build());
         }
         return sanitize(copy(response, messages));
     }
 
-    public GenerationResponseMetadata appendApprovalMessages(GenerationResponseMetadata response,
-        List<ToolApprovalRequest> approvals) {
+    public GenerationResponseMetadata appendApprovalMessages(
+            GenerationResponseMetadata response, List<ToolApprovalRequest> approvals) {
         if (approvals == null || approvals.isEmpty()) {
             return response;
         }
         var messages = mutableMessages(response);
-        messages.add(ModelMessage.assistant(approvals.stream()
-            .map(ModelMessagePart::toolApprovalRequest)
-            .toList()));
+        messages.add(ModelMessage.assistant(
+                approvals.stream().map(ModelMessagePart::toolApprovalRequest).toList()));
         return response == null
-            ? GenerationResponseMetadata.builder().messages(messages).build()
-            : copy(response, messages);
+                ? GenerationResponseMetadata.builder().messages(messages).build()
+                : copy(response, messages);
     }
 
-    public GenerationResponseMetadata appendToolMessages(GenerationResponseMetadata response,
-        List<ToolResult> results, List<ToolError> errors) {
+    public GenerationResponseMetadata appendToolMessages(
+            GenerationResponseMetadata response, List<ToolResult> results, List<ToolError> errors) {
         if ((results == null || results.isEmpty()) && (errors == null || errors.isEmpty())) {
             return response;
         }
@@ -65,31 +64,37 @@ public final class GenerationMessageHistoryAssembler {
         var messages = mutableMessages(response);
         messages.add(ModelMessage.tool(parts));
         return response == null
-            ? GenerationResponseMetadata.builder().messages(messages).build()
-            : copy(response, messages);
+                ? GenerationResponseMetadata.builder().messages(messages).build()
+                : copy(response, messages);
     }
 
     public List<ModelMessage> responseMessages(GenerationResponseMetadata response) {
-        return response != null && response.getMessages() != null
-            ? List.copyOf(response.getMessages())
-            : List.of();
+        return response != null && response.getMessages() != null ? List.copyOf(response.getMessages()) : List.of();
     }
 
     public List<ModelMessage> responseMessages(List<GenerationStep> steps) {
         return nullSafe(steps).stream()
-            .flatMap(step -> nullSafe(step.getResponseMessages()).stream())
-            .toList();
+                .flatMap(step -> nullSafe(step.getResponseMessages()).stream())
+                .toList();
     }
 
     public GenerationResponseMetadata sanitize(GenerationResponseMetadata response) {
-        if (response == null || reasoningHistorySupported
-            || response.getMessages() == null || response.getMessages().isEmpty()) {
+        if (response == null) {
+            return null;
+        }
+        if (reasoningHistorySupported) {
+            return response;
+        }
+        if (response.getMessages() == null) {
+            return response;
+        }
+        if (response.getMessages().isEmpty()) {
             return response;
         }
         var messages = response.getMessages().stream()
-            .map(this::withoutReasoningParts)
-            .filter(message -> !message.getContent().isEmpty())
-            .toList();
+                .map(this::withoutReasoningParts)
+                .filter(message -> !message.getContent().isEmpty())
+                .toList();
         return copy(response, messages);
     }
 
@@ -98,8 +103,8 @@ public final class GenerationMessageHistoryAssembler {
             return message;
         }
         return ModelMessage.assistant(message.getContent().stream()
-            .filter(part -> !PartType.isReasoning(part.getType()))
-            .toList());
+                .filter(part -> !PartType.isReasoning(part.getType()))
+                .toList());
     }
 
     private ArrayList<ModelMessage> mutableMessages(GenerationResponseMetadata response) {
@@ -110,17 +115,16 @@ public final class GenerationMessageHistoryAssembler {
         return messages;
     }
 
-    private GenerationResponseMetadata copy(GenerationResponseMetadata response,
-        List<ModelMessage> messages) {
+    private GenerationResponseMetadata copy(GenerationResponseMetadata response, List<ModelMessage> messages) {
         return GenerationResponseMetadata.builder()
-            .id(response.getId())
-            .model(response.getModel())
-            .timestamp(response.getTimestamp())
-            .messages(messages)
-            .headers(response.getHeaders())
-            .body(response.getBody())
-            .metadata(response.getMetadata())
-            .build();
+                .id(response.getId())
+                .model(response.getModel())
+                .timestamp(response.getTimestamp())
+                .messages(messages)
+                .headers(response.getHeaders())
+                .body(response.getBody())
+                .metadata(response.getMetadata())
+                .build();
     }
 
     private <T> List<T> nullSafe(List<T> list) {

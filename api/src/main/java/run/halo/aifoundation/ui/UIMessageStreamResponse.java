@@ -8,8 +8,8 @@ import reactor.core.publisher.Flux;
 /**
  * HTTP-friendly descriptor for returning Halo UI message streams.
  *
- * <p>The descriptor adds a protocol header automatically and can encode chunks as
- * server-sent event frames when a serializer is supplied.
+ * <p>The descriptor adds a protocol header automatically and can encode chunks as server-sent event frames when a
+ * serializer is supplied.
  *
  * <pre>{@code
  * UIMessageStreamResponse response = new UIMessageStreamResponse(stream, json::writeValueAsString);
@@ -45,8 +45,7 @@ public final class UIMessageStreamResponse {
      * @param stream structured UI message stream
      * @param serializer chunk serializer used by {@link #body()}
      */
-    public UIMessageStreamResponse(UIMessageStream stream,
-        Function<UIMessageChunk, String> serializer) {
+    public UIMessageStreamResponse(UIMessageStream stream, Function<UIMessageChunk, String> serializer) {
         this.stream = Objects.requireNonNull(stream, "stream must not be null");
         this.serializer = serializer;
     }
@@ -77,13 +76,9 @@ public final class UIMessageStreamResponse {
      */
     public Flux<String> body() {
         if (serializer == null) {
-            return Flux.error(new IllegalStateException(
-                "UI message stream response body requires a chunk serializer"));
+            return Flux.error(new IllegalStateException("UI message stream response body requires a chunk serializer"));
         }
-        return stream()
-            .map(serializer)
-            .map(UIMessageStreamResponse::sseFrame)
-            .concatWithValues(sseFrame(DONE_MARKER));
+        return stream().map(serializer).map(UIMessageStreamResponse::sseFrame).concatWithValues(sseFrame(DONE_MARKER));
     }
 
     private static String sseFrame(String data) {

@@ -27,6 +27,9 @@ class StackWalkingCallerPluginResolverTest {
         var provider = mockPluginWrapperProvider(self);
         var resolver = new StackWalkingCallerPluginResolver(client, provider);
         var callerPlugin = callerPlugin();
+        var descriptor = mock(org.pf4j.PluginDescriptor.class);
+        when(caller.getDescriptor()).thenReturn(descriptor);
+        when(descriptor.getVersion()).thenReturn("1.2.3");
 
         when(self.getPluginId()).thenReturn("ai-foundation");
         when(self.getPluginManager()).thenReturn(pluginManager);
@@ -39,19 +42,43 @@ class StackWalkingCallerPluginResolverTest {
         assertThat(snapshot.isDetected()).isTrue();
         assertThat(snapshot.getPluginName()).isEqualTo("consumer-plugin");
         assertThat(snapshot.getDisplayName()).isNull();
+        assertThat(snapshot.getVersion()).isEqualTo("1.2.3");
+        when(descriptor.getVersion()).thenReturn("2.0.0");
+        assertThat(snapshot.getVersion()).isEqualTo("1.2.3");
+        assertThat(ConsumerPluginCaller.resolveSnapshot(resolver).getVersion()).isEqualTo("2.0.0");
+        org.mockito.Mockito.verifyNoInteractions(client);
 
         StepVerifier.create(ConsumerPluginCaller.resolve(resolver))
-            .assertNext(info -> {
-                assertThat(info.isDetected()).isTrue();
-                assertThat(info.getDetectionSource()).isEqualTo("stack-classloader");
-                assertThat(info.getPluginName()).isEqualTo("consumer-plugin");
-                assertThat(info.getDisplayName()).isEqualTo("Consumer Plugin");
-                assertThat(info.getDescription()).isEqualTo("Calls AI Foundation in tests.");
-                assertThat(info.getVersion()).isEqualTo("1.2.3");
-                assertThat(info.getAuthorName()).isEqualTo("Halo");
-                assertThat(info.getRepo()).isEqualTo("https://github.com/example/consumer-plugin");
-            })
-            .verifyComplete();
+                .assertNext(info -> {
+                    assertThat(info.isDetected()).isTrue();
+                    assertThat(info.getDetectionSource()).isEqualTo("stack-classloader");
+                    assertThat(info.getPluginName()).isEqualTo("consumer-plugin");
+                    assertThat(info.getDisplayName()).isEqualTo("Consumer Plugin");
+                    assertThat(info.getDescription()).isEqualTo("Calls AI Foundation in tests.");
+                    assertThat(info.getVersion()).isEqualTo("1.2.3");
+                    assertThat(info.getAuthorName()).isEqualTo("Halo");
+                    assertThat(info.getRepo()).isEqualTo("https://github.com/example/consumer-plugin");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void resolveCurrentCaller_doesNotAttributeUnknownCallsToFoundation() {
+        var client = mock(ReactiveExtensionClient.class);
+        var self = mock(PluginWrapper.class);
+        var manager = mock(PluginManager.class);
+        when(self.getPluginId()).thenReturn("ai-foundation");
+        when(self.getPluginManager()).thenReturn(manager);
+        when(self.getPluginClassLoader()).thenReturn(getClass().getClassLoader());
+        when(manager.getStartedPlugins()).thenReturn(List.of(self));
+        var resolver = new StackWalkingCallerPluginResolver(client, mockPluginWrapperProvider(self));
+
+        var caller = resolver.resolveCurrentCallerSnapshot();
+
+        assertThat(caller.isDetected()).isFalse();
+        assertThat(caller.getPluginName()).isNull();
+        assertThat(caller.getDetectionSource()).isEqualTo("none");
+        org.mockito.Mockito.verifyNoInteractions(client);
     }
 
     @Test
@@ -61,12 +88,12 @@ class StackWalkingCallerPluginResolverTest {
         var resolver = new StackWalkingCallerPluginResolver(client, provider);
 
         StepVerifier.create(resolver.resolveCurrentCaller())
-            .assertNext(info -> {
-                assertThat(info.isDetected()).isFalse();
-                assertThat(info.getDetectionSource()).isEqualTo("none");
-                assertThat(info.getPluginName()).isNull();
-            })
-            .verifyComplete();
+                .assertNext(info -> {
+                    assertThat(info.isDetected()).isFalse();
+                    assertThat(info.getDetectionSource()).isEqualTo("none");
+                    assertThat(info.getPluginName()).isNull();
+                })
+                .verifyComplete();
     }
 
     @SuppressWarnings("unchecked")

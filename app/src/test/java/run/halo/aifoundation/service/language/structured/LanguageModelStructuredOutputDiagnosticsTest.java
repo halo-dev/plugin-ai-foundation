@@ -34,43 +34,54 @@ class LanguageModelStructuredOutputDiagnosticsTest {
         logger.addAppender(appender);
         logger.setLevel(Level.INFO);
         try {
-            var output = OutputSpec.object(Map.of(
-                "type", "object",
-                "properties", Map.of("privateField", Map.of("type", "string"))));
+            var output = OutputSpec.object(
+                    Map.of("type", "object", "properties", Map.of("privateField", Map.of("type", "string"))));
             var response = GenerationResponseMetadata.builder()
-                .id("response-42")
-                .model("deepseek-v4-pro")
-                .headers(Map.of("Authorization", List.of("Bearer response-secret")))
-                .body("private-provider-response")
-                .metadata(Map.of(AiFoundationDiagnostics.CORRELATION_ID_KEY,
-                    "ai_production_test"))
-                .build();
+                    .id("response-42")
+                    .model("deepseek-v4-pro")
+                    .headers(Map.of("Authorization", List.of("Bearer response-secret")))
+                    .body("private-provider-response")
+                    .metadata(Map.of(AiFoundationDiagnostics.CORRELATION_ID_KEY, "ai_production_test"))
+                    .build();
             var usage = LanguageModelUsage.builder()
-                .inputTokens(120)
-                .outputTokens(500)
-                .reasoningTokens(498)
-                .totalTokens(620)
-                .raw(Map.of("privateUsage", "raw-secret"))
-                .build();
+                    .inputTokens(120)
+                    .outputTokens(500)
+                    .reasoningTokens(498)
+                    .totalTokens(620)
+                    .raw(Map.of("privateUsage", "raw-secret"))
+                    .build();
 
-            handler().enrich(new StructuredOutputValidationException("invalid JSON"), output,
-                "private-model-output", 0, usage, response, FinishReason.LENGTH, "length");
+            handler()
+                    .enrich(
+                            new StructuredOutputValidationException("invalid JSON"),
+                            output,
+                            "private-model-output",
+                            0,
+                            usage,
+                            response,
+                            FinishReason.LENGTH,
+                            "length");
 
             assertThat(appender.list).hasSize(1);
             assertThat(appender.list.getFirst().getLevel()).isEqualTo(Level.WARN);
             assertThat(appender.list.getFirst().getFormattedMessage())
-                .contains("event=structured-output-failure-summary",
-                    "diagnosticId=ai_production_test",
-                    "errorType=\"StructuredOutputTerminationException\"",
-                    "finishReason=\"LENGTH\"",
-                    "rawFinishReason=\"length\"",
-                    "model=\"deepseek-v4-pro\"",
-                    "responseId=\"response-42\"",
-                    "outputTokens=\"500\"",
-                    "reasoningTokens=\"498\"",
-                    "outputChars=\"20\"")
-                .doesNotContain("private-model-output", "privateField",
-                    "private-provider-response", "response-secret", "raw-secret");
+                    .contains(
+                            "event=structured-output-failure-summary",
+                            "diagnosticId=ai_production_test",
+                            "errorType=\"StructuredOutputTerminationException\"",
+                            "finishReason=\"LENGTH\"",
+                            "rawFinishReason=\"length\"",
+                            "model=\"deepseek-v4-pro\"",
+                            "responseId=\"response-42\"",
+                            "outputTokens=\"500\"",
+                            "reasoningTokens=\"498\"",
+                            "outputChars=\"20\"")
+                    .doesNotContain(
+                            "private-model-output",
+                            "privateField",
+                            "private-provider-response",
+                            "response-secret",
+                            "raw-secret");
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(previousLevel);
@@ -87,9 +98,8 @@ class LanguageModelStructuredOutputDiagnosticsTest {
         logger.addAppender(appender);
         logger.setLevel(Level.INFO);
         try {
-            var output = OutputSpec.object(Map.of(
-                "type", "object",
-                "properties", Map.of("title", Map.of("type", "string"))));
+            var output = OutputSpec.object(
+                    Map.of("type", "object", "properties", Map.of("title", Map.of("type", "string"))));
 
             handler().parse(output, "{\"title\":\"Halo\"}", "ai_success_test");
 
@@ -110,25 +120,26 @@ class LanguageModelStructuredOutputDiagnosticsTest {
         logger.addAppender(appender);
         logger.setLevel(Level.TRACE);
         try {
-            var output = OutputSpec.object(Map.of(
-                "type", "object",
-                "properties", Map.of("title", Map.of("type", "string"))));
+            var output = OutputSpec.object(
+                    Map.of("type", "object", "properties", Map.of("title", Map.of("type", "string"))));
 
-            assertThatThrownBy(() -> handler().parse(output,
-                "the model returned no JSON", "ai_structured_test"))
-                .isInstanceOf(StructuredOutputValidationException.class);
+            assertThatThrownBy(() -> handler().parse(output, "the model returned no JSON", "ai_structured_test"))
+                    .isInstanceOf(StructuredOutputValidationException.class);
 
-            assertThat(appender.list).extracting(ILoggingEvent::getFormattedMessage)
-                .anySatisfy(message -> assertThat(message)
-                    .contains("event=structured-output-input",
-                        "diagnosticId=ai_structured_test",
-                        "modelText=\"the model returned no JSON\"",
-                        "extractedText=\"the model returned no JSON\""))
-                .anySatisfy(message -> assertThat(message)
-                    .contains("event=structured-output-failure",
-                        "diagnosticId=ai_structured_test",
-                        "stage=\"json-parse\"",
-                        "validationPath=\"$\""));
+            assertThat(appender.list)
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .anySatisfy(message -> assertThat(message)
+                            .contains(
+                                    "event=structured-output-input",
+                                    "diagnosticId=ai_structured_test",
+                                    "modelText=\"the model returned no JSON\"",
+                                    "extractedText=\"the model returned no JSON\""))
+                    .anySatisfy(message -> assertThat(message)
+                            .contains(
+                                    "event=structured-output-failure",
+                                    "diagnosticId=ai_structured_test",
+                                    "stage=\"json-parse\"",
+                                    "validationPath=\"$\""));
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(previousLevel);
@@ -147,24 +158,35 @@ class LanguageModelStructuredOutputDiagnosticsTest {
         try {
             var output = OutputSpec.object(Map.of("type", "object"));
             var response = GenerationResponseMetadata.builder()
-                .metadata(Map.of(AiFoundationDiagnostics.CORRELATION_ID_KEY,
-                    "ai_termination_test"))
-                .build();
-            var usage = LanguageModelUsage.builder().outputTokens(500).reasoningTokens(498).build();
+                    .metadata(Map.of(AiFoundationDiagnostics.CORRELATION_ID_KEY, "ai_termination_test"))
+                    .build();
+            var usage = LanguageModelUsage.builder()
+                    .outputTokens(500)
+                    .reasoningTokens(498)
+                    .build();
 
-            var error = handler().enrich(
-                new StructuredOutputValidationException("invalid JSON"), output, "", 0, usage,
-                response, FinishReason.LENGTH, "length");
+            var error = handler()
+                    .enrich(
+                            new StructuredOutputValidationException("invalid JSON"),
+                            output,
+                            "",
+                            0,
+                            usage,
+                            response,
+                            FinishReason.LENGTH,
+                            "length");
 
             assertThat(error).isInstanceOf(StructuredOutputTerminationException.class);
-            assertThat(appender.list).extracting(ILoggingEvent::getFormattedMessage)
-                .anySatisfy(message -> assertThat(message)
-                    .contains("event=structured-output-termination",
-                        "diagnosticId=ai_termination_test",
-                        "finishReason=\"LENGTH\"",
-                        "rawFinishReason=\"length\"",
-                        "outputTokens=500",
-                        "reasoningTokens=498"));
+            assertThat(appender.list)
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .anySatisfy(message -> assertThat(message)
+                            .contains(
+                                    "event=structured-output-termination",
+                                    "diagnosticId=ai_termination_test",
+                                    "finishReason=\"LENGTH\"",
+                                    "rawFinishReason=\"length\"",
+                                    "outputTokens=500",
+                                    "reasoningTokens=498"));
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(previousLevel);

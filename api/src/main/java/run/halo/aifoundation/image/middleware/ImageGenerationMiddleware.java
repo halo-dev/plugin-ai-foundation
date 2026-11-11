@@ -8,9 +8,9 @@ import run.halo.aifoundation.image.GenerateImageResult;
 /**
  * Provider-neutral middleware for image generation calls.
  *
- * <p>Middleware can transform a request, wrap provider execution, short-circuit with a result, or
- * short-circuit with an error. The default implementation applies
- * {@link #transformRequest(ImageGenerationContext)} and delegates to the next step.
+ * <p>Middleware can transform a request, wrap provider execution, short-circuit with a result, or short-circuit with an
+ * error. The default implementation applies {@link #transformRequest(ImageGenerationContext)} and delegates to the next
+ * step.
  */
 public interface ImageGenerationMiddleware {
 
@@ -31,8 +31,7 @@ public interface ImageGenerationMiddleware {
      * @param next next generation step
      * @return image generation result
      */
-    default Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context,
-        GenerateImageNext next) {
+    default Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context, GenerateImageNext next) {
         return transformRequest(context).flatMap(next::generate);
     }
 }

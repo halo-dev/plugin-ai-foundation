@@ -12,19 +12,16 @@ import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.part.TextStreamPart;
 
-/**
- * Helpers for composing language model middleware.
- */
+/** Helpers for composing language model middleware. */
 public final class LanguageModelMiddlewares {
 
-    private LanguageModelMiddlewares() {
-    }
+    private LanguageModelMiddlewares() {}
 
     /**
      * Wraps a model with model-level middleware.
      *
-     * <p>Middleware is applied in list order. Request-level middleware attached to
-     * {@link GenerateTextRequest} runs inside model-level middleware and also preserves list order.
+     * <p>Middleware is applied in list order. Request-level middleware attached to {@link GenerateTextRequest} runs
+     * inside model-level middleware and also preserves list order.
      *
      * @param model base model
      * @param middleware model-level middleware
@@ -53,15 +50,14 @@ public final class LanguageModelMiddlewares {
     /**
      * Applies request-level middleware attached to a generation request.
      *
-     * <p>This is primarily used by model implementations that want to honor request middleware
-     * without adding model-level middleware.
+     * <p>This is primarily used by model implementations that want to honor request middleware without adding
+     * model-level middleware.
      *
      * @param model terminal model
      * @param request request that may contain request-level middleware
      * @return generated result
      */
-    public static Mono<GenerateTextResult> applyRequestMiddleware(LanguageModel model,
-        GenerateTextRequest request) {
+    public static Mono<GenerateTextResult> applyRequestMiddleware(LanguageModel model, GenerateTextRequest request) {
         return generate(model, request, requestMiddleware(request));
     }
 
@@ -72,8 +68,7 @@ public final class LanguageModelMiddlewares {
      * @param request request that may contain request-level middleware
      * @return stream result
      */
-    public static StreamTextResult applyRequestStreamMiddleware(LanguageModel model,
-        GenerateTextRequest request) {
+    public static StreamTextResult applyRequestStreamMiddleware(LanguageModel model, GenerateTextRequest request) {
         return stream(model, request, requestMiddleware(request));
     }
 
@@ -85,98 +80,106 @@ public final class LanguageModelMiddlewares {
      */
     public static StreamTextResult defer(Mono<StreamTextResult> result) {
         var cached = Objects.requireNonNull(result, "result must not be null").cache();
-        Flux<TextStreamPart> fullStream = cached.flatMapMany(StreamTextResult::fullStream).cache();
+        Flux<TextStreamPart> fullStream =
+                cached.flatMapMany(StreamTextResult::fullStream).cache();
         var textStream = fullStream
-            .filter(part -> "text-delta".equals(part.getType()))
-            .map(TextStreamPart::getDelta)
-            .filter(delta -> delta != null && !delta.isEmpty());
+                .filter(part -> "text-delta".equals(part.getType()))
+                .map(TextStreamPart::getDelta)
+                .filter(delta -> delta != null && !delta.isEmpty());
         return new StreamTextResult(
-            fullStream,
-            textStream,
-            cached.flatMapMany(StreamTextResult::partialOutputStream),
-            cached.flatMapMany(StreamTextResult::elementStream),
-            cached.flatMap(StreamTextResult::output),
-            cached.flatMap(StreamTextResult::result)
-        );
+                fullStream,
+                textStream,
+                cached.flatMapMany(StreamTextResult::partialOutputStream),
+                cached.flatMapMany(StreamTextResult::elementStream),
+                cached.flatMap(StreamTextResult::output),
+                cached.flatMap(StreamTextResult::result));
     }
 
-    private static Mono<GenerateTextResult> generate(LanguageModel model, GenerateTextRequest request,
-        List<LanguageModelMiddleware> middleware) {
+    private static Mono<GenerateTextResult> generate(
+            LanguageModel model, GenerateTextRequest request, List<LanguageModelMiddleware> middleware) {
         Objects.requireNonNull(model, "model must not be null");
-        var effectiveRequest = request != null ? request : GenerateTextRequest.builder().build();
+        var effectiveRequest =
+                request != null ? request : GenerateTextRequest.builder().build();
         return generateAt(model, effectiveRequest, middleware, 0);
     }
 
-    private static Mono<GenerateTextResult> generateAt(LanguageModel model, GenerateTextRequest request,
-        List<LanguageModelMiddleware> middleware, int index) {
+    private static Mono<GenerateTextResult> generateAt(
+            LanguageModel model, GenerateTextRequest request, List<LanguageModelMiddleware> middleware, int index) {
         if (index >= middleware.size()) {
             return model.generateText(withoutMiddleware(request));
         }
         var current = middleware.get(index);
-        return current.wrapGenerate(new LanguageModelGenerateContext(model, request),
-            nextRequest -> generateAt(model, nextRequest, middleware, index + 1));
+        return current.wrapGenerate(
+                new LanguageModelGenerateContext(model, request),
+                nextRequest -> generateAt(model, nextRequest, middleware, index + 1));
     }
 
-    private static StreamTextResult stream(LanguageModel model, GenerateTextRequest request,
-        List<LanguageModelMiddleware> middleware) {
+    private static StreamTextResult stream(
+            LanguageModel model, GenerateTextRequest request, List<LanguageModelMiddleware> middleware) {
         Objects.requireNonNull(model, "model must not be null");
-        var effectiveRequest = request != null ? request : GenerateTextRequest.builder().build();
+        var effectiveRequest =
+                request != null ? request : GenerateTextRequest.builder().build();
         return streamAt(model, effectiveRequest, middleware, 0);
     }
 
-    private static StreamTextResult streamAt(LanguageModel model, GenerateTextRequest request,
-        List<LanguageModelMiddleware> middleware, int index) {
+    private static StreamTextResult streamAt(
+            LanguageModel model, GenerateTextRequest request, List<LanguageModelMiddleware> middleware, int index) {
         if (index >= middleware.size()) {
             return model.streamText(withoutMiddleware(request));
         }
         var current = middleware.get(index);
-        return current.wrapStream(new LanguageModelStreamContext(model, request),
-            nextRequest -> streamAt(model, nextRequest, middleware, index + 1));
+        return current.wrapStream(
+                new LanguageModelStreamContext(model, request),
+                nextRequest -> streamAt(model, nextRequest, middleware, index + 1));
     }
 
     private static List<LanguageModelMiddleware> requestMiddleware(GenerateTextRequest request) {
-        if (request == null || request.getMiddleware() == null || request.getMiddleware().isEmpty()) {
+        if (request == null
+                || request.getMiddleware() == null
+                || request.getMiddleware().isEmpty()) {
             return List.of();
         }
         return List.copyOf(request.getMiddleware());
     }
 
     private static GenerateTextRequest withoutMiddleware(GenerateTextRequest request) {
-        if (request == null || request.getMiddleware() == null || request.getMiddleware().isEmpty()) {
+        if (request == null
+                || request.getMiddleware() == null
+                || request.getMiddleware().isEmpty()) {
             return request;
         }
         return GenerateTextRequest.builder()
-            .system(request.getSystem())
-            .prompt(request.getPrompt())
-            .messages(request.getMessages())
-            .maxOutputTokens(request.getMaxOutputTokens())
-            .temperature(request.getTemperature())
-            .topP(request.getTopP())
-            .topK(request.getTopK())
-            .minP(request.getMinP())
-            .presencePenalty(request.getPresencePenalty())
-            .frequencyPenalty(request.getFrequencyPenalty())
-            .repetitionPenalty(request.getRepetitionPenalty())
-            .logprobs(request.getLogprobs())
-            .topLogprobs(request.getTopLogprobs())
-            .parallelToolCalls(request.getParallelToolCalls())
-            .stopSequences(request.getStopSequences())
-            .seed(request.getSeed())
-            .maxRetries(request.getMaxRetries())
-            .reasoning(request.getReasoning())
-            .headers(request.getHeaders())
-            .metadata(request.getMetadata())
-            .context(request.getContext())
-            .output(request.getOutput())
-            .tools(request.getTools())
-            .toolChoice(request.getToolChoice())
-            .stopWhen(request.getStopWhen())
-            .prepareStep(request.getPrepareStep())
-            .lifecycle(request.getLifecycle())
-            .toolCallRepair(request.getToolCallRepair())
-            .cancellationToken(request.getCancellationToken())
-            .timeouts(request.getTimeouts())
-            .build();
+                .system(request.getSystem())
+                .prompt(request.getPrompt())
+                .messages(request.getMessages())
+                .maxOutputTokens(request.getMaxOutputTokens())
+                .temperature(request.getTemperature())
+                .topP(request.getTopP())
+                .topK(request.getTopK())
+                .minP(request.getMinP())
+                .presencePenalty(request.getPresencePenalty())
+                .frequencyPenalty(request.getFrequencyPenalty())
+                .repetitionPenalty(request.getRepetitionPenalty())
+                .logprobs(request.getLogprobs())
+                .topLogprobs(request.getTopLogprobs())
+                .parallelToolCalls(request.getParallelToolCalls())
+                .stopSequences(request.getStopSequences())
+                .seed(request.getSeed())
+                .maxRetries(request.getMaxRetries())
+                .reasoning(request.getReasoning())
+                .headers(request.getHeaders())
+                .metadata(request.getMetadata())
+                .context(request.getContext())
+                .output(request.getOutput())
+                .tools(request.getTools())
+                .toolChoice(request.getToolChoice())
+                .stopWhen(request.getStopWhen())
+                .prepareStep(request.getPrepareStep())
+                .lifecycle(request.getLifecycle())
+                .toolCallRepair(request.getToolCallRepair())
+                .cancellationToken(request.getCancellationToken())
+                .timeouts(request.getTimeouts())
+                .build();
     }
 
     private static final class WrappedLanguageModel implements LanguageModel {

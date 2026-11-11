@@ -97,7 +97,7 @@ const modelDescription = computed(() => {
     <template #start>
       <VEntityField>
         <template #description>
-          <VAvatar :src="providerType?.iconUrl" />
+          <VAvatar :src="providerType?.iconUrl ?? undefined" />
         </template>
       </VEntityField>
       <VEntityField :title="model.spec.displayName" :description="modelDescription">

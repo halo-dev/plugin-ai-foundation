@@ -6,20 +6,30 @@ import org.springframework.ai.embedding.EmbeddingOptions;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 
-/**
- * Provider-specific switches used by the generic embedding model implementation.
- */
+/** Provider-specific switches used by the generic embedding model implementation. */
 public record EmbeddingModelProviderOptions(
-    String providerOptionsNamespace,
-    EmbeddingOptionsFactory embeddingOptionsFactory
-) {
-    public static EmbeddingModelProviderOptions defaults(String providerType) {
-        return new EmbeddingModelProviderOptions(providerType, null);
+        EmbeddingOptionsFactory embeddingOptionsFactory, Map<String, Object> nativeOptions) {
+    public EmbeddingModelProviderOptions {
+        nativeOptions = nativeOptions == null ? Map.of() : Map.copyOf(nativeOptions);
     }
 
-    public EmbeddingOptions buildOptions(EmbeddingRequest request,
-        List<EmbeddingWarning> warnings) {
+    public EmbeddingModelProviderOptions(EmbeddingOptionsFactory embeddingOptionsFactory) {
+        this(embeddingOptionsFactory, Map.of());
+    }
+
+    public static EmbeddingModelProviderOptions defaults() {
+        return new EmbeddingModelProviderOptions(null, Map.of());
+    }
+
+    public EmbeddingModelProviderOptions withNativeOptions(Map<String, Object> options) {
+        return new EmbeddingModelProviderOptions(embeddingOptionsFactory, options);
+    }
+
+    public EmbeddingOptions buildOptions(EmbeddingRequest request, List<EmbeddingWarning> warnings) {
         if (embeddingOptionsFactory == null) {
+            if (!nativeOptions.isEmpty()) {
+                throw new IllegalStateException("Embedding provider does not support configured native options");
+            }
             return defaultOptions(request);
         }
         return embeddingOptionsFactory.build(request, this, warnings);

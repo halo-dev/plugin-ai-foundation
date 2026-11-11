@@ -11,36 +11,46 @@ import org.junit.jupiter.api.Test;
 class AgentDocumentationTest {
 
     @Test
-    void bilingualGuidesNavigationAndSkillMapReferenceThePublishedAgentSurface()
-        throws IOException {
+    void bilingualGuidesNavigationAndSkillMapReferenceThePublishedAgentSurface() throws IOException {
         var root = repositoryRoot();
         var chineseGuide = read(root, "dev/zh-CN/sdk-core/agents.md");
         var englishGuide = read(root, "dev/en/sdk-core/agents.md");
-        for (var type : List.of("Agent", "AgentOptions", "AgentCall", "PreparedAgentCall",
-            "ToolCallFailureKind", "UIMessageChatHandlers.streamAgent")) {
+        for (var type : List.of(
+                "Agent",
+                "AgentOptions",
+                "AgentCall",
+                "PreparedAgentCall",
+                "ToolCallFailureKind",
+                "UIMessageChatHandlers.streamAgent")) {
             assertThat(chineseGuide).contains(type);
             assertThat(englishGuide).contains(type);
         }
         assertThat(read(root, "dev/zh-CN/sdk-core/README.md")).contains("./agents.md");
         assertThat(read(root, "dev/en/sdk-core/README.md")).contains("./agents.md");
         assertThat(read(root, "dev/zh-CN/sdk-core/api-reference.md"))
-            .contains("AgentCallPrepareContext", "ToolCallFailureKind");
+                .contains("AgentCallPrepareContext", "ToolCallFailureKind");
         assertThat(read(root, "dev/en/sdk-core/api-reference.md"))
-            .contains("AgentCallPrepareContext", "ToolCallFailureKind");
+                .contains("AgentCallPrepareContext", "ToolCallFailureKind");
         assertThat(read(root, "skills/use-ai-foundation-sdk/references/sdk-map.md"))
-            .contains("sdk-core/agents.md", "aifoundation/agent/");
+                .contains("sdk-core/agents.md", "aifoundation/agent/");
     }
 
     @Test
     void everyDocumentedAgentTopLevelTypeHasPublicSource() {
         var root = repositoryRoot();
-        for (var type : List.of("Agent", "AgentOptions", "AgentCall", "AgentCallValidator",
-            "AgentCallPrepare", "AgentCallPrepareContext", "PreparedAgentCall",
-            "AgentCallPhase", "AgentCallException")) {
-            assertThat(root.resolve("api/src/main/java/run/halo/aifoundation/agent/"
-                + type + ".java"))
-                .as("published source for %s", type)
-                .isRegularFile();
+        for (var type : List.of(
+                "Agent",
+                "AgentOptions",
+                "AgentCall",
+                "AgentCallValidator",
+                "AgentCallPrepare",
+                "AgentCallPrepareContext",
+                "PreparedAgentCall",
+                "AgentCallPhase",
+                "AgentCallException")) {
+            assertThat(root.resolve("api/src/main/java/run/halo/aifoundation/agent/" + type + ".java"))
+                    .as("published source for %s", type)
+                    .isRegularFile();
         }
     }
 

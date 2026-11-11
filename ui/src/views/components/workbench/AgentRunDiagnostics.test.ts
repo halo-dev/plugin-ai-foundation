@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from '@rstest/core'
 import { mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
 import AgentRunDiagnostics from './AgentRunDiagnostics.vue'
 
 const wrappers: VueWrapper[] = []

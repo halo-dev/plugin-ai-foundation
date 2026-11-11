@@ -13,8 +13,8 @@ import run.halo.aifoundation.exception.InvalidMediaContentException;
 /**
  * Provider-neutral caller-provided media content.
  *
- * <p>A value is either URL-backed or base64-data-backed. URL values are never downloaded by the
- * SDK and regular URLs never infer {@link #mediaType} from a file extension.
+ * <p>A value is either URL-backed or base64-data-backed. URL values are never downloaded by the SDK and regular URLs
+ * never infer {@link #mediaType} from a file extension.
  */
 @Data
 @Builder(buildMethodName = "uncheckedBuild")
@@ -28,32 +28,24 @@ public class DataContent {
     /**
      * Provider-native media URL, when the target model supports URL input.
      *
-     * <p>The runtime validates URL structure and model capability, but does not download the
-     * remote resource.
+     * <p>The runtime validates URL structure and model capability, but does not download the remote resource.
      */
     private String url;
 
-    /**
-     * Base64 encoded media data without a data URL prefix.
-     */
+    /** Base64 encoded media data without a data URL prefix. */
     private String data;
 
-    /**
-     * Media type such as {@code image/png}. Required for data-backed content.
-     */
+    /** Media type such as {@code image/png}. Required for data-backed content. */
     private String mediaType;
 
-    /**
-     * Optional caller-supplied filename for diagnostics and provider adapters that support it.
-     */
+    /** Optional caller-supplied filename for diagnostics and provider adapters that support it. */
     private String filename;
 
     /**
      * Creates URL-backed media content without a media type.
      *
-     * <p>Regular URLs do not infer a media type from their path or extension. Some model
-     * capabilities or providers may still require callers to provide one through
-     * {@link #url(String, String)}.
+     * <p>Regular URLs do not infer a media type from their path or extension. Some model capabilities or providers may
+     * still require callers to provide one through {@link #url(String, String)}.
      *
      * @param url provider-native media URL
      * @return URL-backed media content
@@ -66,8 +58,8 @@ public class DataContent {
      * Creates URL-backed media content with an explicit media type.
      *
      * @param url provider-native media URL
-     * @param mediaType media type such as {@code image/png}; may be {@code null} when the target
-     *                  model does not require it
+     * @param mediaType media type such as {@code image/png}; may be {@code null} when the target model does not require
+     *     it
      * @return URL-backed media content
      */
     public static DataContent url(String url, String mediaType) {
@@ -78,17 +70,17 @@ public class DataContent {
      * Creates URL-backed media content with optional diagnostics metadata.
      *
      * @param url provider-native media URL
-     * @param mediaType media type such as {@code image/png}; may be {@code null} when the target
-     *                  model does not require it
+     * @param mediaType media type such as {@code image/png}; may be {@code null} when the target model does not require
+     *     it
      * @param filename optional filename for diagnostics and provider adapters
      * @return URL-backed media content
      */
     public static DataContent url(String url, String mediaType, String filename) {
         return DataContent.builder()
-            .url(url)
-            .mediaType(mediaType)
-            .filename(filename)
-            .build();
+                .url(url)
+                .mediaType(mediaType)
+                .filename(filename)
+                .build();
     }
 
     /**
@@ -97,8 +89,7 @@ public class DataContent {
      * @param base64Data base64 encoded media bytes without a data URL prefix
      * @param mediaType required media type such as {@code image/png}
      * @return data-backed media content
-     * @throws InvalidMediaContentException when the data is blank, not valid base64, or the media
-     *                                      type is missing
+     * @throws InvalidMediaContentException when the data is blank, not valid base64, or the media type is missing
      */
     public static DataContent data(String base64Data, String mediaType) {
         return data(base64Data, mediaType, null);
@@ -111,16 +102,15 @@ public class DataContent {
      * @param mediaType required media type such as {@code image/png}
      * @param filename optional filename for diagnostics and provider adapters
      * @return data-backed media content
-     * @throws InvalidMediaContentException when the data is blank, not valid base64, or the media
-     *                                      type is missing
+     * @throws InvalidMediaContentException when the data is blank, not valid base64, or the media type is missing
      */
     public static DataContent data(String base64Data, String mediaType, String filename) {
         validateBase64(base64Data, mediaType, filename);
         return DataContent.builder()
-            .data(base64Data)
-            .mediaType(mediaType)
-            .filename(filename)
-            .build();
+                .data(base64Data)
+                .mediaType(mediaType)
+                .filename(filename)
+                .build();
     }
 
     /**
@@ -154,8 +144,8 @@ public class DataContent {
     /**
      * Creates data-backed media content from a {@code data:<mediaType>;base64,...} URL.
      *
-     * <p>The returned value stores normalized base64 data and media type separately; it does not
-     * keep the full data URL as {@link #url}.
+     * <p>The returned value stores normalized base64 data and media type separately; it does not keep the full data URL
+     * as {@link #url}.
      *
      * @param dataUrl data URL using base64 encoding
      * @return normalized data-backed media content
@@ -218,8 +208,8 @@ public class DataContent {
     /**
      * Returns the source kind represented by this content.
      *
-     * @return {@link InputSource#URL}, {@link InputSource#DATA}, or {@code null} when the value has
-     * not been populated yet
+     * @return {@link InputSource#URL}, {@link InputSource#DATA}, or {@code null} when the value has not been populated
+     *     yet
      */
     public InputSource source() {
         if (isUrl()) {
@@ -254,14 +244,12 @@ public class DataContent {
         }
         if (hasText(data)) {
             if (!hasText(mediaType)) {
-                throw invalid("data-backed media content must include mediaType", mediaType,
-                    filename);
+                throw invalid("data-backed media content must include mediaType", mediaType, filename);
             }
             validateBase64(data, mediaType, filename);
         }
         if (hasText(url) && url.strip().length() != url.length()) {
-            throw invalid("media URL must not contain leading or trailing whitespace", mediaType,
-                filename);
+            throw invalid("media URL must not contain leading or trailing whitespace", mediaType, filename);
         }
         return this;
     }
@@ -281,19 +269,16 @@ public class DataContent {
         return value != null && !value.isBlank();
     }
 
-    private static InvalidMediaContentException invalid(String message, String mediaType,
-        String filename) {
+    private static InvalidMediaContentException invalid(String message, String mediaType, String filename) {
         return new InvalidMediaContentException(message, mediaType, filename, null, null);
     }
 
-    private static InvalidMediaContentException invalid(String message, String mediaType,
-        String filename, Throwable cause) {
+    private static InvalidMediaContentException invalid(
+            String message, String mediaType, String filename, Throwable cause) {
         return new InvalidMediaContentException(message, mediaType, filename, null, null, cause);
     }
 
-    /**
-     * Validating builder for {@link DataContent}.
-     */
+    /** Validating builder for {@link DataContent}. */
     public static class DataContentBuilder {
         /**
          * Builds and validates a media content value.

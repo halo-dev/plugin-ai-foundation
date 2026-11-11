@@ -32,16 +32,17 @@ class AiFoundationDiagnosticsTest {
             assertThat(appender.list).isEmpty();
 
             logger.setLevel(Level.TRACE);
-            AiFoundationDiagnostics.trace("provider-request", "ai_enabled",
-                () -> AiFoundationDiagnostics.fields(
-                    "body", "{\"api_key\":\"sk-secret\",\"prompt\":\"recognize link\"}",
-                    "header", "Authorization: Bearer another-secret"));
+            AiFoundationDiagnostics.trace(
+                    "provider-request",
+                    "ai_enabled",
+                    () -> AiFoundationDiagnostics.fields(
+                            "body", "{\"api_key\":\"sk-secret\",\"prompt\":\"recognize link\"}",
+                            "header", "Authorization: Bearer another-secret"));
 
             assertThat(appender.list).hasSize(1);
             assertThat(appender.list.getFirst().getFormattedMessage())
-                .contains("event=provider-request", "diagnosticId=ai_enabled",
-                    "recognize link", "[REDACTED]")
-                .doesNotContain("sk-secret", "another-secret");
+                    .contains("event=provider-request", "diagnosticId=ai_enabled", "recognize link", "[REDACTED]")
+                    .doesNotContain("sk-secret", "another-secret");
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(previousLevel);

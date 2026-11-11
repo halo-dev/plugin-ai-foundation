@@ -3,6 +3,7 @@ package run.halo.aifoundation.service.audit;
 import static java.lang.StackWalker.Option.RETAIN_CLASS_REFERENCE;
 
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,11 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     private static final StackWalker STACK_WALKER = StackWalker.getInstance(RETAIN_CLASS_REFERENCE);
     private static final String DETECTION_SOURCE = "stack-classloader";
+    private static final List<String> CONSOLE_TEST_CLASS_NAMES = List.of(
+            "run.halo.aifoundation.endpoint.ModelConsoleEndpoint",
+            "run.halo.aifoundation.endpoint.DecisionConsoleEndpoint");
+    private static final List<String> FRAMEWORK_PACKAGE_PREFIXES =
+            List.of("java.", "jdk.", "reactor.", "org.springframework.", "org.pf4j.", "run.halo.aifoundation.");
 
     private final ReactiveExtensionClient client;
     private final ObjectProvider<PluginWrapper> pluginWrapperProvider;
@@ -34,86 +40,76 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     @Override
     public CallerPluginInfo resolveCurrentCallerSnapshot() {
-        return detectCallerPluginName()
-            .map(pluginName -> CallerPluginInfo.builder()
-                .detected(true)
-                .detectionSource(DETECTION_SOURCE)
-                .pluginName(pluginName)
-                .build())
-            .orElseGet(this::unknown);
+        return detectCallerPlugin()
+                .map(plugin -> CallerPluginInfo.builder()
+                        .detected(true)
+                        .detectionSource(DETECTION_SOURCE)
+                        .pluginName(plugin.getPluginId())
+                        .version(plugin.getDescriptor().getVersion())
+                        .build())
+                .orElseGet(this::unknown);
     }
 
-    private Optional<String> detectCallerPluginName() {
+    private Optional<PluginWrapper> detectCallerPlugin() {
         var self = pluginWrapperProvider.getIfAvailable();
         if (self == null || self.getPluginManager() == null) {
             return Optional.empty();
         }
 
-        var pluginByClassLoader = new IdentityHashMap<ClassLoader, String>();
+        var pluginByClassLoader = new IdentityHashMap<ClassLoader, PluginWrapper>();
         for (var plugin : self.getPluginManager().getStartedPlugins()) {
             if (plugin == null || Objects.equals(self.getPluginId(), plugin.getPluginId())) {
                 continue;
             }
             var classLoader = plugin.getPluginClassLoader();
             if (classLoader != null) {
-                pluginByClassLoader.put(classLoader, plugin.getPluginId());
+                pluginByClassLoader.put(classLoader, plugin);
             }
         }
-        if (pluginByClassLoader.isEmpty()) {
-            return Optional.empty();
-        }
-
-        return STACK_WALKER.walk(frames -> frames
-            .map(StackWalker.StackFrame::getDeclaringClass)
-            .filter(this::isCandidateCallerClass)
-            .map(Class::getClassLoader)
-            .map(pluginByClassLoader::get)
-            .filter(Objects::nonNull)
-            .findFirst());
+        return STACK_WALKER.walk(frames -> frames.map(StackWalker.StackFrame::getDeclaringClass)
+                .map(type -> {
+                    // Only the Console test boundary may identify Foundation as its own caller.
+                    // Include nested classes for deferred RAG reranking invocations.
+                    if (type.getClassLoader() == self.getPluginClassLoader()
+                            && CONSOLE_TEST_CLASS_NAMES.stream()
+                                    .anyMatch(name -> type.getName().equals(name)
+                                            || type.getName().startsWith(name + "$"))) {
+                        return self;
+                    }
+                    return isCandidateCallerClass(type) ? pluginByClassLoader.get(type.getClassLoader()) : null;
+                })
+                .filter(Objects::nonNull)
+                .findFirst());
     }
 
     private boolean isCandidateCallerClass(Class<?> type) {
         var name = type.getName();
-        return !name.startsWith("java.")
-            && !name.startsWith("jdk.")
-            && !name.startsWith("reactor.")
-            && !name.startsWith("org.springframework.")
-            && !name.startsWith("org.pf4j.")
-            && !name.startsWith("run.halo.aifoundation.");
+        for (var prefix : FRAMEWORK_PACKAGE_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Mono<CallerPluginInfo> fetchCallerPlugin(String pluginName) {
         return client.fetch(Plugin.class, pluginName)
-            .map(plugin -> fromPlugin(plugin, true))
-            .defaultIfEmpty(CallerPluginInfo.builder()
-                .detected(true)
-                .detectionSource(DETECTION_SOURCE)
-                .pluginName(pluginName)
-                .build());
+                .map(this::fromPlugin)
+                .defaultIfEmpty(CallerPluginInfo.builder()
+                        .detected(true)
+                        .detectionSource(DETECTION_SOURCE)
+                        .pluginName(pluginName)
+                        .build());
     }
 
-    private CallerPluginInfo fromPlugin(Plugin plugin, boolean detected) {
-        var spec = plugin.getSpec();
-        var author = spec != null ? spec.getAuthor() : null;
-        return CallerPluginInfo.builder()
-            .detected(detected)
-            .detectionSource(DETECTION_SOURCE)
-            .pluginName(plugin.getMetadata() != null ? plugin.getMetadata().getName() : null)
-            .displayName(spec != null ? spec.getDisplayName() : null)
-            .description(spec != null ? spec.getDescription() : null)
-            .version(spec != null ? spec.getVersion() : null)
-            .authorName(author != null ? author.getName() : null)
-            .authorWebsite(author != null ? author.getWebsite() : null)
-            .homepage(spec != null ? spec.getHomepage() : null)
-            .repo(spec != null ? spec.getRepo() : null)
-            .issues(spec != null ? spec.getIssues() : null)
-            .build();
+    private CallerPluginInfo fromPlugin(Plugin plugin) {
+        return CallerPluginInfo.fromPlugin(plugin, DETECTION_SOURCE);
     }
 
     private CallerPluginInfo unknown() {
         return CallerPluginInfo.builder()
-            .detected(false)
-            .detectionSource("none")
-            .build();
+                .detected(false)
+                .detectionSource("none")
+                .build();
     }
 }

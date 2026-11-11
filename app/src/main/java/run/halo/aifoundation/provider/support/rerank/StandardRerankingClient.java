@@ -14,13 +14,24 @@ public class StandardRerankingClient extends AbstractHttpRerankingClient {
     private final String modelId;
     private final Map<String, String> headers;
 
-    public StandardRerankingClient(String providerType, String baseUrl, String path, String modelId,
-        String apiKey, WebClient.Builder webClientBuilder) {
+    public StandardRerankingClient(
+            String providerType,
+            String baseUrl,
+            String path,
+            String modelId,
+            String apiKey,
+            WebClient.Builder webClientBuilder) {
         this(providerType, baseUrl, path, modelId, apiKey, webClientBuilder, Map.of());
     }
 
-    public StandardRerankingClient(String providerType, String baseUrl, String path, String modelId,
-        String apiKey, WebClient.Builder webClientBuilder, Map<String, String> headers) {
+    public StandardRerankingClient(
+            String providerType,
+            String baseUrl,
+            String path,
+            String modelId,
+            String apiKey,
+            WebClient.Builder webClientBuilder,
+            Map<String, String> headers) {
         super(providerType, modelId, apiKey, webClientBuilder);
         this.baseUrl = baseUrl;
         this.path = path;
@@ -34,15 +45,14 @@ public class StandardRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
-        var options = namespacedOptions(request);
+    protected Map<String, Object> requestBody(RerankRequest request, Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", modelId);
         body.put("query", request.getQuery());
         body.put("documents", documentTexts(request));
         putIfPresent(body, "top_n", topN(request));
         body.put("return_documents", true);
-        applyOptions(body, options, "model", "query", "documents", "top_n");
+        applyOptions(body, nativeOptions, "model", "query", "documents", "top_n");
         return body;
     }
 

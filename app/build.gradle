@@ -23,10 +23,26 @@ configurations.runtimeClasspath {
     exclude group: 'org.springdoc'
     exclude group: 'io.swagger.core.v3'
     exclude group: 'com.fasterxml.jackson.core'
+    // Halo 2.26 provides Jackson 3 as well. Bundling it splits class identity
+    // between the host and plugin classloaders, even when versions match.
+    exclude group: 'tools.jackson.core'
     exclude group: 'org.slf4j'
     exclude group: 'io.micrometer'
     exclude group: 'com.squareup.okhttp3'
     exclude group: 'com.squareup.okio'
+}
+
+// Isolate TestKit's Gradle dependencies from the application's test runtime.
+sourceSets {
+    snapshotTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    snapshotTestImplementation.extendsFrom testImplementation
+    snapshotTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
 
 dependencies {
@@ -34,9 +50,8 @@ dependencies {
     implementation platform("org.springframework.ai:spring-ai-bom:2.0.0")
     implementation project(':api')
 
-    implementation 'org.springframework.ai:spring-ai-client-chat'
-    implementation 'org.springframework.ai:spring-ai-deepseek'
-    implementation 'org.springframework.ai:spring-ai-ollama'
+    implementation 'org.xerial:sqlite-jdbc:3.53.2.0'
+    implementation 'org.springframework.ai:spring-ai-model'
 
     compileOnly 'run.halo.app:api'
 
@@ -44,10 +59,39 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    snapshotTestImplementation gradleTestKit()
 }
 
 test {
     useJUnitPlatform()
+}
+
+tasks.named('processSnapshotTestResources', ProcessResources) {
+    from(rootProject.file('gradle/models-dev-snapshot.gradle')) {
+        into 'gradle'
+    }
+}
+
+tasks.register('snapshotTest', Test) {
+    description = 'Verify models.dev snapshot maintenance tasks against the runtime parser'
+    group = 'verification'
+    testClassesDirs = sourceSets.snapshotTest.output.classesDirs
+    classpath = sourceSets.snapshotTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter tasks.named('test')
+}
+
+// Opt-in: exercises retained SQLite data rather than running during every plugin build.
+tasks.register('usageScaleValidation', Test) {
+    description = 'Validate usage statistics with one million calls and five million executions'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    environment 'AI_USAGE_BENCHMARK', 'true'
+    filter { includeTestsMatching '*UsageStatisticsScaleBenchmarkTest' }
+    testLogging { events 'passed', 'failed'; showStandardStreams = true }
 }
 
 tasks.register('processUiResources', Copy) {
@@ -68,6 +112,16 @@ tasks.named('generatePluginComponentsIdx') {
 tasks.named('jar') {
     archiveBaseName = "plugin-ai-foundation"
     dependsOn(':api:jar')
+
+    // Keep ARM64/AMD64 natives, including musl for Alpine Linux.
+    includeEmptyDirs = false
+    eachFile { details ->
+        if (details.path.startsWith('org/sqlite/native/')
+            && !details.path.matches(
+                'org/sqlite/native/(Mac|Linux|Linux-Musl|Windows)/(aarch64|x86_64)/.*')) {
+            details.exclude()
+        }
+    }
 }
 
 haloPlugin {
@@ -99,5 +153,58 @@ haloPlugin {
 }
 
 halo {
-    version = '2.25'
+    version = '2.26.0'
+}
+
+def generatedOpenApi = layout.projectDirectory.file(
+    '../api-docs/openapi/v3_0/aiFoundationApis.json')
+
+// Halo's documentation task starts on a random port. Normalize only its generated server block so
+// repeated client generation is deterministic; API clients still receive the Console axios base.
+def normalizeGeneratedOpenApiServers = tasks.register('normalizeGeneratedOpenApiServers') {
+    dependsOn tasks.named('generateOpenApiDocs')
+    outputs.upToDateWhen { false }
+    doLast {
+        def spec = generatedOpenApi.asFile
+        def original = spec.getText('UTF-8')
+        if (original.contains('"url" : "/"')) {
+            return
+        }
+        def generatedServerPattern = '(?s)"servers"\\s*:\\s*\\[\\s*\\{\\s*"url"\\s*:' +
+            '\\s*"[^"]+"\\s*,\\s*"description"\\s*:\\s*"Generated server url"\\s*\\}\\s*\\]'
+        def generatedServer = ~generatedServerPattern
+        def normalized = original.replaceFirst(generatedServer, '''"servers" : [ {
+    "url" : "/",
+    "description" : "Generated server url"
+  } ]''')
+        if (normalized == original) {
+            throw new GradleException('Generated OpenAPI server block was not found')
+        }
+        spec.setText(normalized, 'UTF-8')
+    }
+}
+
+afterEvaluate {
+    tasks.named('generateApiClient') {
+        dependsOn normalizeGeneratedOpenApiServers
+    }
+}
+
+// Unit tests use one classloader and cannot detect host/plugin Jackson duplication.
+tasks.register('verifyHostProvidedJackson') {
+    group = 'verification'
+    description = 'Ensures Jackson core classes are supplied only by Halo at runtime.'
+    doLast {
+        def bundled = configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll {
+            it.moduleVersion.id.group in ['com.fasterxml.jackson.core', 'tools.jackson.core']
+        }
+        if (!bundled.empty) {
+            throw new GradleException("Host-provided Jackson must not be bundled: ${bundled*.moduleVersion*.id}")
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyHostProvidedJackson')
+    dependsOn tasks.named('snapshotTest')
 }

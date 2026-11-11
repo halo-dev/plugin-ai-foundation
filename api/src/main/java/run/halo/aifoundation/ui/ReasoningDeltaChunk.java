@@ -10,7 +10,7 @@ import java.util.Map;
  * @param providerMetadata provider-specific reasoning metadata
  */
 public record ReasoningDeltaChunk(String id, String delta, Map<String, Object> providerMetadata)
-    implements UIMessageChunk {
+        implements UIMessageChunk {
     @Override
     public String type() {
         return UIMessageChunkType.REASONING_DELTA;

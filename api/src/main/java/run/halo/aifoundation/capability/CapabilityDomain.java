@@ -7,25 +7,20 @@ import java.util.Optional;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**
- * Top-level capability domains tracked by AI Foundation.
- */
+/** Top-level capability domains tracked by AI Foundation. */
 @Getter
 @RequiredArgsConstructor
 public enum CapabilityDomain {
-    /**
-     * Language model capabilities, including media input and reasoning-history support.
-     */
+    /** Language model capabilities, including media input and reasoning-history support. */
     LANGUAGE("language"),
 
-    /**
-     * Image generation capabilities, including generation modes and output controls.
-     */
-    IMAGE_GENERATION("imageGeneration");
+    /** Image generation capabilities, including generation modes and output controls. */
+    IMAGE_GENERATION("imageGeneration"),
 
-    /**
-     * Stable serialized value used in resource specs, API payloads, and selector filters.
-     */
+    /** Decision question types, structured input support, and option limits. */
+    DECISION("decision");
+
+    /** Stable serialized value used in resource specs, API payloads, and selector filters. */
     private final String value;
 
     @JsonValue
@@ -42,9 +37,7 @@ public enum CapabilityDomain {
      */
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static CapabilityDomain fromValue(String value) {
-        return find(value)
-            .orElseThrow(() -> new IllegalArgumentException("Unsupported capability domain: "
-                + value));
+        return find(value).orElseThrow(() -> new IllegalArgumentException("Unsupported capability domain: " + value));
     }
 
     /**
@@ -58,8 +51,7 @@ public enum CapabilityDomain {
             return Optional.empty();
         }
         return Arrays.stream(values())
-            .filter(domain -> domain.value.equals(value))
-            .findFirst();
+                .filter(domain -> domain.value.equals(value))
+                .findFirst();
     }
-
 }

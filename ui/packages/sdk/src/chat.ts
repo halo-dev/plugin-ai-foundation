@@ -22,6 +22,7 @@ import type {
   ToolPart,
   UIMessage,
   UIMessageChunk,
+  UIMessagePart,
   UIMessageStreamTerminal,
 } from './types'
 
@@ -621,7 +622,7 @@ export class Chat<METADATA = unknown> {
 
   private resetAutomaticContinuationIfIdle(): void {
     const assistant = this.lastAssistantMessage()
-    if (!assistant || !assistant.parts.some(isPendingToolPart)) {
+    if (!assistant || !latestStepParts(assistant.parts).some(isPendingToolPart)) {
       this.automaticStepCount = 0
       this.clearPendingAutomaticContinuation()
     }
@@ -838,11 +839,16 @@ function automaticContinuationKeys<METADATA>(messages: UIMessage<METADATA>[]): s
   if (!assistant) {
     return []
   }
-  const toolParts = assistant.parts.filter(isContinuableToolPart)
+  const toolParts = latestStepParts(assistant.parts).filter(isContinuableToolPart)
   if (toolParts.length === 0) {
     return []
   }
   return Array.from(new Set(toolParts.map(automaticContinuationPartKey)))
+}
+
+function latestStepParts(parts: UIMessagePart[]): UIMessagePart[] {
+  const stepStart = findLastIndex(parts, (part) => part.type === 'step-start')
+  return stepStart === -1 ? parts : parts.slice(stepStart + 1)
 }
 
 function automaticContinuationPartKey(part: ToolPart): string {
@@ -950,7 +956,7 @@ export function lastAssistantMessageIsCompleteWithToolCalls<METADATA = unknown>(
   if (!assistant) {
     return false
   }
-  const toolParts = assistant.parts.filter(isToolPart)
+  const toolParts = latestStepParts(assistant.parts).filter(isToolPart)
   return toolParts.length > 0 && toolParts.every(isCompletedToolResultPart)
 }
 
@@ -963,7 +969,7 @@ export function lastAssistantMessageHasCompletedToolContinuations<METADATA = unk
   if (!assistant) {
     return false
   }
-  const toolParts = assistant.parts.filter(isToolPart)
+  const toolParts = latestStepParts(assistant.parts).filter(isToolPart)
   return toolParts.length > 0 && toolParts.every(isContinuableToolPart)
 }
 
@@ -976,7 +982,7 @@ export function lastAssistantMessageHasRespondedToToolApprovals<METADATA = unkno
   if (!assistant) {
     return false
   }
-  const approvalParts = assistant.parts.filter(
+  const approvalParts = latestStepParts(assistant.parts).filter(
     (part): part is ToolPart =>
       isToolPart(part) &&
       (part.state === 'approval-requested' || part.state === 'approval-responded'),

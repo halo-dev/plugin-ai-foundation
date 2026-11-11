@@ -11,9 +11,9 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 /**
  * Provider-neutral structured output specification for {@link GenerateTextRequest}.
  *
- * <p>The wire contract is JSON Schema based, using Java collection types. For Java callers that
- * want a typed schema experience, use {@link #object(Class)} or {@link #array(Class)} to
- * derive the JSON Schema from a record or simple POJO:
+ * <p>The wire contract is JSON Schema based, using Java collection types. For Java callers that want a typed schema
+ * experience, use {@link #object(Class)} or {@link #array(Class)} to derive the JSON Schema from a record or simple
+ * POJO:
  *
  * <pre>{@code
  * record Recipe(String name, List<String> steps) {
@@ -30,49 +30,34 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OutputSpec {
-    /**
-     * Output mode. Omitted output specs behave like {@link OutputType#TEXT}.
-     */
+    /** Output mode. Omitted output specs behave like {@link OutputType#TEXT}. */
     private OutputType type;
     /**
      * Optional output name forwarded to provider-native structured output formats when supported.
      *
-     * <p>Provider adapters may impose additional character and length constraints. Invalid names
-     * fail locally before a provider request is sent.
+     * <p>Provider adapters may impose additional character and length constraints. Invalid names fail locally before a
+     * provider request is sent.
      */
     private String name;
-    /**
-     * Optional human-readable description forwarded as structured output guidance when supported.
-     */
+    /** Optional human-readable description forwarded as structured output guidance when supported. */
     private String description;
-    /**
-     * JSON Schema object for {@link OutputType#OBJECT}.
-     */
+    /** JSON Schema object for {@link OutputType#OBJECT}. */
     private Map<String, Object> schema;
-    /**
-     * Element JSON Schema for {@link OutputType#ARRAY}.
-     */
+    /** Element JSON Schema for {@link OutputType#ARRAY}. */
     private Map<String, Object> elementSchema;
-    /**
-     * Allowed values for {@link OutputType#CHOICE}.
-     */
+    /** Allowed values for {@link OutputType#CHOICE}. */
     private List<String> choices;
     /**
      * Whether to request provider-native strict schema enforcement.
      *
-     * <p>Only {@link Boolean#TRUE} opts into native strict enforcement. {@code false} and
-     * {@code null} are non-strict and never cause the schema to be rewritten. AI Foundation always
-     * performs final local parsing and validation, including when the selected provider cannot
-     * guarantee strict output natively.
+     * <p>Only {@link Boolean#TRUE} opts into native strict enforcement. {@code false} and {@code null} are non-strict
+     * and never cause the schema to be rewritten. AI Foundation always performs final local parsing and validation,
+     * including when the selected provider cannot guarantee strict output natively.
      */
     private Boolean strict;
-    /**
-     * Transient Java target class used only by in-process Java callers.
-     */
+    /** Transient Java target class used only by in-process Java callers. */
     private transient Class<?> outputClass;
-    /**
-     * Transient Java array element class used only by in-process Java callers.
-     */
+    /** Transient Java array element class used only by in-process Java callers. */
     private transient Class<?> elementClass;
 
     public static OutputSpec text() {
@@ -97,14 +82,17 @@ public class OutputSpec {
 
     public static OutputSpec object(Class<?> outputClass) {
         return OutputSpec.builder()
-            .type(OutputType.OBJECT)
-            .schema(StructuredSchema.fromClass(outputClass))
-            .outputClass(outputClass)
-            .build();
+                .type(OutputType.OBJECT)
+                .schema(StructuredSchema.fromClass(outputClass))
+                .outputClass(outputClass)
+                .build();
     }
 
     public static OutputSpec array(Map<String, Object> elementSchema) {
-        return OutputSpec.builder().type(OutputType.ARRAY).elementSchema(elementSchema).build();
+        return OutputSpec.builder()
+                .type(OutputType.ARRAY)
+                .elementSchema(elementSchema)
+                .build();
     }
 
     public static OutputSpec array(JsonSchema elementSchema) {
@@ -117,10 +105,10 @@ public class OutputSpec {
 
     public static OutputSpec array(Class<?> elementClass) {
         return OutputSpec.builder()
-            .type(OutputType.ARRAY)
-            .elementSchema(StructuredSchema.fromClass(elementClass))
-            .elementClass(elementClass)
-            .build();
+                .type(OutputType.ARRAY)
+                .elementSchema(StructuredSchema.fromClass(elementClass))
+                .elementClass(elementClass)
+                .build();
     }
 
     public static OutputSpec choice(List<String> choices) {

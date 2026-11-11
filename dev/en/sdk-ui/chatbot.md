@@ -50,6 +50,11 @@ is a convenience for text-only interfaces.
 The default request body contains `id`, `messages`, `trigger`, and `messageId`. Per-request
 headers, body, and credentials can be passed as the second `sendMessage` argument.
 
+For a `submit-message` request, the backend continues the last assistant message only when its
+latest step contains at least one tool part and every tool part in that step is ready to continue,
+for example after tool output or approval. It then reuses that assistant id in the response stream.
+An ordinary assistant message that already contains final text starts a new response message.
+
 ## Files, cancellation, and regeneration
 
 ```ts

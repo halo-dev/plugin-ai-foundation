@@ -20,34 +20,43 @@ import run.halo.aifoundation.provider.support.ModelType;
 @Component
 public class ModelCapabilityService {
 
-    public ModelCapabilities effectiveCapabilities(AiModel model,
-        @Nullable AiProviderType providerType) {
+    public ModelCapabilities effectiveCapabilities(AiModel model, @Nullable AiProviderType providerType) {
         if (model == null || model.getSpec() == null) {
             return ModelCapabilities.empty();
         }
         var spec = model.getSpec();
         var explicit = spec.getCapabilities();
         var sources = effectiveSources(explicit, spec.getCapabilitySources());
+        var decision = spec.getModelType() == ModelType.DECISION && providerType != null
+                ? providerType.decisionCapabilities()
+                : null;
+        // Decision limits are adapter-owned and cannot be widened by persisted model metadata.
+        sources.setDecision(decision == null ? CapabilitySource.UNKNOWN : CapabilitySource.BUILT_IN);
         var language = copy(explicit == null ? null : explicit.getLanguage());
         var imageGeneration = copy(explicit == null ? null : explicit.getImageGeneration());
 
         if (spec.getModelType() == ModelType.LANGUAGE) {
-            language = applyLanguageDefaults(language, spec.getFeatures(), providerType);
+            // Catalog imports keep precise coverage even after individual fields are edited.
+            language =
+                    applyLanguageDefaults(language, spec.getFeatures(), providerType, spec.getCatalogMatch() != null);
         }
         if (spec.getModelType() == ModelType.IMAGE_GENERATION
-            && sources.getImageGeneration() != CapabilitySource.MANUAL) {
-            imageGeneration = applyImageGenerationDefaults(imageGeneration, spec.getAdapterType(),
-                providerType);
+                && sources.getImageGeneration() != CapabilitySource.MANUAL) {
+            imageGeneration = applyImageGenerationDefaults(imageGeneration, spec.getAdapterType(), providerType);
         }
         return ModelCapabilities.builder()
-            .language(language)
-            .imageGeneration(imageGeneration)
-            .sources(sources)
-            .build();
+                .decision(decision)
+                .language(language)
+                .imageGeneration(imageGeneration)
+                .sources(sources)
+                .build();
     }
 
-    private LanguageCapability applyLanguageDefaults(LanguageCapability language,
-        List<ModelFeature> features, @Nullable AiProviderType providerType) {
+    private LanguageCapability applyLanguageDefaults(
+            LanguageCapability language,
+            List<ModelFeature> features,
+            @Nullable AiProviderType providerType,
+            boolean catalogImport) {
         var result = language;
         var hasVision = features != null && features.contains(ModelFeature.VISION);
         var hasAudioInput = features != null && features.contains(ModelFeature.AUDIO_INPUT);
@@ -55,8 +64,7 @@ public class ModelCapabilityService {
             result = result == null ? LanguageCapability.unknown() : result;
             if (result.getReasoningHistory() == null) {
                 var providerOptions = providerType.languageModelProviderOptions();
-                result.setReasoningHistory(providerOptions != null
-                    && providerOptions.reasoningHistorySupported());
+                result.setReasoningHistory(providerOptions != null && providerOptions.reasoningHistorySupported());
             }
         }
         if (hasVision) {
@@ -71,19 +79,25 @@ public class ModelCapabilityService {
                 result.setFileInput(true);
             }
         }
-        if (result != null && Boolean.TRUE.equals(result.getImageInput())) {
-            if (result.getInputMediaTypes() == null || result.getInputMediaTypes().isEmpty()) {
-                result.setInputMediaTypes(List.of("image/*"));
-            }
-            if (result.getInputSources() == null || result.getInputSources().isEmpty()) {
-                result.setInputSources(List.of(InputSource.DATA));
-            }
+        if (result == null) {
+            return null;
         }
-        if (result != null && hasAudioInput && Boolean.TRUE.equals(result.getFileInput())) {
+        // Catalog imports treat explicit lists, including empty ones, as the complete coverage.
+        var missingMediaTypes = result.getInputMediaTypes() == null;
+        var imageInput = Boolean.TRUE.equals(result.getImageInput());
+        var audioFileInput = hasAudioInput && Boolean.TRUE.equals(result.getFileInput());
+        if (imageInput
+                && (missingMediaTypes
+                        || (!catalogImport && result.getInputMediaTypes().isEmpty()))) {
+            result.setInputMediaTypes(List.of("image/*"));
+        }
+        if (audioFileInput && (!catalogImport || missingMediaTypes)) {
             appendDefault(result.getInputMediaTypes(), "audio/*", result::setInputMediaTypes);
-            if (result.getInputSources() == null || result.getInputSources().isEmpty()) {
-                result.setInputSources(List.of(InputSource.DATA));
-            }
+        }
+        if ((imageInput || audioFileInput)
+                && (result.getInputSources() == null
+                        || (!catalogImport && result.getInputSources().isEmpty()))) {
+            result.setInputSources(List.of(InputSource.DATA));
         }
         return result;
     }
@@ -102,14 +116,12 @@ public class ModelCapabilityService {
     }
 
     private ImageGenerationCapability applyImageGenerationDefaults(
-        ImageGenerationCapability imageGeneration, AdapterType adapterType,
-        @Nullable AiProviderType providerType) {
-        var result = imageGeneration == null
-            ? ImageGenerationCapability.unknown()
-            : imageGeneration;
+            ImageGenerationCapability imageGeneration, AdapterType adapterType, @Nullable AiProviderType providerType) {
+        var result = imageGeneration == null ? ImageGenerationCapability.unknown() : imageGeneration;
         if (adapterType == null && providerType != null) {
-            adapterType = providerType.recommendAdapterType(ModelType.IMAGE_GENERATION)
-                .orElse(null);
+            adapterType = providerType
+                    .recommendAdapterType(ModelType.IMAGE_GENERATION)
+                    .orElse(null);
         }
         if (adapterType != null && adapterType.getModelType() == ModelType.IMAGE_GENERATION) {
             if (result.getTextToImage() == null) {
@@ -122,19 +134,17 @@ public class ModelCapabilityService {
         return result;
     }
 
-    private ModelCapabilitySources effectiveSources(ModelCapabilities capabilities,
-        ModelCapabilitySources specSources) {
-        var source = specSources != null ? specSources
-            : capabilities == null ? null : capabilities.getSources();
+    private ModelCapabilitySources effectiveSources(
+            ModelCapabilities capabilities, ModelCapabilitySources specSources) {
+        var source = specSources != null ? specSources : capabilities == null ? null : capabilities.getSources();
         if (source == null) {
             return ModelCapabilitySources.unknown();
         }
         return ModelCapabilitySources.builder()
-            .language(source.getLanguage() == null ? CapabilitySource.UNKNOWN
-                : source.getLanguage())
-            .imageGeneration(source.getImageGeneration() == null ? CapabilitySource.UNKNOWN
-                : source.getImageGeneration())
-            .build();
+                .language(source.getLanguage() == null ? CapabilitySource.UNKNOWN : source.getLanguage())
+                .imageGeneration(
+                        source.getImageGeneration() == null ? CapabilitySource.UNKNOWN : source.getImageGeneration())
+                .build();
     }
 
     private LanguageCapability copy(LanguageCapability source) {
@@ -142,12 +152,12 @@ public class ModelCapabilityService {
             return null;
         }
         return LanguageCapability.builder()
-            .imageInput(source.getImageInput())
-            .fileInput(source.getFileInput())
-            .reasoningHistory(source.getReasoningHistory())
-            .inputMediaTypes(copyList(source.getInputMediaTypes()))
-            .inputSources(copyList(source.getInputSources()))
-            .build();
+                .imageInput(source.getImageInput())
+                .fileInput(source.getFileInput())
+                .reasoningHistory(source.getReasoningHistory())
+                .inputMediaTypes(copyList(source.getInputMediaTypes()))
+                .inputSources(copyList(source.getInputSources()))
+                .build();
     }
 
     private ImageGenerationCapability copy(ImageGenerationCapability source) {
@@ -155,14 +165,14 @@ public class ModelCapabilityService {
             return null;
         }
         return ImageGenerationCapability.builder()
-            .textToImage(source.getTextToImage())
-            .imageToImage(source.getImageToImage())
-            .maskInput(source.getMaskInput())
-            .maxImagesPerCall(source.getMaxImagesPerCall())
-            .sizes(copyList(source.getSizes()))
-            .aspectRatios(copyList(source.getAspectRatios()))
-            .outputMediaTypes(copyList(source.getOutputMediaTypes()))
-            .build();
+                .textToImage(source.getTextToImage())
+                .imageToImage(source.getImageToImage())
+                .maskInput(source.getMaskInput())
+                .maxImagesPerCall(source.getMaxImagesPerCall())
+                .sizes(copyList(source.getSizes()))
+                .aspectRatios(copyList(source.getAspectRatios()))
+                .outputMediaTypes(copyList(source.getOutputMediaTypes()))
+                .build();
     }
 
     private <T> List<T> copyList(List<T> source) {

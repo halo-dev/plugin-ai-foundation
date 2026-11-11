@@ -46,6 +46,15 @@ return imageModel.generateImage(request)
 `responseFormat` 是偏好而不是保证，必须检查每个返回文件的实际内容。AI Foundation 不会自动
 下载 URL，也不会把生成结果保存为 Halo 附件。
 
+## 图片响应缓冲上限
+
+从 AI Foundation 1.2.0 起，可以在控制台的供应商设置中配置「图片响应缓冲上限」，对应
+`AiProvider.spec.maxInMemorySize`。单位为字节，未配置时默认使用 67,108,864 字节（64 MiB），
+可配置范围为 1,024–1,073,741,824 字节（1 KiB–1 GiB）。
+
+该设置仅控制图片生成响应的内存缓冲上限，不影响聊天或模型发现请求。当供应商返回较大的
+base64 图片，导致响应超过缓冲上限时，可以按需调高；它限制的是整个响应体，而不是单张图片的大小。
+
 ## 图生图与编辑
 
 ```java

@@ -29,16 +29,12 @@ class SecretResolverTest {
 
     @Test
     void resolveApiKey_nullSecretName_returnsEmpty() {
-        StepVerifier.create(secretResolver.resolveApiKey(null))
-            .expectNext("")
-            .verifyComplete();
+        StepVerifier.create(secretResolver.resolveApiKey(null)).expectNext("").verifyComplete();
     }
 
     @Test
     void resolveApiKey_blankSecretName_returnsEmpty() {
-        StepVerifier.create(secretResolver.resolveApiKey("  "))
-            .expectNext("")
-            .verifyComplete();
+        StepVerifier.create(secretResolver.resolveApiKey("  ")).expectNext("").verifyComplete();
     }
 
     @Test
@@ -46,8 +42,8 @@ class SecretResolverTest {
         when(client.fetch(Secret.class, "missing-secret")).thenReturn(Mono.empty());
 
         StepVerifier.create(secretResolver.resolveApiKey("missing-secret"))
-            .expectErrorMessage("API key secret not found: missing-secret")
-            .verify();
+                .expectErrorMessage("API key secret not found: missing-secret")
+                .verify();
     }
 
     @Test
@@ -56,8 +52,8 @@ class SecretResolverTest {
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
 
         StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
-            .expectNext("sk-test-key")
-            .verifyComplete();
+                .expectNext("sk-test-key")
+                .verifyComplete();
     }
 
     @Test
@@ -69,8 +65,8 @@ class SecretResolverTest {
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
 
         StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
-            .expectNext("bearer-token")
-            .verifyComplete();
+                .expectNext("bearer-token")
+                .verifyComplete();
     }
 
     @Test
@@ -79,8 +75,8 @@ class SecretResolverTest {
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
 
         StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
-            .expectErrorMessage("API key secret 'my-secret' must contain key 'api-key'")
-            .verify();
+                .expectErrorMessage("API key secret 'my-secret' must contain key 'api-key'")
+                .verify();
     }
 
     @Test
@@ -89,8 +85,8 @@ class SecretResolverTest {
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
 
         StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
-            .expectErrorMessage("API key secret 'my-secret' has no data")
-            .verify();
+                .expectErrorMessage("API key secret 'my-secret' has no data")
+                .verify();
     }
 
     private Secret secretWithData(Map<String, String> stringData) {

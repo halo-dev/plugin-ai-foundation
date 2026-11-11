@@ -91,7 +91,7 @@ function updateNumberField(key: NumberField, value: string) {
             <label class=":uno: text-xs text-slate-600 font-medium">响应格式</label>
             <select
               :value="imageResponseFormat || 'DEFAULT'"
-              class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+              class=":uno: select-workbench w-full"
               @change="
                 emit(
                   'update:imageResponseFormat',

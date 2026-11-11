@@ -2,9 +2,7 @@ package run.halo.aifoundation.agent;
 
 import run.halo.aifoundation.exception.AiFoundationException;
 
-/**
- * Stable pre-provider failure raised while validating or preparing an agent call.
- */
+/** Stable pre-provider failure raised while validating or preparing an agent call. */
 public class AgentCallException extends AiFoundationException {
     private final AgentCallPhase phase;
 

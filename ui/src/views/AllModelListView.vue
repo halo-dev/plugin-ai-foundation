@@ -11,7 +11,7 @@ import {
   VLoading,
   VSpace,
 } from '@halo-dev/components'
-import { useFuse } from '@vueuse/integrations'
+import { useFuse } from '@vueuse/integrations/useFuse'
 import { useRouteQuery } from '@vueuse/router'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'

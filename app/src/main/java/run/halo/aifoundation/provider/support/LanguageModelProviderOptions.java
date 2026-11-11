@@ -1,21 +1,22 @@
 package run.halo.aifoundation.provider.support;
 
-/**
- * Provider-specific switches used by the generic language model implementation.
- */
+import java.util.Set;
+
+/** Provider-specific switches used by the generic language model implementation. */
 public record LanguageModelProviderOptions(
-    boolean reasoningHistorySupported,
-    boolean streamToolCallsForReasoning,
-    boolean requestHeadersSupported,
-    boolean seedSupported,
-    boolean nativeStrictToolSchemas,
-    StructuredOutputSupport structuredOutputSupport,
-    ChatOptionsFactory chatOptionsFactory,
-    ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
-    StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory,
-    ReasoningControlOptions reasoningControlOptions,
-    AssistantReasoningContentExtractor reasoningContentExtractor
-) {
+        boolean reasoningHistorySupported,
+        boolean streamToolCallsForReasoning,
+        boolean requestHeadersSupported,
+        boolean seedSupported,
+        boolean nativeStrictToolSchemas,
+        StructuredOutputSupport structuredOutputSupport,
+        ChatOptionsFactory chatOptionsFactory,
+        ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
+        StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory,
+        ReasoningControlOptions reasoningControlOptions,
+        AssistantReasoningContentExtractor reasoningContentExtractor,
+        NativeChatOptionsApplicator nativeOptionsApplicator,
+        Set<String> additionalMediaUrlSchemes) {
     public static LanguageModelProviderOptions defaults() {
         return builder().build();
     }
@@ -30,16 +31,16 @@ public record LanguageModelProviderOptions(
         private boolean requestHeadersSupported;
         private boolean seedSupported;
         private boolean nativeStrictToolSchemas;
-        private StructuredOutputSupport structuredOutputSupport =
-            StructuredOutputSupport.PROMPT_ONLY;
+        private StructuredOutputSupport structuredOutputSupport = StructuredOutputSupport.PROMPT_ONLY;
         private ChatOptionsFactory chatOptionsFactory;
         private ToolCallingChatOptionsFactory toolCallingChatOptionsFactory;
         private StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory;
         private ReasoningControlOptions reasoningControlOptions = ReasoningControlOptions.unsupported();
         private AssistantReasoningContentExtractor reasoningContentExtractor;
+        private NativeChatOptionsApplicator nativeOptionsApplicator;
+        private Set<String> additionalMediaUrlSchemes = Set.of();
 
-        private Builder() {
-        }
+        private Builder() {}
 
         public Builder reasoningHistorySupported(boolean reasoningHistorySupported) {
             this.reasoningHistorySupported = reasoningHistorySupported;
@@ -66,11 +67,9 @@ public record LanguageModelProviderOptions(
             return this;
         }
 
-        public Builder structuredOutputSupport(
-            StructuredOutputSupport structuredOutputSupport) {
-            this.structuredOutputSupport = structuredOutputSupport != null
-                ? structuredOutputSupport
-                : StructuredOutputSupport.PROMPT_ONLY;
+        public Builder structuredOutputSupport(StructuredOutputSupport structuredOutputSupport) {
+            this.structuredOutputSupport =
+                    structuredOutputSupport != null ? structuredOutputSupport : StructuredOutputSupport.PROMPT_ONLY;
             return this;
         }
 
@@ -79,45 +78,54 @@ public record LanguageModelProviderOptions(
             return this;
         }
 
-        public Builder toolCallingChatOptionsFactory(
-            ToolCallingChatOptionsFactory toolCallingChatOptionsFactory) {
+        public Builder toolCallingChatOptionsFactory(ToolCallingChatOptionsFactory toolCallingChatOptionsFactory) {
             this.toolCallingChatOptionsFactory = toolCallingChatOptionsFactory;
             return this;
         }
 
         public Builder structuredOutputChatOptionsFactory(
-            StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory) {
+                StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory) {
             this.structuredOutputChatOptionsFactory = structuredOutputChatOptionsFactory;
             return this;
         }
 
         public Builder reasoningControlOptions(ReasoningControlOptions reasoningControlOptions) {
-            this.reasoningControlOptions = reasoningControlOptions != null
-                ? reasoningControlOptions
-                : ReasoningControlOptions.unsupported();
+            this.reasoningControlOptions =
+                    reasoningControlOptions != null ? reasoningControlOptions : ReasoningControlOptions.unsupported();
             return this;
         }
 
-        public Builder reasoningContentExtractor(
-            AssistantReasoningContentExtractor reasoningContentExtractor) {
+        public Builder reasoningContentExtractor(AssistantReasoningContentExtractor reasoningContentExtractor) {
             this.reasoningContentExtractor = reasoningContentExtractor;
+            return this;
+        }
+
+        public Builder nativeOptionsApplicator(NativeChatOptionsApplicator nativeOptionsApplicator) {
+            this.nativeOptionsApplicator = nativeOptionsApplicator;
+            return this;
+        }
+
+        public Builder additionalMediaUrlSchemes(Set<String> additionalMediaUrlSchemes) {
+            this.additionalMediaUrlSchemes =
+                    additionalMediaUrlSchemes != null ? Set.copyOf(additionalMediaUrlSchemes) : Set.of();
             return this;
         }
 
         public LanguageModelProviderOptions build() {
             return new LanguageModelProviderOptions(
-                reasoningHistorySupported,
-                streamToolCallsForReasoning,
-                requestHeadersSupported,
-                seedSupported,
-                nativeStrictToolSchemas,
-                structuredOutputSupport,
-                chatOptionsFactory,
-                toolCallingChatOptionsFactory,
-                structuredOutputChatOptionsFactory,
-                reasoningControlOptions,
-                reasoningContentExtractor
-            );
+                    reasoningHistorySupported,
+                    streamToolCallsForReasoning,
+                    requestHeadersSupported,
+                    seedSupported,
+                    nativeStrictToolSchemas,
+                    structuredOutputSupport,
+                    chatOptionsFactory,
+                    toolCallingChatOptionsFactory,
+                    structuredOutputChatOptionsFactory,
+                    reasoningControlOptions,
+                    reasoningContentExtractor,
+                    nativeOptionsApplicator,
+                    additionalMediaUrlSchemes);
         }
     }
 }

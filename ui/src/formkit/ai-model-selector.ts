@@ -21,6 +21,14 @@ export function isModelOptionSelectable(model: ModelOption) {
   return model.available !== false
 }
 
+export function missingRequiredFeatureLabels(model: ModelOption, requiredFeatures?: string[]) {
+  if (!requiredFeatures?.length) {
+    return []
+  }
+  const features = new Set<string>(model.features ?? [])
+  return requiredFeatures.filter((feature) => !features.has(feature)).map(modelFeatureLabel)
+}
+
 export function modelOptionDisplayName(model: ModelOption) {
   return model.displayName || model.modelId || model.name
 }
@@ -82,6 +90,8 @@ export function modelFeatureLabel(feature: string): string {
 
 export function modelTypeLabel(type?: string): string {
   switch (type) {
+    case ModelOptionModelTypeEnum.Decision:
+      return '决策'
     case ModelOptionModelTypeEnum.Language:
       return '语言'
     case ModelOptionModelTypeEnum.Embedding:

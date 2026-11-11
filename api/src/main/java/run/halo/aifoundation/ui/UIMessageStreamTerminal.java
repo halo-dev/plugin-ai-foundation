@@ -11,8 +11,8 @@ import run.halo.aifoundation.chat.LanguageModelUsage;
  * @param aborted whether the stream ended because of cancellation
  * @param errorText caller-facing error text when the stream ended with an error
  */
-public record UIMessageStreamTerminal(FinishReason finishReason, LanguageModelUsage usage,
-                                      boolean aborted, String errorText) {
+public record UIMessageStreamTerminal(
+        FinishReason finishReason, LanguageModelUsage usage, boolean aborted, String errorText) {
 
     /**
      * Creates an empty terminal state before a terminal chunk is observed.
@@ -30,8 +30,7 @@ public record UIMessageStreamTerminal(FinishReason finishReason, LanguageModelUs
      * @param usage token usage
      * @return updated terminal state
      */
-    public UIMessageStreamTerminal withFinish(FinishReason finishReason,
-        LanguageModelUsage usage) {
+    public UIMessageStreamTerminal withFinish(FinishReason finishReason, LanguageModelUsage usage) {
         return new UIMessageStreamTerminal(finishReason, usage, aborted, errorText);
     }
 

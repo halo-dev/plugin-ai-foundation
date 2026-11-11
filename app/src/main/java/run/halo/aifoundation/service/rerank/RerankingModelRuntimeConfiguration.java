@@ -4,17 +4,17 @@ import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 public record RerankingModelRuntimeConfiguration(
-    ModelRuntimeContext context,
-    RerankingModelProviderOptions providerOptions
-) {
+        ModelRuntimeContext context, RerankingModelProviderOptions providerOptions) {
 
     public RerankingModelRuntimeConfiguration {
-        providerOptions = providerOptions != null
-            ? providerOptions : RerankingModelProviderOptions.defaults();
+        providerOptions = providerOptions != null ? providerOptions : RerankingModelProviderOptions.defaults();
     }
 
     public static RerankingModelRuntimeConfiguration from(ModelRuntimeContext context) {
-        return new RerankingModelRuntimeConfiguration(context,
-            context.providerDefinition().rerankingModelProviderOptions());
+        var options = context.providerDefinition().rerankingModelProviderOptions();
+        if (options == null) {
+            options = RerankingModelProviderOptions.defaults();
+        }
+        return new RerankingModelRuntimeConfiguration(context, options.withNativeOptions(context.nativeOptions()));
     }
 }

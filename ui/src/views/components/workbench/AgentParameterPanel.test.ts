@@ -1,9 +1,9 @@
-import { describe, expect, it, rstest } from '@rstest/core'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
+import { describe, expect, it, vi } from 'vitest'
 import AgentParameterPanel from './AgentParameterPanel.vue'
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   VSwitch: defineComponent({
     props: { modelValue: Boolean, disabled: Boolean },
     emits: ['update:modelValue'],

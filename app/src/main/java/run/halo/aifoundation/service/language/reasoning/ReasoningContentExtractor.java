@@ -11,11 +11,10 @@ import run.halo.aifoundation.part.ReasoningPart;
 
 public final class ReasoningContentExtractor {
 
-    private static final Pattern REASONING_TAG_PATTERN = Pattern.compile(
-        "<(think|reasoning)>\\s*(.*?)\\s*</\\1>",
-        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final List<String> REASONING_METADATA_KEYS = List.of(
-        "reasoning", "reasoningContent", "reasoning_content");
+    private static final Pattern REASONING_TAG_PATTERN =
+            Pattern.compile("<(think|reasoning)>\\s*(.*?)\\s*</\\1>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final List<String> REASONING_METADATA_KEYS =
+            List.of("reasoning", "reasoningContent", "reasoning_content");
 
     private final String providerType;
     private final Function<Object, Object> sanitizer;
@@ -29,15 +28,15 @@ public final class ReasoningContentExtractor {
         var safeText = text != null ? text : "";
         var tagged = extractTaggedReasoning(safeText);
         var metadataReasoning = firstMetadataText(metadata);
-        var reasoningText = hasText(metadataReasoning)
-            ? metadataReasoning
-            : tagged.reasoningText();
-        var reasoning = hasText(reasoningText)
-            ? List.of(ReasoningPart.builder()
-                .text(reasoningText)
-                .providerMetadata(reasoningProviderMetadata(metadata))
-                .build())
-            : List.<ReasoningPart>of();
+        var reasoningText = hasText(metadataReasoning) ? metadataReasoning : tagged.reasoningText();
+        var providerMetadata = reasoningProviderMetadata(metadata);
+        var reasoning = hasText(reasoningText) || !providerMetadata.isEmpty()
+                ? List.of(ReasoningPart.builder()
+                        .text(reasoningText)
+                        .signature(reasoningSignature(metadata))
+                        .providerMetadata(providerMetadata)
+                        .build())
+                : List.<ReasoningPart>of();
         return new Extraction(tagged.text(), reasoning);
     }
 
@@ -89,14 +88,27 @@ public final class ReasoningContentExtractor {
         return providerValues.isEmpty() ? Map.of() : Map.of(providerType, providerValues);
     }
 
+    private String reasoningSignature(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        for (var key : List.of("reasoningSignature", "reasoning_signature", "signature")) {
+            var value = metadata.get(key);
+            if (value != null && hasText(value.toString())) {
+                return value.toString();
+            }
+        }
+        return null;
+    }
+
     private boolean isPreservedReasoningMetadataKey(String key) {
         if (key == null || key.isBlank()) {
             return false;
         }
         var normalized = key.toLowerCase(Locale.ROOT);
         if ("reasoning".equals(normalized)
-            || "reasoningcontent".equals(normalized)
-            || "reasoning_content".equals(normalized)) {
+                || "reasoningcontent".equals(normalized)
+                || "reasoning_content".equals(normalized)) {
             return false;
         }
         return normalized.contains("reasoning") || "signature".equals(normalized);
@@ -110,16 +122,15 @@ public final class ReasoningContentExtractor {
         return value != null && !value.isBlank();
     }
 
-    private record TaggedReasoning(String text, String reasoningText) {
-    }
+    private record TaggedReasoning(String text, String reasoningText) {}
 
     public record Extraction(String text, List<ReasoningPart> reasoning) {
 
         public String reasoningText() {
             return reasoning.stream()
-                .map(ReasoningPart::getText)
-                .filter(ReasoningContentExtractor::hasText)
-                .reduce("", String::concat);
+                    .map(ReasoningPart::getText)
+                    .filter(ReasoningContentExtractor::hasText)
+                    .reduce("", String::concat);
         }
     }
 }

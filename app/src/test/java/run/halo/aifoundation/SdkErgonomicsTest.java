@@ -6,12 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import run.halo.aifoundation.chat.GenerateTextResult;
-import run.halo.aifoundation.chat.GenerationStep;
-import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.chat.ReasoningOptions;
+import reactor.core.publisher.Mono;
 import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.ModelCapabilityRequirement;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerateTextResult;
+import run.halo.aifoundation.chat.GenerationStep;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.exception.InvalidMediaContentException;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
@@ -26,13 +27,13 @@ import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.schema.JsonSchema;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.schema.OutputType;
-import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolApprovalPolicy;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolApprovalResponse;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairContext;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
+import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolExecutionContext;
 import run.halo.aifoundation.tool.ToolInputAvailableContext;
 import run.halo.aifoundation.tool.ToolInputDeltaContext;
@@ -40,7 +41,6 @@ import run.halo.aifoundation.tool.ToolInputStartContext;
 import run.halo.aifoundation.ui.FilePart;
 import run.halo.aifoundation.ui.UIMessageStreamReader;
 import run.halo.aifoundation.ui.UIMessageStreams;
-import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
 
 class SdkErgonomicsTest {
@@ -48,12 +48,12 @@ class SdkErgonomicsTest {
     @Test
     void jsonSchema_buildsDiscoverableObjectSchema() {
         var schema = JsonSchema.object()
-            .description("Weather lookup input")
-            .property("location", JsonSchema.string().description("City name"))
-            .property("unit", JsonSchema.enumeration("celsius", "fahrenheit"))
-            .property("days", JsonSchema.integer())
-            .required("location")
-            .build();
+                .description("Weather lookup input")
+                .property("location", JsonSchema.string().description("City name"))
+                .property("unit", JsonSchema.enumeration("celsius", "fahrenheit"))
+                .property("days", JsonSchema.integer())
+                .required("location")
+                .build();
 
         assertThat(schema.toMap()).containsEntry("type", "object");
         assertThat(schema.toMap()).containsEntry("required", List.of("location"));
@@ -66,17 +66,17 @@ class SdkErgonomicsTest {
     @Test
     void toolDefinition_acceptsTypedInputAndOutputSchemas() {
         var tool = ToolDefinition.builder()
-            .name("weather")
-            .description("Get weather")
-            .inputSchema(JsonSchema.object()
-                .property("location", JsonSchema.string())
-                .required("location")
-                .build())
-            .outputSchema(JsonSchema.object()
-                .property("temperature", JsonSchema.number())
-                .required("temperature")
-                .build())
-            .build();
+                .name("weather")
+                .description("Get weather")
+                .inputSchema(JsonSchema.object()
+                        .property("location", JsonSchema.string())
+                        .required("location")
+                        .build())
+                .outputSchema(JsonSchema.object()
+                        .property("temperature", JsonSchema.number())
+                        .required("temperature")
+                        .build())
+                .build();
 
         assertThat(tool.getInputSchema()).containsEntry("type", "object");
         assertThat(tool.getOutputSchema()).containsEntry("type", "object");
@@ -84,20 +84,19 @@ class SdkErgonomicsTest {
 
     @Test
     void toolDefinition_acceptsApprovalPolicies() {
-        var always = ToolDefinition.builder()
-            .name("dangerous")
-            .needsApproval(true)
-            .build();
+        var always =
+                ToolDefinition.builder().name("dangerous").needsApproval(true).build();
         var dynamic = ToolDefinition.builder()
-            .name("payment")
-            .needsApproval(context -> ((Number) context.getInput().get("amount")).intValue() > 1000)
-            .build();
+                .name("payment")
+                .needsApproval(context -> ((Number) context.getInput().get("amount")).intValue() > 1000)
+                .build();
 
-        assertThat(always.getApprovalPolicy().getMode())
-            .isEqualTo(ToolApprovalPolicy.Mode.ALWAYS);
-        assertThat(dynamic.getApprovalPolicy().requiresApproval(ToolExecutionContext.builder()
-            .input(Map.of("amount", 1200))
-            .build())).isTrue();
+        assertThat(always.getApprovalPolicy().getMode()).isEqualTo(ToolApprovalPolicy.Mode.ALWAYS);
+        assertThat(dynamic.getApprovalPolicy()
+                        .requiresApproval(ToolExecutionContext.builder()
+                                .input(Map.of("amount", 1200))
+                                .build()))
+                .isTrue();
     }
 
     @Test
@@ -106,31 +105,31 @@ class SdkErgonomicsTest {
         var mutableContext = new java.util.LinkedHashMap<String, Object>();
         mutableContext.put("traceId", "trace-1");
         var start = ToolInputStartContext.builder()
-            .toolCallId("call-1")
-            .toolName("weather")
-            .messages(mutableMessages)
-            .requestContext(mutableContext)
-            .build();
+                .toolCallId("call-1")
+                .toolName("weather")
+                .messages(mutableMessages)
+                .requestContext(mutableContext)
+                .build();
         var delta = ToolInputDeltaContext.builder()
-            .toolCallId("call-1")
-            .toolName("weather")
-            .inputTextDelta("{\"city\"")
-            .messages(mutableMessages)
-            .requestContext(mutableContext)
-            .build();
+                .toolCallId("call-1")
+                .toolName("weather")
+                .inputTextDelta("{\"city\"")
+                .messages(mutableMessages)
+                .requestContext(mutableContext)
+                .build();
         var available = ToolInputAvailableContext.builder()
-            .toolCallId("call-1")
-            .toolName("weather")
-            .input(Map.of("city", "Hangzhou"))
-            .messages(mutableMessages)
-            .requestContext(mutableContext)
-            .build();
+                .toolCallId("call-1")
+                .toolName("weather")
+                .input(Map.of("city", "Hangzhou"))
+                .messages(mutableMessages)
+                .requestContext(mutableContext)
+                .build();
         var tool = ToolDefinition.builder()
-            .name("weather")
-            .onInputStart(context -> Mono.empty())
-            .onInputDelta(context -> Mono.empty())
-            .onInputAvailable(context -> Mono.empty())
-            .build();
+                .name("weather")
+                .onInputStart(context -> Mono.empty())
+                .onInputDelta(context -> Mono.empty())
+                .onInputAvailable(context -> Mono.empty())
+                .build();
 
         mutableMessages.clear();
         mutableContext.put("traceId", "changed");
@@ -143,14 +142,13 @@ class SdkErgonomicsTest {
         assertThat(delta.getInputTextDelta()).isEqualTo("{\"city\"");
         assertThat(available.getInput()).containsEntry("city", "Hangzhou");
         assertThatThrownBy(() -> start.getRequestContext().put("new", "value"))
-            .isInstanceOf(UnsupportedOperationException.class);
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
     void toolInputEndAndErrorAreValidatedTypedStreamParts() throws Exception {
         var end = TextStreamPart.toolInputEnd("input-1", "call-1", "weather");
-        var error = TextStreamPart.toolInputError("call-1", "weather", "invalid input",
-            Map.of("provider", "test"));
+        var error = TextStreamPart.toolInputError("call-1", "weather", "invalid input", Map.of("provider", "test"));
         var mapper = JsonMapper.builder().build();
 
         assertThat(end.getType()).isEqualTo(PartType.TOOL_INPUT_END);
@@ -158,38 +156,35 @@ class SdkErgonomicsTest {
         assertThat(mapper.writeValueAsString(end)).contains("\"type\":\"tool-input-end\"");
         assertThat(mapper.writeValueAsString(error)).contains("\"errorText\":\"invalid input\"");
         assertThatThrownBy(() -> TextStreamPart.toolInputEnd("", "call-1", "weather"))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> TextStreamPart.toolInputError("call-1", "weather", "", Map.of()))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void generationResultsExposeProviderNeutralResponseMessages() {
         var responseMessage = ModelMessage.assistant("hello");
         var step = GenerationStep.builder()
-            .responseMessages(List.of(responseMessage))
-            .build();
+                .responseMessages(List.of(responseMessage))
+                .build();
         var result = GenerateTextResult.builder()
-            .responseMessages(List.of(responseMessage))
-            .steps(List.of(step))
-            .build();
+                .responseMessages(List.of(responseMessage))
+                .steps(List.of(step))
+                .build();
 
-        assertThat(result.getResponseMessages())
-            .singleElement()
-            .satisfies(message -> {
-                assertThat(message.getRole().name()).isEqualTo("ASSISTANT");
-                assertThat(message.getContent().getFirst().getText()).isEqualTo("hello");
-            });
-        assertThat(result.getSteps().getFirst().getResponseMessages())
-            .containsExactly(responseMessage);
+        assertThat(result.getResponseMessages()).singleElement().satisfies(message -> {
+            assertThat(message.getRole().name()).isEqualTo("ASSISTANT");
+            assertThat(message.getContent().getFirst().getText()).isEqualTo("hello");
+        });
+        assertThat(result.getSteps().getFirst().getResponseMessages()).containsExactly(responseMessage);
     }
 
     @Test
     void outputSpec_acceptsTypedSchemas() {
         var objectOutput = OutputSpec.object(JsonSchema.object()
-            .property("name", JsonSchema.string())
-            .required("name")
-            .build());
+                .property("name", JsonSchema.string())
+                .required("name")
+                .build());
         var arrayOutput = OutputSpec.array(JsonSchema.string().build());
 
         assertThat(objectOutput.getType()).isEqualTo(OutputType.OBJECT);
@@ -201,29 +196,28 @@ class SdkErgonomicsTest {
     @Test
     void reasoningOptions_buildTypedSettings() {
         assertThat(ReasoningOptions.providerDefault().isExplicit()).isFalse();
-        assertThat(ReasoningOptions.enabled().getMode())
-            .isEqualTo(ReasoningOptions.Mode.ENABLED);
-        assertThat(ReasoningOptions.disabled().getMode())
-            .isEqualTo(ReasoningOptions.Mode.DISABLED);
+        assertThat(ReasoningOptions.enabled().getMode()).isEqualTo(ReasoningOptions.Mode.ENABLED);
+        assertThat(ReasoningOptions.disabled().getMode()).isEqualTo(ReasoningOptions.Mode.DISABLED);
         assertThat(ReasoningOptions.effort(ReasoningOptions.Effort.LOW).getEffort())
-            .isEqualTo(ReasoningOptions.Effort.LOW);
+                .isEqualTo(ReasoningOptions.Effort.LOW);
         assertThat(GenerateTextRequest.builder()
-            .prompt("fast")
-            .reasoning(ReasoningOptions.disabled())
-            .build()
-            .getReasoning()
-            .isExplicit()).isTrue();
+                        .prompt("fast")
+                        .reasoning(ReasoningOptions.disabled())
+                        .build()
+                        .getReasoning()
+                        .isExplicit())
+                .isTrue();
         assertThat(GenerateTextRequest.builder().prompt("default").build().getReasoning())
-            .isNull();
+                .isNull();
     }
 
     @Test
     void reasoningOptions_areJsonSerializable() throws Exception {
         var mapper = JsonMapper.builder().build();
         var request = GenerateTextRequest.builder()
-            .prompt("fast")
-            .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
-            .build();
+                .prompt("fast")
+                .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
+                .build();
 
         var json = mapper.writeValueAsString(request);
         var restored = mapper.readValue(json, GenerateTextRequest.class);
@@ -235,12 +229,12 @@ class SdkErgonomicsTest {
     @Test
     void messagePartBuilderRejectsInvalidShape() {
         assertThatThrownBy(() -> ModelMessagePart.builder()
-            .type(PartType.TEXT)
-            .text("hello")
-            .toolName("weather")
-            .build())
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("text message part has invalid fields");
+                        .type(PartType.TEXT)
+                        .text("hello")
+                        .toolName("weather")
+                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("text message part has invalid fields");
     }
 
     @Test
@@ -259,21 +253,20 @@ class SdkErgonomicsTest {
     @Test
     void dataContent_rejectsInvalidBase64AndConflictingSources() {
         assertThatThrownBy(() -> DataContent.data("not base64", "image/png"))
-            .isInstanceOf(InvalidMediaContentException.class);
+                .isInstanceOf(InvalidMediaContentException.class);
         assertThatThrownBy(() -> DataContent.builder()
-            .url("https://example.com/image.png")
-            .data("aGVsbG8=")
-            .mediaType("image/png")
-            .build())
-            .isInstanceOf(InvalidMediaContentException.class)
-            .hasMessage("media content must set exactly one of url or data");
+                        .url("https://example.com/image.png")
+                        .data("aGVsbG8=")
+                        .mediaType("image/png")
+                        .build())
+                .isInstanceOf(InvalidMediaContentException.class)
+                .hasMessage("media content must set exactly one of url or data");
     }
 
     @Test
     void modelMessagePart_acceptsImageAndFileMedia() {
         var image = ModelMessagePart.image(DataContent.data("aGVsbG8=", "image/png"));
-        var file = ModelMessagePart.file(DataContent.url("https://example.com/manual.pdf",
-            "application/pdf"));
+        var file = ModelMessagePart.file(DataContent.url("https://example.com/manual.pdf", "application/pdf"));
 
         assertThat(image.getType()).isEqualTo(PartType.IMAGE);
         assertThat(image.getMedia().getMediaType()).isEqualTo("image/png");
@@ -283,12 +276,9 @@ class SdkErgonomicsTest {
 
     @Test
     void generatedFile_reusesFileContentAndImageResultConvenience() {
-        var file = GeneratedFile.url("https://example.com/generated.png", "image/png",
-            "generated.png");
+        var file = GeneratedFile.url("https://example.com/generated.png", "image/png", "generated.png");
         var content = GenerationContentPart.file(file);
-        var result = GenerateImageResult.builder()
-            .images(List.of(file))
-            .build();
+        var result = GenerateImageResult.builder().images(List.of(file)).build();
 
         assertThat(content.getType()).isEqualTo(PartType.FILE);
         assertThat(content.getUrl()).isEqualTo(file.getUrl());
@@ -298,18 +288,17 @@ class SdkErgonomicsTest {
     @Test
     void generateImageRequest_acceptsTypedControlsAndCapabilityRequirements() {
         var request = GenerateImageRequest.builder()
-            .prompt("Halo mascot")
-            .n(2)
-            .size(1024)
-            .responseFormat(ImageResponseFormat.URL)
-            .negativePrompt("blurry")
-            .build();
+                .prompt("Halo mascot")
+                .n(2)
+                .size(1024)
+                .responseFormat(ImageResponseFormat.URL)
+                .negativePrompt("blurry")
+                .build();
         var wideRequest = GenerateImageRequest.builder()
-            .prompt("Halo banner")
-            .size(1024, 768)
-            .build();
-        var requirement = ModelCapabilityRequirement.languageImageInput("image/*",
-            InputSource.DATA);
+                .prompt("Halo banner")
+                .size(1024, 768)
+                .build();
+        var requirement = ModelCapabilityRequirement.languageImageInput("image/*", InputSource.DATA);
 
         assertThat(request.getSize()).isEqualTo("1024x1024");
         assertThat(wideRequest.getSize()).isEqualTo("1024x768");
@@ -317,76 +306,77 @@ class SdkErgonomicsTest {
         assertThat(requirement.getLanguage().getImageInput()).isTrue();
         assertThat(requirement.getLanguage().getInputMediaTypes()).containsExactly("image/*");
         assertThatThrownBy(() -> GenerateImageRequest.builder().size(0))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("edge must be positive");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("edge must be positive");
         assertThatThrownBy(() -> GenerateImageRequest.builder().size(1024, -1))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("height must be positive");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("height must be positive");
     }
 
     @Test
     void uiMessageStreamWriter_acceptsGeneratedFiles() {
         var file = GeneratedFile.base64("abc123", "image/png", "generated.png");
-        var stream = UIMessageStreams.create("assistant-1", writer ->
-            writer.writeFile("image-1", file));
+        var stream = UIMessageStreams.create("assistant-1", writer -> writer.writeFile("image-1", file));
         var message = UIMessageStreamReader.read(options -> options.stream(stream))
-            .responseMessage()
-            .block();
+                .responseMessage()
+                .block();
 
-        assertThat(message.parts())
-            .singleElement()
-            .isInstanceOfSatisfying(FilePart.class, part -> {
-                assertThat(part.fileId()).isEqualTo("image-1");
-                assertThat(part.mediaType()).isEqualTo("image/png");
-                assertThat(part.data()).isEqualTo("abc123");
-                assertThat(part.title()).isEqualTo("generated.png");
-            });
+        assertThat(message.parts()).singleElement().isInstanceOfSatisfying(FilePart.class, part -> {
+            assertThat(part.fileId()).isEqualTo("image-1");
+            assertThat(part.mediaType()).isEqualTo("image/png");
+            assertThat(part.data()).isEqualTo("abc123");
+            assertThat(part.title()).isEqualTo("generated.png");
+        });
     }
 
     @Test
     void approvalPartsHaveTypedFactories() {
-        var request = ToolApprovalRequest.from(ToolCall.builder()
-            .toolCallId("call_1")
-            .toolName("run")
-            .input(Map.of("command", "rm file"))
-            .build(), "approval_call_1", 0, Map.of());
+        var request = ToolApprovalRequest.from(
+                ToolCall.builder()
+                        .toolCallId("call_1")
+                        .toolName("run")
+                        .input(Map.of("command", "rm file"))
+                        .build(),
+                "approval_call_1",
+                0,
+                Map.of());
         var response = ToolApprovalResponse.builder()
-            .approvalId("approval_call_1")
-            .toolCallId("call_1")
-            .toolName("run")
-            .approved(false)
-            .reason("Destructive command")
-            .build();
+                .approvalId("approval_call_1")
+                .toolCallId("call_1")
+                .toolName("run")
+                .approved(false)
+                .reason("Destructive command")
+                .build();
 
-        assertThat(ModelMessagePart.toolApprovalRequest(request).getType())
-            .isEqualTo(PartType.TOOL_APPROVAL_REQUEST);
+        assertThat(ModelMessagePart.toolApprovalRequest(request).getType()).isEqualTo(PartType.TOOL_APPROVAL_REQUEST);
         assertThat(ModelMessagePart.toolApprovalResponse(response).getApproved())
-            .isFalse();
+                .isFalse();
         assertThat(GenerationContentPart.toolApprovalRequest(request).getApprovalId())
-            .isEqualTo("approval_call_1");
-        assertThat(TextStreamPart.toolApprovalRequest(request).getType())
-            .isEqualTo(PartType.TOOL_APPROVAL_REQUEST);
+                .isEqualTo("approval_call_1");
+        assertThat(TextStreamPart.toolApprovalRequest(request).getType()).isEqualTo(PartType.TOOL_APPROVAL_REQUEST);
     }
 
     @Test
     void generateTextRequest_acceptsTransientToolCallRepairCallback() throws Exception {
         var mapper = JsonMapper.builder().build();
         var request = GenerateTextRequest.builder()
-            .prompt("repair tool")
-            .toolCallRepair(context -> Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
-                .toolCallId(context.getToolCall().getToolCallId())
-                .toolName(context.getToolCall().getToolName())
-                .input(Map.of("location", "SF"))
-                .build())))
-            .build();
+                .prompt("repair tool")
+                .toolCallRepair(context -> Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                        .toolCallId(context.getToolCall().getToolCallId())
+                        .toolName(context.getToolCall().getToolName())
+                        .input(Map.of("location", "SF"))
+                        .build())))
+                .build();
 
-        var repaired = request.getToolCallRepair().repair(ToolCallRepairContext.builder()
-            .toolCall(ToolCall.builder()
-                .toolCallId("call_1")
-                .toolName("weather")
-                .input(Map.of("city", "SF"))
-                .build())
-            .build()).block();
+        var repaired = request.getToolCallRepair()
+                .repair(ToolCallRepairContext.builder()
+                        .toolCall(ToolCall.builder()
+                                .toolCallId("call_1")
+                                .toolName("weather")
+                                .input(Map.of("city", "SF"))
+                                .build())
+                        .build())
+                .block();
 
         assertThat(repaired.getToolCall().getInput()).containsEntry("location", "SF");
         var json = mapper.writeValueAsString(request);
@@ -398,22 +388,22 @@ class SdkErgonomicsTest {
     @Test
     void generationContentBuilderRejectsInvalidShape() {
         assertThatThrownBy(() -> GenerationContentPart.builder()
-            .type(PartType.TOOL_RESULT)
-            .toolCallId("call_1")
-            .toolName("weather")
-            .text("not valid here")
-            .build())
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("tool-result generation content part has invalid fields");
+                        .type(PartType.TOOL_RESULT)
+                        .toolCallId("call_1")
+                        .toolName("weather")
+                        .text("not valid here")
+                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tool-result generation content part has invalid fields");
     }
 
     @Test
     void streamPartBuilderRejectsMissingRequiredFields() {
         assertThatThrownBy(() -> TextStreamPart.builder()
-            .type(PartType.TEXT_DELTA)
-            .delta("hello")
-            .build())
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("text-delta stream part id must not be blank");
+                        .type(PartType.TEXT_DELTA)
+                        .delta("hello")
+                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("text-delta stream part id must not be blank");
     }
 }

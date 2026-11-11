@@ -3,6 +3,7 @@ package run.halo.aifoundation.endpoint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,9 +12,14 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.mockito.ArgumentCaptor;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.pf4j.PluginDescriptor;
+import org.pf4j.PluginManager;
+import org.pf4j.PluginWrapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
@@ -25,30 +31,34 @@ import run.halo.aifoundation.chat.GenerationRequestMetadata;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StepContext;
+import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
+import run.halo.aifoundation.extension.AiModel;
+import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationModel;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.part.PartType;
-import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.part.TextStreamPart;
-import run.halo.aifoundation.extension.AiModel;
-import run.halo.aifoundation.extension.AiProvider;
-import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankResult;
 import run.halo.aifoundation.rerank.RerankingModel;
+import run.halo.aifoundation.service.audit.CallerPluginInfo;
+import run.halo.aifoundation.service.audit.StackWalkingCallerPluginResolver;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -65,32 +75,49 @@ class ModelConsoleEndpointTest {
     void setUp() {
         mockType = mock(AiProviderType.class);
         when(mockType.getSupportedModelTypes())
-            .thenReturn(List.of(ModelType.LANGUAGE, ModelType.EMBEDDING, ModelType.RERANK,
-                ModelType.IMAGE_GENERATION));
+                .thenReturn(
+                        List.of(ModelType.LANGUAGE, ModelType.EMBEDDING, ModelType.RERANK, ModelType.IMAGE_GENERATION));
         when(mockType.getSupportedFeatures())
-            .thenReturn(List.of(ModelFeature.STREAMING, ModelFeature.VISION,
-                ModelFeature.AUDIO_INPUT, ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
-                ModelFeature.REASONING));
+                .thenReturn(List.of(
+                        ModelFeature.STREAMING,
+                        ModelFeature.VISION,
+                        ModelFeature.AUDIO_INPUT,
+                        ModelFeature.TOOL_CALL,
+                        ModelFeature.STRUCTURED_OUTPUT,
+                        ModelFeature.REASONING));
+        when(mockType.getSupportedFeatures(any(AdapterType.class)))
+                .thenAnswer(invocation -> mockType.getSupportedFeatures());
         when(mockType.getSupportedAdapterTypes())
-            .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
-                AdapterType.RERANK, AdapterType.OPENAI_IMAGE));
-        when(mockType.recommendAdapterType(ModelType.LANGUAGE))
-            .thenReturn(Optional.of(AdapterType.OPENAI_CHAT));
-        when(mockType.recommendAdapterType(ModelType.EMBEDDING))
-            .thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
-        when(mockType.recommendAdapterType(ModelType.RERANK))
-            .thenReturn(Optional.of(AdapterType.RERANK));
+                .thenReturn(List.of(
+                        AdapterType.OPENAI_CHAT,
+                        AdapterType.OPENAI_EMBEDDING,
+                        AdapterType.RERANK,
+                        AdapterType.OPENAI_IMAGE));
+        when(mockType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(Optional.of(AdapterType.OPENAI_CHAT));
+        when(mockType.recommendAdapterType(ModelType.EMBEDDING)).thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
+        when(mockType.recommendAdapterType(ModelType.RERANK)).thenReturn(Optional.of(AdapterType.RERANK));
         when(mockType.recommendAdapterType(ModelType.IMAGE_GENERATION))
-            .thenReturn(Optional.of(AdapterType.OPENAI_IMAGE));
+                .thenReturn(Optional.of(AdapterType.OPENAI_IMAGE));
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
         when(providerClientCache.getProviderType("openai")).thenReturn(mockType);
+        doAnswer(invocation -> {
+                    NativeModelOptionsValidator.validate(
+                            ((run.halo.aifoundation.provider.support.ProviderModelRef) invocation.getArgument(0))
+                                    .nativeOptions());
+                    return null;
+                })
+                .when(mockType)
+                .validateNativeModelOptions(any());
 
-        var modelValidator = new ModelConsoleModelValidator(client, providerClientCache,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
+        var modelValidator = new ModelConsoleModelValidator(
+                client,
+                providerClientCache,
+                new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+                new EffectiveParameterMappingResolver());
         var endpoint = new ModelConsoleEndpoint(client, aiModelService, modelValidator);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
-            .configureClient()
-            .build();
+                .configureClient()
+                .build();
     }
 
     // ---- list ----
@@ -98,30 +125,32 @@ class ModelConsoleEndpointTest {
     @Test
     void list_returnsAllModels() {
         when(client.listAll(eq(AiModel.class), any(), any()))
-            .thenReturn(Flux.just(
-                model("gpt-4", "openai-prod", "gpt-4"),
-                model("llama2", "ollama-local", "llama2")
-            ));
+                .thenReturn(
+                        Flux.just(model("gpt-4", "openai-prod", "gpt-4"), model("llama2", "ollama-local", "llama2")));
 
-        webTestClient.get().uri("/models")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBodyList(AiModel.class)
-            .hasSize(2);
+        webTestClient
+                .get()
+                .uri("/models")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(AiModel.class)
+                .hasSize(2);
     }
 
     @Test
     void list_withFieldSelector_returnsFilteredModels() {
         when(client.listAll(eq(AiModel.class), any(), any()))
-            .thenReturn(Flux.just(
-                model("gpt-4", "openai-prod", "gpt-4")
-            ));
+                .thenReturn(Flux.just(model("gpt-4", "openai-prod", "gpt-4")));
 
-        webTestClient.get().uri("/models?fieldSelector=spec.providerName=openai-prod")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBodyList(AiModel.class)
-            .hasSize(1);
+        webTestClient
+                .get()
+                .uri("/models?fieldSelector=spec.providerName=openai-prod")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(AiModel.class)
+                .hasSize(1);
     }
 
     // ---- create ----
@@ -135,14 +164,19 @@ class ModelConsoleEndpointTest {
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.metadata.name").isEqualTo(generatedName)
-            .jsonPath("$.spec.group").doesNotExist();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.metadata.name")
+                .isEqualTo(generatedName)
+                .jsonPath("$.spec.group")
+                .doesNotExist();
     }
 
     @Test
@@ -155,14 +189,33 @@ class ModelConsoleEndpointTest {
         m.getSpec().setParameterMappings(mappings);
         stubCreate(m);
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.spec.parameterMappings.language.maxOutputTokens.template")
-            .isEqualTo("openai.max-completion-tokens");
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.spec.parameterMappings.language.maxOutputTokens.template")
+                .isEqualTo("openai.max-completion-tokens");
+    }
+
+    @Test
+    void create_rejectsNativeOptionsOwnedByEachInvocation() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setNativeOptions(Map.of("messages", List.of("not allowed")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -171,14 +224,16 @@ class ModelConsoleEndpointTest {
         var mappings = new ModelParameterMappings();
         mappings.setEmbedding(new ModelParameterMappings.EmbeddingMappings());
         m.getSpec().setParameterMappings(mappings);
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -189,14 +244,16 @@ class ModelConsoleEndpointTest {
         language.setMaxOutputTokens(template("chat.temperature"));
         mappings.setLanguage(language);
         m.getSpec().setParameterMappings(mappings);
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -204,51 +261,72 @@ class ModelConsoleEndpointTest {
         var m = model("gpt-4", "openai-prod", "gpt-4");
         m.getSpec().setAdapterType(null);
         var generatedName = AiModelNameGenerator.generate("openai-prod", "gpt-4");
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiModel.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getSpec().getAdapterType())
-                    .isEqualTo(AdapterType.OPENAI_CHAT));
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AiModel.class)
+                .consumeWith(response -> assertThat(
+                                response.getResponseBody().getSpec().getAdapterType())
+                        .isEqualTo(AdapterType.OPENAI_CHAT));
     }
 
     @Test
     void create_missingAdapterTypeWithoutRecommendation_returns400() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
         m.getSpec().setAdapterType(null);
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(mockType.recommendAdapterType(ModelType.LANGUAGE))
-            .thenReturn(Optional.empty());
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(mockType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(Optional.empty());
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void create_explicitUnsupportedAdapterType_returns400() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
         m.getSpec().setAdapterType(AdapterType.OLLAMA_CHAT);
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
+    void create_adapterForDifferentModelType_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setAdapterType(AdapterType.OPENAI_EMBEDDING);
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -259,17 +337,19 @@ class ModelConsoleEndpointTest {
         m.getSpec().setAdapterType(AdapterType.OPENAI_EMBEDDING);
         var generatedName = AiModelNameGenerator.generate("openai-prod", "text-embedding-3-small");
 
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isOk();
     }
 
     @Test
@@ -280,17 +360,19 @@ class ModelConsoleEndpointTest {
         m.getSpec().setAdapterType(AdapterType.RERANK);
         var generatedName = AiModelNameGenerator.generate("openai-prod", "rerank-v1");
 
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isOk();
     }
 
     @Test
@@ -301,17 +383,19 @@ class ModelConsoleEndpointTest {
         m.getSpec().setAdapterType(AdapterType.OPENAI_IMAGE);
         var generatedName = AiModelNameGenerator.generate("openai-prod", "gpt-image-1");
 
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isOk();
     }
 
     @Test
@@ -321,14 +405,16 @@ class ModelConsoleEndpointTest {
         m.getSpec().setAdapterType(AdapterType.OPENAI_EMBEDDING);
 
         when(mockType.getSupportedModelTypes()).thenReturn(List.of(ModelType.LANGUAGE));
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -337,35 +423,39 @@ class ModelConsoleEndpointTest {
         m.getSpec().setFeatures(List.of(ModelFeature.TOOL_CALL));
 
         when(mockType.getSupportedFeatures()).thenReturn(List.of(ModelFeature.STREAMING));
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void create_modelNameNormalizesIllegalCharactersAndCase() {
         var m = model("ignored", "OpenAI-Prod", "GPT/4.1 Mini");
         var generatedName = AiModelNameGenerator.generate("OpenAI-Prod", "GPT/4.1 Mini");
-        when(client.fetch(AiProvider.class, "OpenAI-Prod"))
-            .thenReturn(Mono.just(provider("OpenAI-Prod", "openai")));
+        when(client.fetch(AiProvider.class, "OpenAI-Prod")).thenReturn(Mono.just(provider("OpenAI-Prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiModel.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo(generatedName));
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AiModel.class)
+                .consumeWith(response -> assertThat(
+                                response.getResponseBody().getMetadata().getName())
+                        .isEqualTo(generatedName));
     }
 
     @Test
@@ -375,22 +465,24 @@ class ModelConsoleEndpointTest {
         var existing = model(firstName, "openai-prod", "gpt-4");
         var incoming = model("ignored", "openai-prod", "GPT/4");
 
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, firstName)).thenReturn(Mono.just(existing));
         when(client.fetch(AiModel.class, secondName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(incoming)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiModel.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo(secondName));
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(incoming)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AiModel.class)
+                .consumeWith(response -> assertThat(
+                                response.getResponseBody().getMetadata().getName())
+                        .isEqualTo(secondName));
     }
 
     @Test
@@ -401,33 +493,42 @@ class ModelConsoleEndpointTest {
         m.setMetadata(metadata);
         // spec is null
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void create_nullProviderName_returns400() {
         var m = model("gpt-4", null, "gpt-4");
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void create_nullModelId_returns400() {
         var m = model("gpt-4", "openai-prod", null);
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(m)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -438,11 +539,14 @@ class ModelConsoleEndpointTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.just(existing));
 
-        webTestClient.post().uri("/models")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(incoming)
-            .exchange()
-            .expectStatus().isEqualTo(409);
+        webTestClient
+                .post()
+                .uri("/models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(incoming)
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409);
     }
 
     // ---- update ----
@@ -458,29 +562,34 @@ class ModelConsoleEndpointTest {
         when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(existing));
         when(client.update(existing)).thenReturn(Mono.just(existing));
 
-        webTestClient.put().uri("/models/gpt-4")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(updated)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiModel.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getSpec().getDisplayName())
-                    .isEqualTo("Updated Name"));
+        webTestClient
+                .put()
+                .uri("/models/gpt-4")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(updated)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AiModel.class)
+                .consumeWith(response -> assertThat(
+                                response.getResponseBody().getSpec().getDisplayName())
+                        .isEqualTo("Updated Name"));
     }
 
     @Test
     void update_notFound_returns404() {
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, "missing")).thenReturn(Mono.empty());
 
-        webTestClient.put().uri("/models/missing")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(model("missing", "openai-prod", "gpt-4"))
-            .exchange()
-            .expectStatus().isNotFound();
+        webTestClient
+                .put()
+                .uri("/models/missing")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(model("missing", "openai-prod", "gpt-4"))
+                .exchange()
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
@@ -493,11 +602,14 @@ class ModelConsoleEndpointTest {
         when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(existing));
         when(client.update(existing)).thenReturn(Mono.just(existing));
 
-        webTestClient.put().uri("/models/gpt-4")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(updated)
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .put()
+                .uri("/models/gpt-4")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(updated)
+                .exchange()
+                .expectStatus()
+                .isOk();
     }
 
     @Test
@@ -510,11 +622,59 @@ class ModelConsoleEndpointTest {
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.just(other));
         when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(existing));
 
-        webTestClient.put().uri("/models/gpt-4")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(updated)
-            .exchange()
-            .expectStatus().isEqualTo(409);
+        webTestClient
+                .put()
+                .uri("/models/gpt-4")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(updated)
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409);
+    }
+
+    @Test
+    void testUiMessageChatStream_detectsFoundationCallerAfterAsyncModelResolution() {
+        var resolver = foundationCallerResolver();
+        var caller = new AtomicReference<CallerPluginInfo>();
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4"))
+                .thenReturn(Mono.just(languageModel).publishOn(reactor.core.scheduler.Schedulers.boundedElastic()));
+        when(languageModel.streamText(any(GenerateTextRequest.class))).thenAnswer(invocation -> {
+            caller.set(resolver.resolveCurrentCallerSnapshot());
+            return streamResult(Flux.just(TextStreamPart.textDelta("text-1", "Hi")));
+        });
+
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(uiMessageBody("Hello"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody()).contains("Hi"));
+
+        assertThat(caller.get()).isNotNull();
+        assertThat(caller.get().getPluginName()).isEqualTo("ai-foundation");
+        assertThat(caller.get().getVersion()).isEqualTo("1.0.0");
+        assertThat(caller.get().isDetected()).isTrue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private StackWalkingCallerPluginResolver foundationCallerResolver() {
+        var self = mock(PluginWrapper.class);
+        var manager = mock(PluginManager.class);
+        var descriptor = mock(PluginDescriptor.class);
+        var provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(self);
+        when(self.getPluginId()).thenReturn("ai-foundation");
+        when(self.getPluginManager()).thenReturn(manager);
+        when(self.getPluginClassLoader()).thenReturn(ModelConsoleEndpoint.class.getClassLoader());
+        when(self.getDescriptor()).thenReturn(descriptor);
+        when(descriptor.getVersion()).thenReturn("1.0.0");
+        when(manager.getStartedPlugins()).thenReturn(List.of(self));
+        return new StackWalkingCallerPluginResolver(client, provider);
     }
 
     @Test
@@ -522,47 +682,59 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.start("assistant-1"),
-                TextStreamPart.textStart("text-1"),
-                TextStreamPart.textDelta("text-1", "Hi"),
-                TextStreamPart.textEnd("text-1"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.start("assistant-1"),
+                        TextStreamPart.textStart("text-1"),
+                        TextStreamPart.textDelta("text-1", "Hi"),
+                        TextStreamPart.textEnd("text-1"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(Map.of(
-                    "id", "user-1",
-                    "role", "user",
-                    "parts", List.of(Map.of(
-                        "type", "text",
-                        "id", "user-text",
-                        "text", "Hello"
-                    )),
-                    "metadata", Map.of("conversationId", "chat-1")
-                )),
-                "trigger", "submit-message",
-                "system", "You are concise.",
-                "temperature", 0.2,
-                "maxOutputTokens", 128
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
-            .expectHeader().valueEquals("X-Halo-AI-UI-Message-Stream", "v1")
-            .expectHeader().doesNotExist("X-Halo-AI-Stream-Protocol")
-            .expectBody(String.class)
-            .consumeWith(response -> {
-                var bodyText = response.getResponseBody();
-                assertThat(bodyText).contains("\"type\":\"start\"");
-                assertThat(bodyText).contains("\"type\":\"text-delta\"");
-                assertThat(bodyText).contains("\"delta\":\"Hi\"");
-                assertThat(bodyText).contains("[DONE]");
-                assertThat(bodyText).doesNotContain("data: data:");
-            });
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id",
+                        "chat-1",
+                        "messages",
+                        List.of(Map.of(
+                                "id",
+                                "user-1",
+                                "role",
+                                "user",
+                                "parts",
+                                List.of(Map.of(
+                                        "type", "text",
+                                        "id", "user-text",
+                                        "text", "Hello")),
+                                "metadata",
+                                Map.of("conversationId", "chat-1"))),
+                        "trigger",
+                        "submit-message",
+                        "system",
+                        "You are concise.",
+                        "temperature",
+                        0.2,
+                        "maxOutputTokens",
+                        128))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+                .expectHeader()
+                .valueEquals("X-Halo-AI-UI-Message-Stream", "v1")
+                .expectHeader()
+                .doesNotExist("X-Halo-AI-Stream-Protocol")
+                .expectBody(String.class)
+                .consumeWith(response -> {
+                    var bodyText = response.getResponseBody();
+                    assertThat(bodyText).contains("\"type\":\"start\"");
+                    assertThat(bodyText).contains("\"type\":\"text-delta\"");
+                    assertThat(bodyText).contains("\"delta\":\"Hi\"");
+                    assertThat(bodyText).contains("[DONE]");
+                    assertThat(bodyText).doesNotContain("data: data:");
+                });
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
@@ -574,7 +746,7 @@ class ModelConsoleEndpointTest {
         assertThat(request.getMessages()).hasSize(1);
         assertThat(request.getMessages().getFirst().getRole().name()).isEqualTo("USER");
         assertThat(request.getMessages().getFirst().getContent().getFirst().getText())
-            .isEqualTo("Hello");
+                .isEqualTo("Hello");
     }
 
     @Test
@@ -582,91 +754,96 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.start("assistant-agent"),
-                TextStreamPart.textStart("text-agent"),
-                TextStreamPart.textDelta("text-agent", "Agent result"),
-                TextStreamPart.textEnd("text-agent"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.start("assistant-agent"),
+                        TextStreamPart.textStart("text-agent"),
+                        TextStreamPart.textDelta("text-agent", "Agent result"),
+                        TextStreamPart.textEnd("text-agent"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.ofEntries(
-                Map.entry("id", "chat-agent"),
-                Map.entry("messages", List.of(Map.of(
-                    "id", "user-agent",
-                    "role", "user",
-                    "parts", List.of(Map.of(
-                        "type", "text",
-                        "id", "user-agent-text",
-                        "text", "Run the agent"
-                    ))
-                ))),
-                Map.entry("system", "Base instructions."),
-                Map.entry("temperature", 0.3),
-                Map.entry("maxOutputTokens", 256),
-                Map.entry("headers", Map.of("X-Agent-Test", "true")),
-                Map.entry("metadata", Map.of("tenant", "console")),
-                Map.entry("context", Map.of("requestSource", "workbench")),
-                Map.entry("output", Map.of("type", "JSON")),
-                Map.entry("agent", Map.ofEntries(
-                    Map.entry("enabled", true),
-                    Map.entry("profile", "CONCISE"),
-                    Map.entry("maxSteps", 9),
-                    Map.entry("stepPolicy", "SERVER_THEN_ALL"),
-                    Map.entry("serverToolEnabled", true),
-                    Map.entry("browserToolEnabled", true),
-                    Map.entry("externalToolEnabled", true),
-                    Map.entry("approvalRequired", true),
-                    Map.entry("toolInputStreamEnabled", true),
-                    Map.entry("recoveryScenario", "RENAMED_TOOL")
-                ))
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .contains("Agent result")
-                .contains("[DONE]"));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.ofEntries(
+                        Map.entry("id", "chat-agent"),
+                        Map.entry(
+                                "messages",
+                                List.of(Map.of(
+                                        "id", "user-agent",
+                                        "role", "user",
+                                        "parts",
+                                                List.of(Map.of(
+                                                        "type", "text",
+                                                        "id", "user-agent-text",
+                                                        "text", "Run the agent"))))),
+                        Map.entry("system", "Base instructions."),
+                        Map.entry("temperature", 0.3),
+                        Map.entry("maxOutputTokens", 256),
+                        Map.entry("headers", Map.of("X-Agent-Test", "true")),
+                        Map.entry("metadata", Map.of("tenant", "console")),
+                        Map.entry("context", Map.of("requestSource", "workbench")),
+                        Map.entry("output", Map.of("type", "JSON")),
+                        Map.entry(
+                                "agent",
+                                Map.ofEntries(
+                                        Map.entry("enabled", true),
+                                        Map.entry("profile", "CONCISE"),
+                                        Map.entry("maxSteps", 9),
+                                        Map.entry("stepPolicy", "SERVER_THEN_ALL"),
+                                        Map.entry("serverToolEnabled", true),
+                                        Map.entry("browserToolEnabled", true),
+                                        Map.entry("externalToolEnabled", true),
+                                        Map.entry("approvalRequired", true),
+                                        Map.entry("toolInputStreamEnabled", true),
+                                        Map.entry("recoveryScenario", "RENAMED_TOOL")))))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody())
+                        .contains("Agent result")
+                        .contains("[DONE]"));
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
-        assertThat(request.getSystem())
-            .isEqualTo("Base instructions. Keep the final answer concise and factual.");
+        assertThat(request.getSystem()).isEqualTo("Base instructions. Keep the final answer concise and factual.");
         assertThat(request.getTemperature()).isEqualTo(0.3);
         assertThat(request.getMaxOutputTokens()).isEqualTo(256);
         assertThat(request.getHeaders()).containsEntry("X-Agent-Test", "true");
         assertThat(request.getContext()).containsEntry("requestSource", "workbench");
         assertThat(request.getCancellationToken()).isNotNull();
-        assertThat(request.getTools()).extracting(run.halo.aifoundation.tool.ToolDefinition::getName)
-            .containsExactly(
-                "halo_test_info",
-                "halo_external_test_info",
-                "get_current_page_context",
-                "halo_agent_test_action",
-                "halo_tool_input_stream_test",
-                "halo_repair_test_info"
-            );
+        assertThat(request.getTools())
+                .extracting(run.halo.aifoundation.tool.ToolDefinition::getName)
+                .containsExactly(
+                        "halo_test_info",
+                        "halo_external_test_info",
+                        "get_current_page_context",
+                        "halo_agent_test_action",
+                        "halo_tool_input_stream_test",
+                        "halo_repair_test_info");
         assertThat(request.getTools().getFirst().getApprovalPolicy().getMode().name())
-            .isEqualTo("ALWAYS");
+                .isEqualTo("ALWAYS");
         assertThat(request.getOutput().getType().name()).isEqualTo("JSON");
-        assertThat(request.getStopWhen().shouldContinue(StepContext.builder().stepIndex(7).build()))
-            .isTrue();
-        assertThat(request.getStopWhen().shouldContinue(StepContext.builder().stepIndex(8).build()))
-            .isFalse();
+        assertThat(request.getStopWhen()
+                        .shouldContinue(StepContext.builder().stepIndex(7).build()))
+                .isTrue();
+        assertThat(request.getStopWhen()
+                        .shouldContinue(StepContext.builder().stepIndex(8).build()))
+                .isFalse();
         assertThat(request.getMetadata()).containsEntry("tenant", "console");
         assertThat(request.getMetadata()).containsKey("agentDiagnostics");
         @SuppressWarnings("unchecked")
         var diagnostics = (Map<String, Object>) request.getMetadata().get("agentDiagnostics");
         assertThat(diagnostics)
-            .containsEntry("profile", "CONCISE")
-            .containsEntry("maximumSteps", 9)
-            .containsEntry("stepPolicy", "SERVER_THEN_ALL")
-            .containsEntry("callPreparationCount", 1)
-            .containsEntry("recoveryScenario", "RENAMED_TOOL");
+                .containsEntry("profile", "CONCISE")
+                .containsEntry("maximumSteps", 9)
+                .containsEntry("stepPolicy", "SERVER_THEN_ALL")
+                .containsEntry("callPreparationCount", 1)
+                .containsEntry("recoveryScenario", "RENAMED_TOOL");
     }
 
     @Test
@@ -676,62 +853,71 @@ class ModelConsoleEndpointTest {
         when(languageModel.streamText(any(GenerateTextRequest.class))).thenAnswer(invocation -> {
             GenerateTextRequest request = invocation.getArgument(0);
             return streamResult(Flux.just(
-                TextStreamPart.finishStep(0, FinishReason.STOP, "stop", null, List.of(),
-                    GenerationRequestMetadata.builder()
-                        .id("request-agent")
-                        .model("gpt-4")
-                        .metadata(request.getMetadata())
-                        .build(),
-                    null, Map.of()),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            ));
+                    TextStreamPart.finishStep(
+                            0,
+                            FinishReason.STOP,
+                            "stop",
+                            null,
+                            List.of(),
+                            GenerationRequestMetadata.builder()
+                                    .id("request-agent")
+                                    .model("gpt-4")
+                                    .metadata(request.getMetadata())
+                                    .build(),
+                            null,
+                            Map.of()),
+                    TextStreamPart.finish(FinishReason.STOP, "stop", null)));
         });
 
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-agent-diagnostics",
-                "messages", List.of(Map.of(
-                    "id", "user-agent",
-                    "role", "user",
-                    "parts", List.of(Map.of(
-                        "type", "text",
-                        "id", "user-agent-text",
-                        "text", "Hello"
-                    ))
-                )),
-                "agent", Map.of(
-                    "enabled", true,
-                    "profile", "EXPLICIT",
-                    "recoveryScenario", "FAILED_RECOVERY"
-                )
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .contains("\"type\":\"finish-step\"")
-                .contains("\"agentDiagnostics\"")
-                .contains("\"callPreparationCount\":1")
-                .contains("\"recoveryScenario\":\"FAILED_RECOVERY\"")
-                .doesNotContain("CopyOnWriteArrayList"));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-agent-diagnostics",
+                        "messages",
+                                List.of(Map.of(
+                                        "id", "user-agent",
+                                        "role", "user",
+                                        "parts",
+                                                List.of(Map.of(
+                                                        "type", "text",
+                                                        "id", "user-agent-text",
+                                                        "text", "Hello")))),
+                        "agent",
+                                Map.of(
+                                        "enabled", true,
+                                        "profile", "EXPLICIT",
+                                        "recoveryScenario", "FAILED_RECOVERY")))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody())
+                        .contains("\"type\":\"finish-step\"")
+                        .contains("\"agentDiagnostics\"")
+                        .contains("\"callPreparationCount\":1")
+                        .contains("\"recoveryScenario\":\"FAILED_RECOVERY\"")
+                        .doesNotContain("CopyOnWriteArrayList"));
     }
 
     @Test
     void testUiMessageChatStream_agentModeRejectsInvalidStepBoundBeforeModelResolution() {
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-agent-invalid",
-                "messages", List.of(Map.of(
-                    "id", "user-agent",
-                    "role", "user",
-                    "parts", List.of(Map.of("type", "text", "text", "Hello"))
-                )),
-                "agent", Map.of("enabled", true, "maxSteps", 101)
-            ))
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-agent-invalid",
+                        "messages",
+                                List.of(Map.of(
+                                        "id", "user-agent",
+                                        "role", "user",
+                                        "parts", List.of(Map.of("type", "text", "text", "Hello")))),
+                        "agent", Map.of("enabled", true, "maxSteps", 101)))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
 
         verify(aiModelService, never()).languageModel(any());
     }
@@ -741,20 +927,24 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream 401"))));
+                .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream 401"))));
 
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(uiMessageBody("Hello"))
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .contains("\"type\":\"error\"")
-                .contains("\"errorText\":\"upstream 401\"")
-                .contains("upstream 401")
-                .contains("[DONE]"));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(uiMessageBody("Hello"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody())
+                        .contains("\"type\":\"error\"")
+                        .contains("\"errorText\":\"upstream 401\"")
+                        .contains("upstream 401")
+                        .contains("[DONE]"));
     }
 
     @Test
@@ -762,39 +952,38 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
-                    .toolCallId("call_1")
-                    .toolName("halo_test_info")
-                    .input(Map.of("query", "hello"))
-                    .build()),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                                .toolCallId("call_1")
+                                .toolName("halo_test_info")
+                                .input(Map.of("query", "hello"))
+                                .build()),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post()
-            .uri("/models/gpt-4/test-chat/ui-message/stream?enableTestTool=true")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(uiMessageBody("请调用测试工具"))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(String.class)
-            .consumeWith(response -> {
-                var bodyText = response.getResponseBody();
-                assertThat(bodyText).contains("\"type\":\"tool-input-available\"");
-                assertThat(bodyText).contains("halo_test_info");
-                assertThat(bodyText).contains("\"input\":{\"query\":\"hello\"}");
-            });
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream?enableTestTool=true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(uiMessageBody("请调用测试工具"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .consumeWith(response -> {
+                    var bodyText = response.getResponseBody();
+                    assertThat(bodyText).contains("\"type\":\"tool-input-available\"");
+                    assertThat(bodyText).contains("halo_test_info");
+                    assertThat(bodyText).contains("\"input\":{\"query\":\"hello\"}");
+                });
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
         assertThat(request.getStopWhen()).isNotNull();
-        assertThat(request.getTools())
-            .singleElement()
-            .satisfies(tool -> {
-                assertThat(tool.getName()).isEqualTo("halo_test_info");
-                assertThat(tool.getExecutor()).isNotNull();
-            });
+        assertThat(request.getTools()).singleElement().satisfies(tool -> {
+            assertThat(tool.getName()).isEqualTo("halo_test_info");
+            assertThat(tool.getExecutor()).isNotNull();
+        });
     }
 
     @Test
@@ -802,43 +991,40 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
-                    .toolCallId("call_stream")
-                    .toolName("halo_tool_input_stream_test")
-                    .input(Map.of(
-                        "title", "stream test",
-                        "payload", "long payload",
-                        "sequence", List.of("start", "delta", "available")
-                    ))
-                    .build()),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                                .toolCallId("call_stream")
+                                .toolName("halo_tool_input_stream_test")
+                                .input(Map.of(
+                                        "title", "stream test",
+                                        "payload", "long payload",
+                                        "sequence", List.of("start", "delta", "available")))
+                                .build()),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post()
-            .uri("/models/gpt-4/test-chat/ui-message/stream?enableToolInputStreamTest=true")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(uiMessageBody("请执行流式工具入参测试"))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .contains("\"type\":\"tool-input-available\"")
-                .contains("halo_tool_input_stream_test"));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream?enableToolInputStreamTest=true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(uiMessageBody("请执行流式工具入参测试"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody())
+                        .contains("\"type\":\"tool-input-available\"")
+                        .contains("halo_tool_input_stream_test"));
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
-        assertThat(captor.getValue().getTools())
-            .singleElement()
-            .satisfies(tool -> {
-                assertThat(tool.getName()).isEqualTo("halo_tool_input_stream_test");
-                assertThat(tool.getOnInputStart()).isNotNull();
-                assertThat(tool.getOnInputDelta()).isNotNull();
-                assertThat(tool.getOnInputAvailable()).isNotNull();
-                assertThat(tool.getExecutor()).isNotNull();
-                assertThat(tool.getInputSchema()).containsEntry("required",
-                    List.of("title", "payload", "sequence"));
-            });
+        assertThat(captor.getValue().getTools()).singleElement().satisfies(tool -> {
+            assertThat(tool.getName()).isEqualTo("halo_tool_input_stream_test");
+            assertThat(tool.getOnInputStart()).isNotNull();
+            assertThat(tool.getOnInputDelta()).isNotNull();
+            assertThat(tool.getOnInputAvailable()).isNotNull();
+            assertThat(tool.getExecutor()).isNotNull();
+            assertThat(tool.getInputSchema()).containsEntry("required", List.of("title", "payload", "sequence"));
+        });
     }
 
     @Test
@@ -846,25 +1032,26 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("text-2", "New answer"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("text-2", "New answer"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "trigger", "regenerate-message",
-                "messageId", "assistant-1",
-                "messages", List.of(
-                    uiMessage("user-1", "user", "user-text", "Question"),
-                    uiMessage("assistant-1", "assistant", "old-text", "Old answer"),
-                    uiMessage("user-2", "user", "later-text", "Later question")
-                )
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "trigger", "regenerate-message",
+                        "messageId", "assistant-1",
+                        "messages",
+                                List.of(
+                                        uiMessage("user-1", "user", "user-text", "Question"),
+                                        uiMessage("assistant-1", "assistant", "old-text", "Old answer"),
+                                        uiMessage("user-2", "user", "later-text", "Later question"))))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
@@ -872,20 +1059,22 @@ class ModelConsoleEndpointTest {
         assertThat(request.getMessages()).hasSize(1);
         assertThat(request.getMessages().getFirst().getRole().name()).isEqualTo("USER");
         assertThat(request.getMessages().getFirst().getContent().getFirst().getText())
-            .isEqualTo("Question");
+                .isEqualTo("Question");
     }
 
     @Test
     void testUiMessageChatStream_regenerateWithoutMessageIdReturns400WithoutCallingModel() {
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "trigger", "regenerate-message",
-                "messages", List.of(uiMessage("user-1", "user", "user-text", "Question"))
-            ))
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "trigger", "regenerate-message",
+                        "messages", List.of(uiMessage("user-1", "user", "user-text", "Question"))))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
 
         verify(aiModelService, never()).languageModel(any());
     }
@@ -895,90 +1084,92 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("text-1", "Continued"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("text-1", "Continued"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(
-                    uiMessage("user-1", "user", "user-text", "Question"),
-                    uiMessageWithParts("assistant-1", List.of(
-                        Map.of(
-                            "type", "reasoning",
-                            "id", "reasoning-1",
-                            "text", "private reasoning"
-                        ),
-                        Map.of(
-                            "type", "text",
-                            "id", "answer-1",
-                            "text", "Answer"
-                        )
-                    )),
-                    uiMessage("user-2", "user", "user-text-2", "Continue")
-                ),
-                "trigger", "submit-message"
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "messages",
+                                List.of(
+                                        uiMessage("user-1", "user", "user-text", "Question"),
+                                        uiMessageWithParts(
+                                                "assistant-1",
+                                                List.of(
+                                                        Map.of(
+                                                                "type", "reasoning",
+                                                                "id", "reasoning-1",
+                                                                "text", "private reasoning"),
+                                                        Map.of(
+                                                                "type", "text",
+                                                                "id", "answer-1",
+                                                                "text", "Answer"))),
+                                        uiMessage("user-2", "user", "user-text-2", "Continue")),
+                        "trigger", "submit-message"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
         assertThat(request.getMessages()).hasSize(3);
         assertThat(request.getMessages().get(1).getContent())
-            .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
-            .containsExactly("text");
+                .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
+                .containsExactly("text");
     }
 
     @Test
     void testUiMessageChatStream_preservesReasoningHistoryWhenProviderSupportsIt() {
         var languageModel = mock(LanguageModel.class);
-        when(languageModel.capabilities())
-            .thenReturn(LanguageModelCapabilities.supportsReasoningHistory());
+        when(languageModel.capabilities()).thenReturn(LanguageModelCapabilities.supportsReasoningHistory());
         when(aiModelService.languageModel("deepseek-chat")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("text-1", "Continued"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("text-1", "Continued"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post().uri("/models/deepseek-chat/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(
-                    uiMessage("user-1", "user", "user-text", "Question"),
-                    uiMessageWithParts("assistant-1", List.of(
-                        Map.of(
-                            "type", "reasoning",
-                            "id", "reasoning-1",
-                            "text", "private reasoning",
-                            "providerMetadata", Map.of("deepseek", Map.of("id", "reasoning-id"))
-                        ),
-                        Map.of(
-                            "type", "text",
-                            "id", "answer-1",
-                            "text", "Answer"
-                        )
-                    )),
-                    uiMessage("user-2", "user", "user-text-2", "Continue")
-                ),
-                "trigger", "submit-message"
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/deepseek-chat/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "messages",
+                                List.of(
+                                        uiMessage("user-1", "user", "user-text", "Question"),
+                                        uiMessageWithParts(
+                                                "assistant-1",
+                                                List.of(
+                                                        Map.of(
+                                                                "type", "reasoning",
+                                                                "id", "reasoning-1",
+                                                                "text", "private reasoning",
+                                                                "providerMetadata",
+                                                                        Map.of(
+                                                                                "deepseek",
+                                                                                Map.of("id", "reasoning-id"))),
+                                                        Map.of(
+                                                                "type", "text",
+                                                                "id", "answer-1",
+                                                                "text", "Answer"))),
+                                        uiMessage("user-2", "user", "user-text-2", "Continue")),
+                        "trigger", "submit-message"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
         assertThat(request.getMessages()).hasSize(3);
         assertThat(request.getMessages().get(1).getContent())
-            .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
-            .containsExactly("reasoning", "text");
+                .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
+                .containsExactly("reasoning", "text");
     }
 
     @Test
@@ -986,48 +1177,47 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("text-1", "Approved"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("text-1", "Approved"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post()
-            .uri("/models/gpt-4/test-chat/ui-message/stream?enableTestToolApproval=true")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(
-                    uiMessage("user-1", "user", "user-text", "请调用测试工具"),
-                    uiMessageWithParts("assistant-1", List.of(
-                        Map.of(
-                            "type", "tool-halo_test_info",
-                            "toolCallId", "call_1",
-                            "toolName", "halo_test_info",
-                            "state", "approval-responded",
-                            "input", Map.of("query", "hello"),
-                            "approval", Map.of(
-                                "id", "approval_1",
-                                "approved", true,
-                                "reason", "console approved"
-                            )
-                        )
-                    ))
-                ),
-                "trigger", "submit-message"
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream?enableTestToolApproval=true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "messages",
+                                List.of(
+                                        uiMessage("user-1", "user", "user-text", "请调用测试工具"),
+                                        uiMessageWithParts(
+                                                "assistant-1",
+                                                List.of(Map.of(
+                                                        "type", "tool-halo_test_info",
+                                                        "toolCallId", "call_1",
+                                                        "toolName", "halo_test_info",
+                                                        "state", "approval-responded",
+                                                        "input", Map.of("query", "hello"),
+                                                        "approval",
+                                                                Map.of(
+                                                                        "id", "approval_1",
+                                                                        "approved", true,
+                                                                        "reason", "console approved"))))),
+                        "trigger", "submit-message"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
         assertThat(request.getMessages()).hasSize(3);
         assertThat(request.getMessages().get(1).getContent())
-            .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
-            .containsExactly("tool-call", "tool-approval-request");
+                .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
+                .containsExactly("tool-call", "tool-approval-request");
         assertThat(request.getMessages().get(2).getRole().name()).isEqualTo("TOOL");
         assertThat(request.getMessages().get(2).getContent().getFirst().getType())
-            .isEqualTo("tool-approval-response");
+                .isEqualTo("tool-approval-response");
     }
 
     @Test
@@ -1035,43 +1225,42 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("text-1", "Continued"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("text-1", "Continued"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post()
-            .uri("/models/gpt-4/test-chat/ui-message/stream?enableExternalTestTool=true")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(
-                    uiMessage("user-1", "user", "user-text", "请调用外部测试工具"),
-                    uiMessageWithParts("assistant-1", List.of(
-                        Map.of(
-                            "type", "tool-halo_external_test_info",
-                            "toolCallId", "call_1",
-                            "toolName", "halo_external_test_info",
-                            "state", "output-available",
-                            "input", Map.of("query", "hello"),
-                            "output", Map.of("ok", true)
-                        )
-                    ))
-                ),
-                "trigger", "submit-message"
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream?enableExternalTestTool=true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "messages",
+                                List.of(
+                                        uiMessage("user-1", "user", "user-text", "请调用外部测试工具"),
+                                        uiMessageWithParts(
+                                                "assistant-1",
+                                                List.of(Map.of(
+                                                        "type", "tool-halo_external_test_info",
+                                                        "toolCallId", "call_1",
+                                                        "toolName", "halo_external_test_info",
+                                                        "state", "output-available",
+                                                        "input", Map.of("query", "hello"),
+                                                        "output", Map.of("ok", true))))),
+                        "trigger", "submit-message"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
         assertThat(request.getMessages()).hasSize(3);
         assertThat(request.getMessages().get(1).getContent().getFirst().getType())
-            .isEqualTo("tool-call");
+                .isEqualTo("tool-call");
         assertThat(request.getMessages().get(2).getRole().name()).isEqualTo("TOOL");
         assertThat(request.getMessages().get(2).getContent().getFirst().getType())
-            .isEqualTo("tool-result");
+                .isEqualTo("tool-result");
     }
 
     @Test
@@ -1079,46 +1268,47 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("text-1", "Continued"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("text-1", "Continued"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post()
-            .uri("/models/gpt-4/test-chat/ui-message/stream?enableAgentTestTools=true")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(
-                    uiMessage("user-1", "user", "user-text", "查看页面上下文"),
-                    uiMessageWithParts("assistant-1", List.of(
-                        Map.of(
-                            "type", "tool-get_current_page_context",
-                            "toolCallId", "call_1",
-                            "toolName", "get_current_page_context",
-                            "state", "output-available",
-                            "input", Map.of(),
-                            "output", Map.of(
-                                "ok", true,
-                                "channel", "console-model-test-workbench"
-                            )
-                        )
-                    ))
-                ),
-                "trigger", "submit-message"
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream?enableAgentTestTools=true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "messages",
+                                List.of(
+                                        uiMessage("user-1", "user", "user-text", "查看页面上下文"),
+                                        uiMessageWithParts(
+                                                "assistant-1",
+                                                List.of(Map.of(
+                                                        "type", "tool-get_current_page_context",
+                                                        "toolCallId", "call_1",
+                                                        "toolName", "get_current_page_context",
+                                                        "state", "output-available",
+                                                        "input", Map.of(),
+                                                        "output",
+                                                                Map.of(
+                                                                        "ok",
+                                                                        true,
+                                                                        "channel",
+                                                                        "console-model-test-workbench"))))),
+                        "trigger", "submit-message"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
         assertThat(request.getMessages()).hasSize(3);
         assertThat(request.getMessages().get(1).getContent().getFirst().getType())
-            .isEqualTo("tool-call");
+                .isEqualTo("tool-call");
         assertThat(request.getMessages().get(2).getRole().name()).isEqualTo("TOOL");
         assertThat(request.getMessages().get(2).getContent().getFirst().getType())
-            .isEqualTo("tool-result");
+                .isEqualTo("tool-result");
     }
 
     @Test
@@ -1126,33 +1316,32 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("text-1", "Tool failed"),
-                TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("text-1", "Tool failed"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null))));
 
-        webTestClient.post()
-            .uri("/models/gpt-4/test-chat/ui-message/stream?enableExternalTestTool=true")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(
-                    uiMessage("user-1", "user", "user-text", "请调用外部测试工具"),
-                    uiMessageWithParts("assistant-1", List.of(
-                        Map.of(
-                            "type", "tool-halo_external_test_info",
-                            "toolCallId", "call_1",
-                            "toolName", "halo_external_test_info",
-                            "state", "output-error",
-                            "input", Map.of("query", "hello"),
-                            "errorText", "external failed"
-                        )
-                    ))
-                ),
-                "trigger", "submit-message"
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream?enableExternalTestTool=true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id", "chat-1",
+                        "messages",
+                                List.of(
+                                        uiMessage("user-1", "user", "user-text", "请调用外部测试工具"),
+                                        uiMessageWithParts(
+                                                "assistant-1",
+                                                List.of(Map.of(
+                                                        "type", "tool-halo_external_test_info",
+                                                        "toolCallId", "call_1",
+                                                        "toolName", "halo_external_test_info",
+                                                        "state", "output-error",
+                                                        "input", Map.of("query", "hello"),
+                                                        "errorText", "external failed")))),
+                        "trigger", "submit-message"))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
@@ -1160,23 +1349,26 @@ class ModelConsoleEndpointTest {
         assertThat(request.getMessages()).hasSize(3);
         assertThat(request.getMessages().get(2).getRole().name()).isEqualTo("TOOL");
         assertThat(request.getMessages().get(2).getContent().getFirst().getType())
-            .isEqualTo("tool-error");
+                .isEqualTo("tool-error");
     }
 
     @Test
     void testUiMessageChatStream_rejectsUnknownPartTypeWithoutCallingModel() {
-        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "id", "chat-1",
-                "messages", List.of(Map.of(
-                    "id", "user-1",
-                    "role", "user",
-                    "parts", List.of(Map.of("type", "unknown"))
-                ))
-            ))
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-chat/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "id",
+                        "chat-1",
+                        "messages",
+                        List.of(Map.of(
+                                "id", "user-1",
+                                "role", "user",
+                                "parts", List.of(Map.of("type", "unknown"))))))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
 
         verify(aiModelService, never()).languageModel(any());
     }
@@ -1186,24 +1378,21 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.just(
-                TextStreamPart.textDelta("txt_1", "Hello"),
-                TextStreamPart.textDelta("txt_1", " world")
-            )));
+                .thenReturn(streamResult(Flux.just(
+                        TextStreamPart.textDelta("txt_1", "Hello"), TextStreamPart.textDelta("txt_1", " world"))));
 
-        webTestClient.post().uri("/models/gpt-4/test-completion/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "prompt", "Say hello",
-                "temperature", 0.2,
-                "maxOutputTokens", 64
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_PLAIN)
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .isEqualTo("Hello world"));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-completion/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("prompt", "Say hello", "temperature", 0.2, "maxOutputTokens", 64))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.TEXT_PLAIN)
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody()).isEqualTo("Hello world"));
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
@@ -1219,31 +1408,31 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(structuredStreamResult(Flux.just(
-                TextStreamPart.textDelta("txt_1", "{\"title\":\"Halo\"}")
-            )));
+                .thenReturn(
+                        structuredStreamResult(Flux.just(TextStreamPart.textDelta("txt_1", "{\"title\":\"Halo\"}"))));
 
         var schema = Map.of(
-            "type", "object",
-            "required", List.of("title"),
-            "properties", Map.of("title", Map.of("type", "string"))
-        );
-        webTestClient.post().uri("/models/gpt-4/test-object/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "input", "Summarize Halo",
-                "schema", schema,
-                "output", Map.of(
-                    "type", "object",
-                    "schema", schema
-                )
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_PLAIN)
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .isEqualTo("{\"title\":\"Halo\"}"));
+                "type", "object",
+                "required", List.of("title"),
+                "properties", Map.of("title", Map.of("type", "string")));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-object/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "input",
+                        "Summarize Halo",
+                        "schema",
+                        schema,
+                        "output",
+                        Map.of("type", "object", "schema", schema)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.TEXT_PLAIN)
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody()).isEqualTo("{\"title\":\"Halo\"}"));
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
@@ -1259,21 +1448,20 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(structuredStreamResult(Flux.just(
-                TextStreamPart.textDelta("txt_1", "{\"ok\":true}")
-            )));
+                .thenReturn(structuredStreamResult(Flux.just(TextStreamPart.textDelta("txt_1", "{\"ok\":true}"))));
 
-        webTestClient.post().uri("/models/gpt-4/test-object/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "input", "Return ok",
-                "schema", Map.of(
-                    "type", "object",
-                    "properties", Map.of("ok", Map.of("type", "boolean"))
-                )
-            ))
-            .exchange()
-            .expectStatus().isOk();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-object/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "input",
+                        "Return ok",
+                        "schema",
+                        Map.of("type", "object", "properties", Map.of("ok", Map.of("type", "boolean")))))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
@@ -1282,14 +1470,14 @@ class ModelConsoleEndpointTest {
 
     @Test
     void testObjectStream_rejectsUnsupportedOutputTypeWithoutCallingModel() {
-        webTestClient.post().uri("/models/gpt-4/test-object/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "input", "Return ok",
-                "output", Map.of("type", "array")
-            ))
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-object/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("input", "Return ok", "output", Map.of("type", "array")))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
 
         verify(aiModelService, never()).languageModel(any());
     }
@@ -1301,37 +1489,41 @@ class ModelConsoleEndpointTest {
         when(rerankingModel.rerank(any(RerankRequest.class))).thenAnswer(invocation -> {
             RerankRequest request = invocation.getArgument(0);
             return Mono.just(RerankResponse.builder()
-                .query(request.getQuery())
-                .results(List.of(RerankResult.builder()
-                    .index(1)
-                    .document(request.getDocuments().get(1))
-                    .score(0.91)
-                    .build()))
-                .build());
+                    .query(request.getQuery())
+                    .results(List.of(RerankResult.builder()
+                            .index(1)
+                            .document(request.getDocuments().get(1))
+                            .score(0.91)
+                            .build()))
+                    .build());
         });
 
-        webTestClient.post().uri("/models/rerank-model/test-rerank")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "query", "Halo RAG",
-                "documents", List.of("generic cms", "Halo AI Foundation"),
-                "topN", 1
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.query").isEqualTo("Halo RAG")
-            .jsonPath("$.resultsCount").isEqualTo(1)
-            .jsonPath("$.results[0].index").isEqualTo(1)
-            .jsonPath("$.results[0].score").isEqualTo(0.91);
+        webTestClient
+                .post()
+                .uri("/models/rerank-model/test-rerank")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "query", "Halo RAG", "documents", List.of("generic cms", "Halo AI Foundation"), "topN", 1))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.query")
+                .isEqualTo("Halo RAG")
+                .jsonPath("$.resultsCount")
+                .isEqualTo(1)
+                .jsonPath("$.results[0].index")
+                .isEqualTo(1)
+                .jsonPath("$.results[0].score")
+                .isEqualTo(0.91);
 
         var captor = ArgumentCaptor.forClass(RerankRequest.class);
         verify(rerankingModel).rerank(captor.capture());
         var request = captor.getValue();
         assertThat(request.getQuery()).isEqualTo("Halo RAG");
         assertThat(request.getDocuments())
-            .extracting(RerankDocument::getText)
-            .containsExactly("generic cms", "Halo AI Foundation");
+                .extracting(RerankDocument::getText)
+                .containsExactly("generic cms", "Halo AI Foundation");
         assertThat(request.getTopN()).isEqualTo(1);
     }
 
@@ -1339,49 +1531,55 @@ class ModelConsoleEndpointTest {
     void testImageGeneration_mapsRequestToImageGenerationModel() {
         var imageModel = mock(ImageGenerationModel.class);
         when(aiModelService.imageGenerationModel("image-model")).thenReturn(Mono.just(imageModel));
-        when(imageModel.generateImage(any(GenerateImageRequest.class))).thenReturn(Mono.just(
-            GenerateImageResult.builder()
-                .images(List.of(GeneratedFile.base64("iVBORw0KGgo=", "image/png", "result.png")))
-                .usage(ImageUsage.builder().imageCount(1).build())
-                .providerMetadata(Map.of("providerType", "openai"))
-                .build()
-        ));
+        when(imageModel.generateImage(any(GenerateImageRequest.class)))
+                .thenReturn(Mono.just(GenerateImageResult.builder()
+                        .images(List.of(GeneratedFile.base64("iVBORw0KGgo=", "image/png", "result.png")))
+                        .usage(ImageUsage.builder().imageCount(1).build())
+                        .providerMetadata(Map.of("providerType", "openai"))
+                        .build()));
 
-        webTestClient.post().uri("/models/image-model/test-image-generation")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.ofEntries(
-                Map.entry("prompt", "A Halo console"),
-                Map.entry("images", List.of(Map.of(
-                    "url", "https://example.test/input.png",
-                    "mediaType", "image/png",
-                    "filename", "input.png"
-                ))),
-                Map.entry("n", 1),
-                Map.entry("width", 1024),
-                Map.entry("height", 768),
-                Map.entry("seed", 42),
-                Map.entry("maxRetries", 1),
-                Map.entry("maxParallelCalls", 2),
-                Map.entry("responseFormat", "BASE64"),
-                Map.entry("negativePrompt", "blurry"),
-                Map.entry("headers", Map.of("X-Test", "true"))
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.imagesCount").isEqualTo(1)
-            .jsonPath("$.images[0].base64").isEqualTo("iVBORw0KGgo=")
-            .jsonPath("$.images[0].mediaType").isEqualTo("image/png")
-            .jsonPath("$.usage.imageCount").isEqualTo(1)
-            .jsonPath("$.providerMetadata.providerType").isEqualTo("openai");
+        webTestClient
+                .post()
+                .uri("/models/image-model/test-image-generation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.ofEntries(
+                        Map.entry("prompt", "A Halo console"),
+                        Map.entry(
+                                "images",
+                                List.of(Map.of(
+                                        "url", "https://example.test/input.png",
+                                        "mediaType", "image/png",
+                                        "filename", "input.png"))),
+                        Map.entry("n", 1),
+                        Map.entry("width", 1024),
+                        Map.entry("height", 768),
+                        Map.entry("seed", 42),
+                        Map.entry("maxRetries", 1),
+                        Map.entry("maxParallelCalls", 2),
+                        Map.entry("responseFormat", "BASE64"),
+                        Map.entry("negativePrompt", "blurry"),
+                        Map.entry("headers", Map.of("X-Test", "true"))))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.imagesCount")
+                .isEqualTo(1)
+                .jsonPath("$.images[0].base64")
+                .isEqualTo("iVBORw0KGgo=")
+                .jsonPath("$.images[0].mediaType")
+                .isEqualTo("image/png")
+                .jsonPath("$.usage.imageCount")
+                .isEqualTo(1)
+                .jsonPath("$.providerMetadata.providerType")
+                .isEqualTo("openai");
 
         var captor = ArgumentCaptor.forClass(GenerateImageRequest.class);
         verify(imageModel).generateImage(captor.capture());
         var request = captor.getValue();
         assertThat(request.getPrompt()).isEqualTo("A Halo console");
         assertThat(request.getImages()).hasSize(1);
-        assertThat(request.getImages().getFirst().getUrl())
-            .isEqualTo("https://example.test/input.png");
+        assertThat(request.getImages().getFirst().getUrl()).isEqualTo("https://example.test/input.png");
         assertThat(request.getSize()).isEqualTo("1024x768");
         assertThat(request.getSeed()).isEqualTo(42);
         assertThat(request.getMaxParallelCalls()).isEqualTo(2);
@@ -1394,39 +1592,42 @@ class ModelConsoleEndpointTest {
         var languageModel = ragAwareLanguageModel("RAG answer");
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
 
-        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "query", "What is Halo AI Foundation?",
-                "sources", List.of(
-                    Map.of(
-                        "id", "source-1",
-                        "title", "Halo AI",
-                        "url", "https://example.test/halo-ai",
-                        "content", "Halo AI Foundation provides shared AI runtime APIs.",
-                        "score", 0.82,
-                        "metadata", Map.of("kind", "doc")
-                    )
-                ),
-                "topN", 1
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
-            .expectBody(String.class)
-            .consumeWith(response -> {
-                var body = response.getResponseBody();
-                assertThat(body)
-                    .contains("\"type\":\"data-rag-input\"")
-                    .contains("\"type\":\"source-url\"")
-                    .contains("\"sourceId\":\"source-1\"")
-                    .contains("\"type\":\"text-delta\"")
-                    .contains("RAG answer")
-                    .contains("\"type\":\"data-rag-diagnostics\"")
-                    .contains("retrieval-finish")
-                    .contains("context-packed")
-                    .contains("[DONE]");
-            });
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-rag/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "query",
+                        "What is Halo AI Foundation?",
+                        "sources",
+                        List.of(Map.of(
+                                "id", "source-1",
+                                "title", "Halo AI",
+                                "url", "https://example.test/halo-ai",
+                                "content", "Halo AI Foundation provides shared AI runtime APIs.",
+                                "score", 0.82,
+                                "metadata", Map.of("kind", "doc"))),
+                        "topN",
+                        1))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+                .expectBody(String.class)
+                .consumeWith(response -> {
+                    var body = response.getResponseBody();
+                    assertThat(body)
+                            .contains("\"type\":\"data-rag-input\"")
+                            .contains("\"type\":\"source-url\"")
+                            .contains("\"sourceId\":\"source-1\"")
+                            .contains("\"type\":\"text-delta\"")
+                            .contains("RAG answer")
+                            .contains("\"type\":\"data-rag-diagnostics\"")
+                            .contains("retrieval-finish")
+                            .contains("context-packed")
+                            .contains("[DONE]");
+                });
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
@@ -1435,58 +1636,69 @@ class ModelConsoleEndpointTest {
 
     @Test
     void testRagUiMessageStream_usesOptionalRerankModel() {
+        var resolver = foundationCallerResolver();
+        var caller = new AtomicReference<CallerPluginInfo>();
         var languageModel = ragAwareLanguageModel("Reranked answer");
         var rerankingModel = mock(RerankingModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(aiModelService.rerankingModel("rerank-model")).thenReturn(Mono.just(rerankingModel));
         when(rerankingModel.rerank(any(RerankRequest.class))).thenAnswer(invocation -> {
+            caller.set(resolver.resolveCurrentCallerSnapshot());
             RerankRequest request = invocation.getArgument(0);
             return Mono.just(RerankResponse.builder()
-                .query(request.getQuery())
-                .results(List.of(RerankResult.builder()
-                    .index(1)
-                    .document(request.getDocuments().get(1))
-                    .score(0.97)
-                    .build()))
-                .build());
+                    .query(request.getQuery())
+                    .results(List.of(RerankResult.builder()
+                            .index(1)
+                            .document(request.getDocuments().get(1))
+                            .score(0.97)
+                            .build()))
+                    .build());
         });
 
-        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "query", "What is Halo AI Foundation?",
-                "sources", List.of(
-                    Map.of("id", "source-1", "content", "Generic CMS content"),
-                    Map.of("id", "source-2", "content", "AI Foundation RAG content")
-                ),
-                "rerankModelName", "rerank-model",
-                "topN", 1
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .contains("\"sourceId\":\"source-2\"")
-                .contains("rerank-finish")
-                .contains("rerankScore"));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-rag/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "query",
+                        "What is Halo AI Foundation?",
+                        "sources",
+                        List.of(
+                                Map.of("id", "source-1", "content", "Generic CMS content"),
+                                Map.of("id", "source-2", "content", "AI Foundation RAG content")),
+                        "rerankModelName",
+                        "rerank-model",
+                        "topN",
+                        1))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody())
+                        .contains("\"sourceId\":\"source-2\"")
+                        .contains("rerank-finish")
+                        .contains("rerankScore"));
 
         var captor = ArgumentCaptor.forClass(RerankRequest.class);
         verify(rerankingModel).rerank(captor.capture());
         assertThat(captor.getValue().getDocuments())
-            .extracting(RerankDocument::getText)
-            .containsExactly("Generic CMS content", "AI Foundation RAG content");
+                .extracting(RerankDocument::getText)
+                .containsExactly("Generic CMS content", "AI Foundation RAG content");
+        assertThat(caller.get()).isNotNull();
+        assertThat(caller.get().getPluginName()).isEqualTo("ai-foundation");
+        assertThat(caller.get().getVersion()).isEqualTo("1.0.0");
     }
 
     @Test
     void testRagUiMessageStream_rejectsEmptySourcesWithoutCallingModel() {
-        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "query", "What is Halo AI Foundation?",
-                "sources", List.of()
-            ))
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-rag/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("query", "What is Halo AI Foundation?", "sources", List.of()))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
 
         verify(aiModelService, never()).languageModel(any());
     }
@@ -1496,27 +1708,31 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream 401"))));
+                .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream 401"))));
 
-        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "query", "What is Halo AI Foundation?",
-                "sources", List.of(Map.of(
-                    "id", "source-1",
-                    "content", "Halo AI Foundation provides shared AI runtime APIs."
-                ))
-            ))
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
-            .expectBody(String.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .contains("\"type\":\"data-rag-input\"")
-                .contains("\"type\":\"error\"")
-                .contains("exceptionType")
-                .contains("upstream 401")
-                .contains("[DONE]"));
+        webTestClient
+                .post()
+                .uri("/models/gpt-4/test-rag/ui-message/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "query",
+                        "What is Halo AI Foundation?",
+                        "sources",
+                        List.of(Map.of(
+                                "id", "source-1",
+                                "content", "Halo AI Foundation provides shared AI runtime APIs."))))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+                .expectBody(String.class)
+                .consumeWith(response -> assertThat(response.getResponseBody())
+                        .contains("\"type\":\"data-rag-input\"")
+                        .contains("\"type\":\"error\"")
+                        .contains("exceptionType")
+                        .contains("upstream 401")
+                        .contains("[DONE]"));
     }
 
     // ---- helpers ----
@@ -1525,8 +1741,7 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(languageModel.streamText(any(GenerateTextRequest.class))).thenAnswer(invocation -> {
             GenerateTextRequest request = invocation.getArgument(0);
-            return LanguageModelMiddlewares.applyRequestStreamMiddleware(terminalModel(answer),
-                request);
+            return LanguageModelMiddlewares.applyRequestStreamMiddleware(terminalModel(answer), request);
         });
         return languageModel;
     }
@@ -1539,20 +1754,18 @@ class ModelConsoleEndpointTest {
             }
 
             @Override
-            public Mono<run.halo.aifoundation.chat.GenerateTextResult> generateText(
-                GenerateTextRequest request) {
+            public Mono<run.halo.aifoundation.chat.GenerateTextResult> generateText(GenerateTextRequest request) {
                 return Mono.empty();
             }
 
             @Override
             public StreamTextResult streamText(GenerateTextRequest request) {
                 return streamResult(Flux.just(
-                    TextStreamPart.start("rag-message"),
-                    TextStreamPart.textStart("text-1"),
-                    TextStreamPart.textDelta("text-1", answer),
-                    TextStreamPart.textEnd("text-1"),
-                    TextStreamPart.finish(FinishReason.STOP, "stop", null)
-                ));
+                        TextStreamPart.start("rag-message"),
+                        TextStreamPart.textStart("text-1"),
+                        TextStreamPart.textDelta("text-1", answer),
+                        TextStreamPart.textEnd("text-1"),
+                        TextStreamPart.finish(FinishReason.STOP, "stop", null)));
             }
         };
     }
@@ -1560,59 +1773,53 @@ class ModelConsoleEndpointTest {
     private StreamTextResult streamResult(Flux<TextStreamPart> fullStream) {
         var shared = fullStream.cache();
         return new StreamTextResult(
-            shared,
-            shared.filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
-                .map(TextStreamPart::getDelta),
-            Flux.empty(),
-            Flux.empty(),
-            Mono.empty(),
-            Mono.empty()
-        );
+                shared,
+                shared.filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
+                        .map(TextStreamPart::getDelta),
+                Flux.empty(),
+                Flux.empty(),
+                Mono.empty(),
+                Mono.empty());
     }
 
     private StreamTextResult structuredStreamResult(Flux<TextStreamPart> fullStream) {
         var shared = fullStream.cache();
         return new StreamTextResult(
-            shared,
-            shared.filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
-                .map(TextStreamPart::getDelta),
-            Flux.empty(),
-            Flux.empty(),
-            Mono.just(Map.of("ok", true)),
-            Mono.just(run.halo.aifoundation.chat.GenerateTextResult.builder()
-                .output(Map.of("ok", true))
-                .build())
-        );
+                shared,
+                shared.filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
+                        .map(TextStreamPart::getDelta),
+                Flux.empty(),
+                Flux.empty(),
+                Mono.just(Map.of("ok", true)),
+                Mono.just(run.halo.aifoundation.chat.GenerateTextResult.builder()
+                        .output(Map.of("ok", true))
+                        .build()));
     }
 
     private Map<String, Object> uiMessageBody(String text) {
         return Map.of(
-            "id", "chat-1",
-            "messages", List.of(uiMessage("user-1", "user", "user-text", text)),
-            "trigger", "submit-message"
-        );
+                "id", "chat-1",
+                "messages", List.of(uiMessage("user-1", "user", "user-text", text)),
+                "trigger", "submit-message");
     }
 
     private Map<String, Object> uiMessage(String id, String role, String partId, String text) {
         return Map.of(
-            "id", id,
-            "role", role,
-            "parts", List.of(Map.of(
-                "type", "text",
-                "id", partId,
-                "text", text
-            )),
-            "metadata", Map.of("conversationId", "chat-1")
-        );
+                "id",
+                id,
+                "role",
+                role,
+                "parts",
+                List.of(Map.of(
+                        "type", "text",
+                        "id", partId,
+                        "text", text)),
+                "metadata",
+                Map.of("conversationId", "chat-1"));
     }
 
     private Map<String, Object> uiMessageWithParts(String id, List<Map<String, Object>> parts) {
-        return Map.of(
-            "id", id,
-            "role", "assistant",
-            "parts", parts,
-            "metadata", Map.of("conversationId", "chat-1")
-        );
+        return Map.of("id", id, "role", "assistant", "parts", parts, "metadata", Map.of("conversationId", "chat-1"));
     }
 
     private AiProvider provider(String name, String providerType) {
@@ -1646,14 +1853,12 @@ class ModelConsoleEndpointTest {
 
     private void stubCreate(AiModel model) {
         var providerName = model.getSpec().getProviderName();
-        var generatedName = AiModelNameGenerator.generate(providerName,
-            model.getSpec().getModelId());
-        when(client.fetch(AiProvider.class, providerName))
-            .thenReturn(Mono.just(provider(providerName, "openai")));
+        var generatedName =
+                AiModelNameGenerator.generate(providerName, model.getSpec().getModelId());
+        when(client.fetch(AiProvider.class, providerName)).thenReturn(Mono.just(provider(providerName, "openai")));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
-        when(client.create(any(AiModel.class)))
-            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
     }
 
     private ModelParameterMappings.Selection template(String id) {

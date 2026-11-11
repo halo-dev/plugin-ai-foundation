@@ -60,18 +60,40 @@ public class AgentOptions<O> {
     AgentCallPrepare<O> prepareCall;
 
     @Builder(toBuilder = true)
-    private AgentOptions(String id, LanguageModel model, String instructions,
-        List<ToolDefinition> tools, List<String> activeTools, ToolChoice toolChoice,
-        OutputSpec output, StopCondition stopWhen, PrepareStepCallback prepareStep,
-        ToolCallRepairCallback toolCallRepair, ReasoningOptions reasoning,
-        Integer maxOutputTokens, Double temperature, Double topP, Integer topK, Double minP,
-        Double presencePenalty, Double frequencyPenalty, Double repetitionPenalty,
-        Boolean logprobs, Integer topLogprobs, Boolean parallelToolCalls,
-        List<String> stopSequences, Integer seed, Integer maxRetries, Map<String, String> headers,
-        Map<String, Object> metadata, Map<String, Object> context,
-        List<LanguageModelMiddleware> middleware, List<GenerationLifecycle> lifecycle,
-        GenerationTimeouts timeouts, AgentCallValidator<O> callValidator,
-        AgentCallPrepare<O> prepareCall) {
+    private AgentOptions(
+            String id,
+            LanguageModel model,
+            String instructions,
+            List<ToolDefinition> tools,
+            List<String> activeTools,
+            ToolChoice toolChoice,
+            OutputSpec output,
+            StopCondition stopWhen,
+            PrepareStepCallback prepareStep,
+            ToolCallRepairCallback toolCallRepair,
+            ReasoningOptions reasoning,
+            Integer maxOutputTokens,
+            Double temperature,
+            Double topP,
+            Integer topK,
+            Double minP,
+            Double presencePenalty,
+            Double frequencyPenalty,
+            Double repetitionPenalty,
+            Boolean logprobs,
+            Integer topLogprobs,
+            Boolean parallelToolCalls,
+            List<String> stopSequences,
+            Integer seed,
+            Integer maxRetries,
+            Map<String, String> headers,
+            Map<String, Object> metadata,
+            Map<String, Object> context,
+            List<LanguageModelMiddleware> middleware,
+            List<GenerationLifecycle> lifecycle,
+            GenerationTimeouts timeouts,
+            AgentCallValidator<O> callValidator,
+            AgentCallPrepare<O> prepareCall) {
         this.id = id;
         this.model = model;
         this.instructions = instructions;
@@ -109,16 +131,12 @@ public class AgentOptions<O> {
         this.prepareCall = prepareCall;
     }
 
-    /**
-     * Creates a definition builder with the required model already selected.
-     */
+    /** Creates a definition builder with the required model already selected. */
     public static AgentOptionsBuilder<Void> forModel(LanguageModel model) {
         return AgentOptions.<Void>builder().model(model);
     }
 
-    /**
-     * Creates a typed definition builder with the required model already selected.
-     */
+    /** Creates a typed definition builder with the required model already selected. */
     public static <O> AgentOptionsBuilder<O> forModel(LanguageModel model, Class<O> optionsType) {
         if (optionsType == null) {
             throw new IllegalArgumentException("optionsType must not be null");

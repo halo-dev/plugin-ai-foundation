@@ -5,9 +5,4 @@ import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 
-public record ToolExecutionBatch(
-    List<ToolResult> results,
-    List<ToolError> errors,
-    List<GenerationWarning> warnings
-) {
-}
+public record ToolExecutionBatch(List<ToolResult> results, List<ToolError> errors, List<GenerationWarning> warnings) {}

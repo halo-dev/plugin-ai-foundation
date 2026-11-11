@@ -12,11 +12,10 @@ import run.halo.aifoundation.schema.JsonSchema;
 /**
  * Request-scoped tool definition that can be exposed to a language model.
  *
- * <p>Tools are provider-neutral at the API layer. Halo converts them to the underlying provider's
- * tool representation at runtime. The {@link #executor} is server-side code and is intentionally
- * {@code transient}; it is used when calling {@link LanguageModel#generateText(GenerateTextRequest)}
- * or {@link LanguageModel#streamText(GenerateTextRequest)} from Java, but is not part of the
- * serialized OpenAPI contract.
+ * <p>Tools are provider-neutral at the API layer. Halo converts them to the underlying provider's tool representation
+ * at runtime. The {@link #executor} is server-side code and is intentionally {@code transient}; it is used when calling
+ * {@link LanguageModel#generateText(GenerateTextRequest)} or {@link LanguageModel#streamText(GenerateTextRequest)} from
+ * Java, but is not part of the serialized OpenAPI contract.
  *
  * <pre>{@code
  * ToolDefinition weather = ToolDefinition.builder()
@@ -38,70 +37,49 @@ import run.halo.aifoundation.schema.JsonSchema;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ToolDefinition {
-    /**
-     * Stable tool name visible to the model. Use letters, numbers, {@code _}, or {@code -}.
-     */
+    /** Stable tool name visible to the model. Use letters, numbers, {@code _}, or {@code -}. */
     private String name;
-    /**
-     * Human-readable description that helps the model decide when to call the tool.
-     */
+    /** Human-readable description that helps the model decide when to call the tool. */
     private String description;
-    /**
-     * JSON Schema object describing accepted tool arguments.
-     */
+    /** JSON Schema object describing accepted tool arguments. */
     private Map<String, Object> inputSchema;
-    /**
-     * Optional JSON Schema object describing the server-side tool result.
-     */
+    /** Optional JSON Schema object describing the server-side tool result. */
     private Map<String, Object> outputSchema;
-    /**
-     * Optional input examples that providers may use for tool guidance.
-     */
+    /** Optional input examples that providers may use for tool guidance. */
     private java.util.List<Map<String, Object>> inputExamples;
-    /**
-     * Whether the provider should enforce strict schema matching when supported.
-     */
+    /** Whether the provider should enforce strict schema matching when supported. */
     private Boolean strict;
-    /**
-     * Approval policy evaluated after input schema validation and before executor invocation.
-     */
+    /** Approval policy evaluated after input schema validation and before executor invocation. */
     private ToolApprovalPolicy approvalPolicy;
     /**
-     * Backpressured callback invoked before streamed input-start is exposed, or before a final-only
-     * input is normalized. It is checked for cancellation before and after invocation, uses the
-     * generation step timeout, and a failure terminates generation before approval or execution.
+     * Backpressured callback invoked before streamed input-start is exposed, or before a final-only input is
+     * normalized. It is checked for cancellation before and after invocation, uses the generation step timeout, and a
+     * failure terminates generation before approval or execution.
      */
     private transient ToolInputStartCallback onInputStart;
     /**
-     * Backpressured callback invoked before each provider-native tool input delta is exposed.
-     * It is serialized with all input events, checked for cancellation before and after invocation,
-     * and uses the generation step timeout. A failure terminates generation. This callback is not
-     * invoked for final-only or non-streaming tool calls.
+     * Backpressured callback invoked before each provider-native tool input delta is exposed. It is serialized with all
+     * input events, checked for cancellation before and after invocation, and uses the generation step timeout. A
+     * failure terminates generation. This callback is not invoked for final-only or non-streaming tool calls.
      */
     private transient ToolInputDeltaCallback onInputDelta;
     /**
-     * Backpressured callback invoked after normalized input is published as available and before
-     * approval, external handoff, or server-side execution. It is checked for cancellation before
-     * and after invocation, uses the generation step timeout, and a failure prevents every
-     * downstream tool action.
+     * Backpressured callback invoked after normalized input is published as available and before approval, external
+     * handoff, or server-side execution. It is checked for cancellation before and after invocation, uses the
+     * generation step timeout, and a failure prevents every downstream tool action.
      */
     private transient ToolInputAvailableCallback onInputAvailable;
-    /**
-     * Server-side tool implementation. Return values should be JSON serializable.
-     */
+    /** Server-side tool implementation. Return values should be JSON serializable. */
     private transient ToolExecutor executor;
 
-    /**
-     * Creates a tool definition with typed schema helpers.
-     */
-    public static ToolDefinition of(String name, String description, JsonSchema inputSchema,
-        ToolExecutor executor) {
+    /** Creates a tool definition with typed schema helpers. */
+    public static ToolDefinition of(String name, String description, JsonSchema inputSchema, ToolExecutor executor) {
         return ToolDefinition.builder()
-            .name(name)
-            .description(description)
-            .inputSchema(inputSchema)
-            .executor(executor)
-            .build();
+                .name(name)
+                .description(description)
+                .inputSchema(inputSchema)
+                .executor(executor)
+                .build();
     }
 
     public static class ToolDefinitionBuilder {
@@ -136,9 +114,7 @@ public class ToolDefinition {
         }
 
         public ToolDefinitionBuilder requiresApproval(boolean requiresApproval) {
-            this.approvalPolicy = requiresApproval
-                ? ToolApprovalPolicy.always()
-                : ToolApprovalPolicy.never();
+            this.approvalPolicy = requiresApproval ? ToolApprovalPolicy.always() : ToolApprovalPolicy.never();
             return this;
         }
 

@@ -10,7 +10,7 @@ package run.halo.aifoundation.ui;
  * @param transientData whether the part originated from stream-only data
  */
 public record DataPart(String type, String id, String name, Object data, boolean transientData)
-    implements UIMessagePart {
+        implements UIMessagePart {
 
     public DataPart {
         UIMessageDynamicNames.requireDataType(type, name);

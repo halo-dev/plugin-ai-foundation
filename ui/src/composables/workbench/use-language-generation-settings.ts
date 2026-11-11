@@ -1,3 +1,5 @@
+import type { ModelParameterProfile } from '@/api/generated'
+import { supportsLanguageParameter, supportsReasoningIntent } from '@/utils/model-parameter-support'
 import {
   buildOutputSpec,
   buildReasoningOptions,
@@ -9,9 +11,15 @@ import {
   type ReasoningMode,
 } from '@/utils/model-test-workbench'
 import { numberOrUndefined, parseStringMapJson } from '@/utils/model-test-workbench-request'
-import { shallowRef, watch } from 'vue'
+import { shallowRef, watch, type Ref } from 'vue'
 
-export function useLanguageGenerationSettings() {
+export function useLanguageGenerationSettings(
+  options: {
+    profile?: Readonly<Ref<ModelParameterProfile | undefined>>
+    isFetching?: Readonly<Ref<boolean>>
+    isError?: Readonly<Ref<boolean>>
+  } = {},
+) {
   const systemPrompt = shallowRef('')
   const temperature = shallowRef(0.7)
   const topP = shallowRef(1)
@@ -24,7 +32,7 @@ export function useLanguageGenerationSettings() {
   const logprobs = shallowRef<boolean | undefined>()
   const topLogprobs = shallowRef<number | undefined>()
   const parallelToolCalls = shallowRef<boolean | undefined>()
-  const maxTokens = shallowRef(1024)
+  const maxTokens = shallowRef(4096)
   const seed = shallowRef<number | undefined>()
   const maxRetries = shallowRef<number | undefined>(2)
   const reasoningMode = shallowRef<ReasoningMode>('DEFAULT')
@@ -62,6 +70,7 @@ export function useLanguageGenerationSettings() {
   const outputError = shallowRef('')
   const chatHeadersText = shallowRef('{}')
   const chatHeadersError = shallowRef('')
+  const parameterError = shallowRef('')
 
   function buildParameters(
     headers: Record<string, string> | undefined,
@@ -71,7 +80,7 @@ export function useLanguageGenerationSettings() {
       .split('\n')
       .map((item) => item.trim())
       .filter(Boolean)
-    return {
+    const parameters = {
       systemPrompt: systemPrompt.value,
       temperature: numberOrUndefined(temperature.value),
       topP: numberOrUndefined(topP.value),
@@ -106,22 +115,71 @@ export function useLanguageGenerationSettings() {
         recoveryScenario: agentRecoveryScenario.value,
       },
     }
+    for (const key of [
+      'temperature',
+      'topP',
+      'topK',
+      'minP',
+      'presencePenalty',
+      'frequencyPenalty',
+      'repetitionPenalty',
+      'stopSequences',
+      'logprobs',
+      'topLogprobs',
+      'parallelToolCalls',
+      'maxOutputTokens',
+      'seed',
+    ] as const) {
+      if (!supportsLanguageParameter(options.profile?.value, key)) parameters[key] = undefined
+    }
+    return parameters
   }
 
-  function buildValidatedParameters(): ReturnType<typeof buildParameters> | undefined {
+  function buildValidatedParameters(
+    validation: { tools?: boolean; output?: boolean } = {},
+  ): ReturnType<typeof buildParameters> | undefined {
+    parameterError.value = ''
+    if (options.isFetching?.value) parameterError.value = '正在读取当前模型的参数配置，请稍后重试'
+    else if (options.isError?.value)
+      parameterError.value = '无法读取当前模型的参数配置，请重新选择模型后重试'
+    const profile = options.profile?.value
+    if (options.profile && !profile && !parameterError.value) {
+      parameterError.value = '正在读取当前模型的参数配置，请稍后重试'
+    }
+    const parameters = buildParameters(undefined, undefined)
+    const outputLimit = profile?.constraints?.outputTokens
+    if (
+      outputLimit !== undefined &&
+      parameters.maxOutputTokens !== undefined &&
+      parameters.maxOutputTokens > outputLimit
+    ) {
+      parameterError.value = `最大输出不能超过 ${outputLimit} Token`
+    } else if (
+      validation.tools !== false &&
+      profile?.constraints?.toolCalling === false &&
+      Object.values(streamOptions()).some(Boolean)
+    ) {
+      parameterError.value = '当前模型不支持工具调用，请关闭工具测试'
+    } else if (!supportsReasoningIntent(profile, reasoningMode.value, reasoningEffort.value)) {
+      parameterError.value = '当前模型不支持所选推理模式，请调整推理控制'
+    }
+    if (parameterError.value) return undefined
     const headers = parseStringMapJson(chatHeadersText.value)
     chatHeadersError.value = headers.error || ''
     if (headers.error) return undefined
 
-    const outputSpec = buildOutputSpec({
-      mode: outputMode.value,
-      schemaText: outputSchemaText.value,
-      choicesText: outputChoicesText.value,
-    })
+    const outputSpec =
+      validation.output === false
+        ? {}
+        : buildOutputSpec({
+            mode: outputMode.value,
+            schemaText: outputSchemaText.value,
+            choicesText: outputChoicesText.value,
+          })
     outputError.value = outputSpec.error || ''
     if (outputSpec.error) return undefined
 
-    return buildParameters(headers.value, outputSpec.value)
+    return { ...parameters, headers: headers.value, output: outputSpec.value }
   }
 
   function streamOptions() {
@@ -189,6 +247,7 @@ export function useLanguageGenerationSettings() {
     outputError,
     chatHeadersText,
     chatHeadersError,
+    parameterError,
     buildParameters,
     buildValidatedParameters,
     streamOptions,

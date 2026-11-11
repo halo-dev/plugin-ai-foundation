@@ -8,13 +8,10 @@ import run.halo.aifoundation.chat.GenerationResponseMetadata;
 import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 
-/**
- * Factory methods for Halo UI message stream chunks.
- */
+/** Factory methods for Halo UI message stream chunks. */
 public final class UIMessageChunks {
 
-    private UIMessageChunks() {
-    }
+    private UIMessageChunks() {}
 
     /**
      * Creates a stream start chunk.
@@ -96,8 +93,7 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific reasoning metadata
      * @return reasoning delta chunk
      */
-    public static ReasoningDeltaChunk reasoningDelta(String id, String delta,
-        Map<String, Object> providerMetadata) {
+    public static ReasoningDeltaChunk reasoningDelta(String id, String delta, Map<String, Object> providerMetadata) {
         return new ReasoningDeltaChunk(id, delta, providerMetadata);
     }
 
@@ -189,8 +185,8 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return source URL chunk
      */
-    public static SourceUrlChunk sourceUrl(String sourceId, String url, String title,
-        Map<String, Object> providerMetadata) {
+    public static SourceUrlChunk sourceUrl(
+            String sourceId, String url, String title, Map<String, Object> providerMetadata) {
         return new SourceUrlChunk(sourceId, url, title, providerMetadata);
     }
 
@@ -204,8 +200,8 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return document source chunk
      */
-    public static SourceDocumentChunk sourceDocument(String sourceId, String mediaType,
-        String title, String filename, Map<String, Object> providerMetadata) {
+    public static SourceDocumentChunk sourceDocument(
+            String sourceId, String mediaType, String title, String filename, Map<String, Object> providerMetadata) {
         return new SourceDocumentChunk(sourceId, mediaType, title, filename, providerMetadata);
     }
 
@@ -220,8 +216,13 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return file chunk
      */
-    public static FileChunk file(String fileId, String url, String title, String mediaType,
-        Object data, Map<String, Object> providerMetadata) {
+    public static FileChunk file(
+            String fileId,
+            String url,
+            String title,
+            String mediaType,
+            Object data,
+            Map<String, Object> providerMetadata) {
         return new FileChunk(fileId, url, title, mediaType, data, providerMetadata);
     }
 
@@ -239,11 +240,27 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return dynamic tool chunk
      */
-    public static ToolChunk tool(String toolCallId, String toolName, ToolPartState state,
-        Object input, String inputTextDelta, Object output, String errorText,
-        ToolApproval approval, Map<String, Object> providerMetadata) {
-        return new ToolChunk(ToolChunk.typeFor(toolName), toolCallId, toolName, state, input,
-            inputTextDelta, output, errorText, approval, providerMetadata);
+    public static ToolChunk tool(
+            String toolCallId,
+            String toolName,
+            ToolPartState state,
+            Object input,
+            String inputTextDelta,
+            Object output,
+            String errorText,
+            ToolApproval approval,
+            Map<String, Object> providerMetadata) {
+        return new ToolChunk(
+                ToolChunk.typeFor(toolName),
+                toolCallId,
+                toolName,
+                state,
+                input,
+                inputTextDelta,
+                output,
+                errorText,
+                approval,
+                providerMetadata);
     }
 
     /**
@@ -277,8 +294,8 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return tool input available chunk
      */
-    public static ToolInputAvailableChunk toolInputAvailable(String toolCallId, String toolName,
-        Object input, Map<String, Object> providerMetadata) {
+    public static ToolInputAvailableChunk toolInputAvailable(
+            String toolCallId, String toolName, Object input, Map<String, Object> providerMetadata) {
         return new ToolInputAvailableChunk(toolCallId, toolName, input, providerMetadata);
     }
 
@@ -291,8 +308,8 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return tool input error chunk
      */
-    public static ToolInputErrorChunk toolInputError(String toolCallId, String toolName,
-        String errorText, Map<String, Object> providerMetadata) {
+    public static ToolInputErrorChunk toolInputError(
+            String toolCallId, String toolName, String errorText, Map<String, Object> providerMetadata) {
         return new ToolInputErrorChunk(toolCallId, toolName, errorText, providerMetadata);
     }
 
@@ -305,8 +322,8 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return tool output available chunk
      */
-    public static ToolOutputAvailableChunk toolOutputAvailable(String toolCallId, String toolName,
-        Object output, Map<String, Object> providerMetadata) {
+    public static ToolOutputAvailableChunk toolOutputAvailable(
+            String toolCallId, String toolName, Object output, Map<String, Object> providerMetadata) {
         return new ToolOutputAvailableChunk(toolCallId, toolName, output, providerMetadata);
     }
 
@@ -319,8 +336,8 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return tool output error chunk
      */
-    public static ToolOutputErrorChunk toolOutputError(String toolCallId, String toolName,
-        String errorText, Map<String, Object> providerMetadata) {
+    public static ToolOutputErrorChunk toolOutputError(
+            String toolCallId, String toolName, String errorText, Map<String, Object> providerMetadata) {
         return new ToolOutputErrorChunk(toolCallId, toolName, errorText, providerMetadata);
     }
 
@@ -334,10 +351,9 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return tool approval request chunk
      */
-    public static ToolApprovalRequestChunk toolApprovalRequest(String approvalId,
-        String toolCallId, String toolName, Object input, Map<String, Object> providerMetadata) {
-        return new ToolApprovalRequestChunk(approvalId, toolCallId, toolName, input,
-            providerMetadata);
+    public static ToolApprovalRequestChunk toolApprovalRequest(
+            String approvalId, String toolCallId, String toolName, Object input, Map<String, Object> providerMetadata) {
+        return new ToolApprovalRequestChunk(approvalId, toolCallId, toolName, input, providerMetadata);
     }
 
     /**
@@ -351,11 +367,14 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return tool approval response chunk
      */
-    public static ToolApprovalResponseChunk toolApprovalResponse(String approvalId,
-        String toolCallId, String toolName, Boolean approved, String reason,
-        Map<String, Object> providerMetadata) {
-        return new ToolApprovalResponseChunk(approvalId, toolCallId, toolName, approved, reason,
-            providerMetadata);
+    public static ToolApprovalResponseChunk toolApprovalResponse(
+            String approvalId,
+            String toolCallId,
+            String toolName,
+            Boolean approved,
+            String reason,
+            Map<String, Object> providerMetadata) {
+        return new ToolApprovalResponseChunk(approvalId, toolCallId, toolName, approved, reason, providerMetadata);
     }
 
     /**
@@ -371,12 +390,17 @@ public final class UIMessageChunks {
      * @param providerMetadata provider-specific metadata
      * @return finish step chunk
      */
-    public static FinishStepChunk finishStep(Integer stepIndex, FinishReason finishReason,
-        String rawFinishReason, LanguageModelUsage usage, List<GenerationWarning> warnings,
-        GenerationRequestMetadata request, GenerationResponseMetadata response,
-        Map<String, Object> providerMetadata) {
-        return new FinishStepChunk(stepIndex, finishReason, rawFinishReason, usage, warnings,
-            request, response, providerMetadata);
+    public static FinishStepChunk finishStep(
+            Integer stepIndex,
+            FinishReason finishReason,
+            String rawFinishReason,
+            LanguageModelUsage usage,
+            List<GenerationWarning> warnings,
+            GenerationRequestMetadata request,
+            GenerationResponseMetadata response,
+            Map<String, Object> providerMetadata) {
+        return new FinishStepChunk(
+                stepIndex, finishReason, rawFinishReason, usage, warnings, request, response, providerMetadata);
     }
 
     /**
@@ -387,8 +411,7 @@ public final class UIMessageChunks {
      * @param usage token usage
      * @return finish chunk
      */
-    public static FinishChunk finish(FinishReason finishReason, String rawFinishReason,
-        LanguageModelUsage usage) {
+    public static FinishChunk finish(FinishReason finishReason, String rawFinishReason, LanguageModelUsage usage) {
         return new FinishChunk(finishReason, rawFinishReason, usage);
     }
 
@@ -401,8 +424,8 @@ public final class UIMessageChunks {
      * @param messageMetadata final metadata update object
      * @return finish chunk
      */
-    public static FinishChunk finish(FinishReason finishReason, String rawFinishReason,
-        LanguageModelUsage usage, Object messageMetadata) {
+    public static FinishChunk finish(
+            FinishReason finishReason, String rawFinishReason, LanguageModelUsage usage, Object messageMetadata) {
         return new FinishChunk(finishReason, rawFinishReason, usage, messageMetadata);
     }
 
@@ -424,8 +447,7 @@ public final class UIMessageChunks {
      * @param metadata provider-specific metadata
      * @return error chunk
      */
-    public static ErrorChunk error(String errorText, Integer stepIndex,
-        Map<String, Object> metadata) {
+    public static ErrorChunk error(String errorText, Integer stepIndex, Map<String, Object> metadata) {
         return new ErrorChunk(errorText, stepIndex, metadata);
     }
 

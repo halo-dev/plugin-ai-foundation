@@ -8,8 +8,8 @@ import lombok.Value;
 /**
  * Provider-neutral timeout settings for one generation or embedding request.
  *
- * <p>{@link #totalTimeout} bounds the whole call, {@link #stepTimeout} bounds each provider model
- * invocation, and {@link #toolTimeout} bounds each server-side tool executor call.
+ * <p>{@link #totalTimeout} bounds the whole call, {@link #stepTimeout} bounds each provider model invocation, and
+ * {@link #toolTimeout} bounds each server-side tool executor call.
  *
  * <pre>{@code
  * var request = GenerateTextRequest.builder()
@@ -26,17 +26,11 @@ import lombok.Value;
 @Builder
 @AllArgsConstructor
 public class GenerationTimeouts {
-    /**
-     * Maximum duration for the whole generation request, including all steps and tool execution.
-     */
+    /** Maximum duration for the whole generation request, including all steps and tool execution. */
     Duration totalTimeout;
-    /**
-     * Maximum duration for a single provider generation step.
-     */
+    /** Maximum duration for a single provider generation step. */
     Duration stepTimeout;
-    /**
-     * Maximum duration for a single server-side tool execution.
-     */
+    /** Maximum duration for a single server-side tool execution. */
     Duration toolTimeout;
 
     public static GenerationTimeouts total(Duration timeout) {

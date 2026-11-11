@@ -10,25 +10,25 @@ import java.util.function.Function;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerateTextResult;
+import run.halo.aifoundation.chat.GenerationRequestMetadata;
+import run.halo.aifoundation.chat.GenerationStep;
+import run.halo.aifoundation.chat.GenerationWarning;
+import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.lifecycle.GenerationErrorEvent;
 import run.halo.aifoundation.lifecycle.GenerationFinishEvent;
 import run.halo.aifoundation.lifecycle.GenerationLifecycle;
-import run.halo.aifoundation.chat.GenerationRequestMetadata;
 import run.halo.aifoundation.lifecycle.GenerationStartEvent;
-import run.halo.aifoundation.chat.GenerationStep;
 import run.halo.aifoundation.lifecycle.GenerationStepFinishEvent;
 import run.halo.aifoundation.lifecycle.GenerationStepStartEvent;
+import run.halo.aifoundation.lifecycle.GenerationToolApprovalRequestEvent;
 import run.halo.aifoundation.lifecycle.GenerationToolCallFinishEvent;
 import run.halo.aifoundation.lifecycle.GenerationToolCallStartEvent;
-import run.halo.aifoundation.lifecycle.GenerationToolApprovalRequestEvent;
-import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.message.ModelMessage;
-import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.service.language.tool.LanguageModelToolExecutor;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
-import run.halo.aifoundation.service.language.tool.LanguageModelToolExecutor;
 
 final class LanguageModelGenerationRun implements LanguageModelToolExecutor.ToolLifecycle {
     private final GenerateTextRequest request;
@@ -40,8 +40,7 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
     private boolean finished;
     private boolean errorNotified;
 
-    LanguageModelGenerationRun(GenerateTextRequest request, String providerType,
-        StopCondition initialStopWhen) {
+    LanguageModelGenerationRun(GenerateTextRequest request, String providerType, StopCondition initialStopWhen) {
         this.request = request;
         this.providerType = providerType;
         this.initialStopWhen = initialStopWhen;
@@ -66,89 +65,104 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
             return Mono.empty();
         }
         started = true;
-        return invoke("onStart", lifecycle -> lifecycle.onStart(GenerationStartEvent.builder()
-            .request(request)
-            .requestMetadata(GenerationRequestMetadata.builder()
-                .metadata(Map.of("providerType", providerType))
-                .build())
-            .metadata(metadata(request))
-            .context(context(request))
-            .tools(nullSafe(request != null ? request.getTools() : null))
-            .toolChoice(request != null ? request.getToolChoice() : null)
-            .stopWhen(initialStopWhen)
-            .timeouts(request != null ? request.getTimeouts() : null)
-            .build()));
+        return invoke(
+                "onStart",
+                lifecycle -> lifecycle.onStart(GenerationStartEvent.builder()
+                        .request(request)
+                        .requestMetadata(GenerationRequestMetadata.builder()
+                                .metadata(Map.of("providerType", providerType))
+                                .build())
+                        .metadata(metadata(request))
+                        .context(context(request))
+                        .tools(nullSafe(request != null ? request.getTools() : null))
+                        .toolChoice(request != null ? request.getToolChoice() : null)
+                        .stopWhen(initialStopWhen)
+                        .timeouts(request != null ? request.getTimeouts() : null)
+                        .build()));
     }
 
-    Mono<Void> stepStart(int stepIndex, GenerateTextRequest stepRequest, List<ModelMessage> messages,
-        List<GenerationStep> previousSteps, StopCondition stopWhen) {
-        return invoke("onStepStart", lifecycle -> lifecycle.onStepStart(GenerationStepStartEvent.builder()
-            .stepIndex(stepIndex)
-            .request(stepRequest)
-            .messages(List.copyOf(nullSafe(messages)))
-            .previousSteps(List.copyOf(nullSafe(previousSteps)))
-            .tools(nullSafe(stepRequest != null ? stepRequest.getTools() : null))
-            .toolChoice(stepRequest != null ? stepRequest.getToolChoice() : null)
-            .stopWhen(stopWhen)
-            .timeouts(stepRequest != null ? stepRequest.getTimeouts() : null)
-            .metadata(metadata(stepRequest))
-            .context(context(stepRequest))
-            .build()));
-    }
-
-    @Override
-    public Mono<Void> toolCallStart(int stepIndex, ToolCall toolCall,
-        Map<String, Object> providerMetadata) {
-        return invoke("onToolCallStart", lifecycle -> lifecycle.onToolCallStart(
-            GenerationToolCallStartEvent.builder()
-                .stepIndex(stepIndex)
-                .toolCallId(toolCall.getToolCallId())
-                .toolName(toolCall.getToolName())
-                .input(toolCall.getInput())
-                .providerMetadata(providerMetadata)
-                .metadata(metadata(request))
-                .context(context(request))
-                .build()));
+    Mono<Void> stepStart(
+            int stepIndex,
+            GenerateTextRequest stepRequest,
+            List<ModelMessage> messages,
+            List<GenerationStep> previousSteps,
+            StopCondition stopWhen) {
+        return invoke(
+                "onStepStart",
+                lifecycle -> lifecycle.onStepStart(GenerationStepStartEvent.builder()
+                        .stepIndex(stepIndex)
+                        .request(stepRequest)
+                        .messages(List.copyOf(nullSafe(messages)))
+                        .previousSteps(List.copyOf(nullSafe(previousSteps)))
+                        .tools(nullSafe(stepRequest != null ? stepRequest.getTools() : null))
+                        .toolChoice(stepRequest != null ? stepRequest.getToolChoice() : null)
+                        .stopWhen(stopWhen)
+                        .timeouts(stepRequest != null ? stepRequest.getTimeouts() : null)
+                        .metadata(metadata(stepRequest))
+                        .context(context(stepRequest))
+                        .build()));
     }
 
     @Override
-    public Mono<Void> toolCallFinish(int stepIndex, ToolResult result, ToolError error,
-        Instant startedAt, Map<String, Object> providerMetadata) {
+    public Mono<Void> toolCallStart(int stepIndex, ToolCall toolCall, Map<String, Object> providerMetadata) {
+        return invoke(
+                "onToolCallStart",
+                lifecycle -> lifecycle.onToolCallStart(GenerationToolCallStartEvent.builder()
+                        .stepIndex(stepIndex)
+                        .toolCallId(toolCall.getToolCallId())
+                        .toolName(toolCall.getToolName())
+                        .input(toolCall.getInput())
+                        .providerMetadata(providerMetadata)
+                        .metadata(metadata(request))
+                        .context(context(request))
+                        .build()));
+    }
+
+    @Override
+    public Mono<Void> toolCallFinish(
+            int stepIndex,
+            ToolResult result,
+            ToolError error,
+            Instant startedAt,
+            Map<String, Object> providerMetadata) {
         var duration = startedAt != null ? Duration.between(startedAt, Instant.now()) : null;
-        return invoke("onToolCallFinish", lifecycle -> lifecycle.onToolCallFinish(
-            GenerationToolCallFinishEvent.builder()
-                .stepIndex(stepIndex)
-                .toolCallId(result != null ? result.getToolCallId() : error.getToolCallId())
-                .toolName(result != null ? result.getToolName() : error.getToolName())
-                .result(result)
-                .error(error)
-                .duration(duration)
-                .providerMetadata(providerMetadata)
-                .metadata(metadata(request))
-                .context(context(request))
-                .build()));
+        return invoke(
+                "onToolCallFinish",
+                lifecycle -> lifecycle.onToolCallFinish(GenerationToolCallFinishEvent.builder()
+                        .stepIndex(stepIndex)
+                        .toolCallId(result != null ? result.getToolCallId() : error.getToolCallId())
+                        .toolName(result != null ? result.getToolName() : error.getToolName())
+                        .result(result)
+                        .error(error)
+                        .duration(duration)
+                        .providerMetadata(providerMetadata)
+                        .metadata(metadata(request))
+                        .context(context(request))
+                        .build()));
     }
 
     @Override
     public Mono<Void> toolApprovalRequest(int stepIndex, ToolApprovalRequest request) {
-        return invoke("onToolApprovalRequest", lifecycle -> lifecycle.onToolApprovalRequest(
-            GenerationToolApprovalRequestEvent.builder()
-                .stepIndex(stepIndex)
-                .approvalRequest(request)
-                .metadata(metadata(this.request))
-                .context(context(this.request))
-                .build()));
+        return invoke(
+                "onToolApprovalRequest",
+                lifecycle -> lifecycle.onToolApprovalRequest(GenerationToolApprovalRequestEvent.builder()
+                        .stepIndex(stepIndex)
+                        .approvalRequest(request)
+                        .metadata(metadata(this.request))
+                        .context(context(this.request))
+                        .build()));
     }
 
     Mono<Void> stepFinish(int stepIndex, GenerationStep step, List<GenerationStep> steps) {
-        return invoke("onStepFinish", lifecycle -> lifecycle.onStepFinish(
-            GenerationStepFinishEvent.builder()
-                .stepIndex(stepIndex)
-                .step(step)
-                .steps(List.copyOf(nullSafe(steps)))
-                .metadata(metadata(request))
-                .context(context(request))
-                .build()));
+        return invoke(
+                "onStepFinish",
+                lifecycle -> lifecycle.onStepFinish(GenerationStepFinishEvent.builder()
+                        .stepIndex(stepIndex)
+                        .step(step)
+                        .steps(List.copyOf(nullSafe(steps)))
+                        .metadata(metadata(request))
+                        .context(context(request))
+                        .build()));
     }
 
     Mono<Void> finish(GenerateTextResult result) {
@@ -156,11 +170,13 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
             return Mono.empty();
         }
         finished = true;
-        return invoke("onFinish", lifecycle -> lifecycle.onFinish(GenerationFinishEvent.builder()
-            .result(result)
-            .metadata(metadata(request))
-            .context(context(request))
-            .build()));
+        return invoke(
+                "onFinish",
+                lifecycle -> lifecycle.onFinish(GenerationFinishEvent.builder()
+                        .result(result)
+                        .metadata(metadata(request))
+                        .context(context(request))
+                        .build()));
     }
 
     Mono<Void> error(Throwable error, Integer stepIndex, List<GenerationStep> steps) {
@@ -169,17 +185,18 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
             return Mono.empty();
         }
         errorNotified = true;
-        return invoke("onError", lifecycle -> lifecycle.onError(GenerationErrorEvent.builder()
-            .error(error)
-            .stepIndex(stepIndex)
-            .steps(List.copyOf(nullSafe(steps)))
-            .metadata(metadata(request))
-            .context(context(request))
-            .build()));
+        return invoke(
+                "onError",
+                lifecycle -> lifecycle.onError(GenerationErrorEvent.builder()
+                        .error(error)
+                        .stepIndex(stepIndex)
+                        .steps(List.copyOf(nullSafe(steps)))
+                        .metadata(metadata(request))
+                        .context(context(request))
+                        .build()));
     }
 
-    private Mono<Void> invoke(String callbackName,
-        Function<GenerationLifecycle, Mono<Void>> callback) {
+    private Mono<Void> invoke(String callbackName, Function<GenerationLifecycle, Mono<Void>> callback) {
         var lifecycle = request != null ? request.getLifecycle() : null;
         if (lifecycle == null) {
             return Mono.empty();
@@ -187,11 +204,11 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
         try {
             var mono = callback.apply(lifecycle);
             return mono != null
-                ? mono.onErrorResume(e -> {
-                    addLifecycleWarning(callbackName, e);
-                    return Mono.empty();
-                })
-                : Mono.empty();
+                    ? mono.onErrorResume(e -> {
+                        addLifecycleWarning(callbackName, e);
+                        return Mono.empty();
+                    })
+                    : Mono.empty();
         } catch (RuntimeException e) {
             addLifecycleWarning(callbackName, e);
             return Mono.empty();
@@ -200,22 +217,18 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
 
     private void addLifecycleWarning(String callbackName, Throwable e) {
         lifecycleWarnings.add(GenerationWarning.builder()
-            .code("lifecycle-callback-failed")
-            .message(callbackName + " callback failed: " + safeErrorMessage(e))
-            .providerMetadata(Map.of("providerType", providerType))
-            .build());
+                .code("lifecycle-callback-failed")
+                .message(callbackName + " callback failed: " + safeErrorMessage(e))
+                .providerMetadata(Map.of("providerType", providerType))
+                .build());
     }
 
     private Map<String, Object> metadata(GenerateTextRequest request) {
-        return request != null && request.getMetadata() != null
-            ? Map.copyOf(request.getMetadata())
-            : Map.of();
+        return request != null && request.getMetadata() != null ? Map.copyOf(request.getMetadata()) : Map.of();
     }
 
     private Map<String, Object> context(GenerateTextRequest request) {
-        return request != null && request.getContext() != null
-            ? Map.copyOf(request.getContext())
-            : Map.of();
+        return request != null && request.getContext() != null ? Map.copyOf(request.getContext()) : Map.of();
     }
 
     private String safeErrorMessage(Throwable e) {

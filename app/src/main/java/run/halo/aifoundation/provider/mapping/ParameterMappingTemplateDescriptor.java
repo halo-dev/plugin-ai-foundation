@@ -5,21 +5,24 @@ import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.support.AdapterType;
 
 public record ParameterMappingTemplateDescriptor(
-    String id,
-    String displayName,
-    String description,
-    String defaultField,
-    ModelParameter parameter,
-    Set<AdapterType> adapterTypes,
-    ConfigurationType configurationType,
-    ModelParameterMappings.ReasoningMapping defaultReasoningMapping,
-    ParameterMappingApplicator applicator
-) {
-    public ParameterMappingTemplateDescriptor(String id, String displayName, String description,
-        ModelParameter parameter, Set<AdapterType> adapterTypes,
-        ConfigurationType configurationType, ParameterMappingApplicator applicator) {
-        this(id, displayName, description, null, parameter, adapterTypes, configurationType,
-            null, applicator);
+        String id,
+        String displayName,
+        String description,
+        String defaultField,
+        ModelParameter parameter,
+        Set<AdapterType> adapterTypes,
+        ConfigurationType configurationType,
+        ModelParameterMappings.ReasoningMapping defaultReasoningMapping,
+        ParameterMappingApplicator applicator) {
+    public ParameterMappingTemplateDescriptor(
+            String id,
+            String displayName,
+            String description,
+            ModelParameter parameter,
+            Set<AdapterType> adapterTypes,
+            ConfigurationType configurationType,
+            ParameterMappingApplicator applicator) {
+        this(id, displayName, description, null, parameter, adapterTypes, configurationType, null, applicator);
     }
 
     public enum ConfigurationType {

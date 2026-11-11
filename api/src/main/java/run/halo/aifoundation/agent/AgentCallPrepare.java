@@ -10,8 +10,6 @@ import reactor.core.publisher.Mono;
 @FunctionalInterface
 public interface AgentCallPrepare<O> {
 
-    /**
-     * Prepares the current call. The callback runs exactly once per subscribed agent call.
-     */
+    /** Prepares the current call. The callback runs exactly once per subscribed agent call. */
     Mono<PreparedAgentCall> prepare(AgentCallPrepareContext<O> context);
 }

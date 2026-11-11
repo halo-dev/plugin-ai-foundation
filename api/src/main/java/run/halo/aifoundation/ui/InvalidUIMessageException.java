@@ -2,9 +2,7 @@ package run.halo.aifoundation.ui;
 
 import java.util.List;
 
-/**
- * Raised when UI message validation fails.
- */
+/** Raised when UI message validation fails. */
 public class InvalidUIMessageException extends IllegalArgumentException {
     private final List<UIMessageValidationIssue> issues;
 

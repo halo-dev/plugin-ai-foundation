@@ -1,14 +1,27 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import type { AiModel, AiModelSpecFeaturesEnum, AiProvider } from '@/api/generated'
+import type {
+  AiModel,
+  AiModelSpecAdapterTypeEnum,
+  AiModelSpecFeaturesEnum,
+  AiProvider,
+  ModelParameterConstraints,
+} from '@/api/generated'
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
+  useModelCatalogStatusFetch,
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
-import { useProviderType } from '@/composables/use-provider-types-fetch'
+import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
+import {
+  capabilityDomainSource,
+  capabilitySourceLabel,
+  capabilitySummaryLabels,
+} from '@/utils/capabilities'
 import { setFocus } from '@/utils/focus'
 import {
+  adapterOptionsForProviderType,
   createModelFromDiscovered,
   discoveredModelProfileForProviderType,
   groupDiscoveredModels,
@@ -16,14 +29,9 @@ import {
   modelImportFailureMessage,
   modelTypeOptionsForProviderType,
   summarizeModelImportResults,
-  syncDiscoveredModelProfiles,
   type DiscoveredModelProfiles,
 } from '@/utils/model'
-import {
-  capabilityDomainSource,
-  capabilitySourceLabel,
-  capabilitySummaryLabels,
-} from '@/utils/capabilities'
+import { parameterFeatures, withFeatureSupport } from '@/utils/model-feature-support'
 import {
   Toast,
   VButton,
@@ -38,8 +46,10 @@ import {
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, onMounted, ref, shallowRef, toRef, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import RiCheckLine from '~icons/ri/check-line'
+import ModelCatalogProvenance from './ModelCatalogProvenance.vue'
+import ModelCatalogStatus from './ModelCatalogStatus.vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -55,8 +65,40 @@ const modal = ref<InstanceType<typeof VModal> | null>(null)
 
 const providerName = computed(() => props.provider.metadata.name || '')
 
-const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
-const selectedProviderType = useProviderType(toRef(props, 'provider'))
+const { data: models, isLoading, refetch: refetchModels } = useDiscoverModelsFetch(providerName)
+const isRefreshingCatalog = ref(false)
+const { data: catalogStatus, refetch: refetchCatalogStatus } = useModelCatalogStatusFetch()
+const editedModelIds = ref(new Set<string>())
+const featureChoices = ref<Record<string, Partial<Record<AiModelSpecFeaturesEnum, boolean>>>>({})
+
+async function refreshCatalog() {
+  if (isRefreshingCatalog.value || isImporting.value) return
+  isRefreshingCatalog.value = true
+  try {
+    const { data } = await aiConsoleApiClient.provider.refreshModelCatalog()
+    await refetchCatalogStatus()
+    if (data.error) {
+      Toast.warning(data.error)
+    } else {
+      Toast.success('能力目录已刷新')
+    }
+    // Only refresh discovery. Saved models are never updated by this action.
+    await refetchModels()
+  } catch {
+    Toast.warning('能力目录刷新失败，仍可使用当前模型列表')
+  } finally {
+    isRefreshingCatalog.value = false
+  }
+}
+const {
+  data: providerTypes,
+  isLoading: isLoadingProviderTypes,
+  isError: isProviderTypesError,
+  refetch: refetchProviderTypes,
+} = useProviderTypesFetch()
+const selectedProviderType = computed(() =>
+  providerTypes.value?.find((type) => type.providerType === props.provider.spec.providerType),
+)
 
 const keyword = shallowRef('')
 
@@ -82,6 +124,22 @@ const selectedModels = ref<Set<string>>(new Set())
 const profileOverrides = ref<DiscoveredModelProfiles>({})
 const isImporting = shallowRef(false)
 const selectedModelCount = computed(() => selectedModels.value.size)
+watch([() => catalogStatus.value?.fetchedAt, isLoading], ([fetchedAt, loading]) => {
+  if (
+    fetchedAt &&
+    fetchedAt !== models.value?.catalog?.fetchedAt &&
+    !loading &&
+    !isRefreshingCatalog.value &&
+    !isImporting.value
+  ) {
+    void refetchModels()
+  }
+})
+const selectedModelsNeedAdapter = computed(() =>
+  allModels.value.some(
+    (model) => selectedModels.value.has(model.modelId) && !profileFor(model).adapterType,
+  ),
+)
 const selectedVisibleModelCount = computed(() => {
   return filteredModels.value.filter((model) => selectedModels.value.has(model.modelId)).length
 })
@@ -99,10 +157,6 @@ const resultText = computed(() => {
 
 const modelTypeOptions = computed(() => modelTypeOptionsForProviderType(selectedProviderType.value))
 
-const featureOptions = computed(() =>
-  modelFeatureOptionsForProviderType(selectedProviderType.value),
-)
-
 function featuresEqual(
   a: NonNullable<AiModel['spec']['features']>,
   b: NonNullable<AiModel['spec']['features']>,
@@ -117,15 +171,51 @@ function profileFor(model: DiscoveredModel) {
   )
 }
 
+function featureOptionsFor(model: DiscoveredModel) {
+  return modelFeatureOptionsForProviderType(
+    selectedProviderType.value,
+    profileFor(model).adapterType,
+  )
+}
+
+function adapterOptionsFor(model: DiscoveredModel) {
+  return adapterOptionsForProviderType(selectedProviderType.value, profileFor(model).modelType)
+}
+
+function featuresWithChoices(modelId: string, recommended: AiModelSpecFeaturesEnum[] = []) {
+  const features = new Set(recommended)
+  const choices = featureChoices.value[modelId] || {}
+  for (const feature of Object.keys(choices) as AiModelSpecFeaturesEnum[]) {
+    if (choices[feature]) features.add(feature)
+    else features.delete(feature)
+  }
+  return [...features]
+}
+
 function setModelType(model: DiscoveredModel, event: Event) {
+  editedModelIds.value.add(model.modelId)
   const current = profileFor(model)
   const next = discoveredModelProfileForProviderType(selectedProviderType.value, model, {
     ...current,
     modelType: (event.target as HTMLSelectElement).value as AiModel['spec']['modelType'],
+    features: featuresWithChoices(model.modelId, current.features),
   })
   profileOverrides.value = {
     ...profileOverrides.value,
     [model.modelId]: next,
+  }
+}
+
+function setAdapterType(model: DiscoveredModel, event: Event) {
+  editedModelIds.value.add(model.modelId)
+  const current = profileFor(model)
+  profileOverrides.value = {
+    ...profileOverrides.value,
+    [model.modelId]: discoveredModelProfileForProviderType(selectedProviderType.value, model, {
+      ...current,
+      adapterType: (event.target as HTMLSelectElement).value as AiModelSpecAdapterTypeEnum,
+      features: featuresWithChoices(model.modelId, current.features),
+    }),
   }
 }
 
@@ -138,10 +228,15 @@ function isFeatureEnabled(model: DiscoveredModel, feature: AiModelSpecFeaturesEn
 }
 
 function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum) {
-  if (!featureOptions.value.some((item) => item.value === feature)) {
+  if (!featureOptionsFor(model).some((item) => item.value === feature)) {
     return
   }
   const profile = profileFor(model)
+  const enabled = !profile.features.includes(feature)
+  featureChoices.value[model.modelId] = {
+    ...featureChoices.value[model.modelId],
+    [feature]: enabled,
+  }
   let features = profile.features
   if (!profile.features.includes(feature)) {
     features = [...profile.features, feature]
@@ -157,18 +252,28 @@ function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum)
   }
 }
 
+function manualFeatureConstraints(model: DiscoveredModel) {
+  if (profileFor(model).modelType !== 'language') return undefined
+  let constraints: ModelParameterConstraints | undefined
+  const supportedFeatures = featureOptionsFor(model).map((option) => option.value)
+  for (const feature of parameterFeatures) {
+    const enabled = featureChoices.value[model.modelId]?.[feature]
+    if (enabled !== undefined && supportedFeatures.includes(feature)) {
+      constraints = withFeatureSupport(constraints, feature, enabled)
+    }
+  }
+  return constraints
+}
+
 function capabilitySourceLabels(model: DiscoveredModel) {
-  return [
+  const domains = [
     ['language', '语言能力'],
     ['imageGeneration', '图像能力'],
-  ]
+  ] as const
+  return domains
     .map(([domain, label]) => {
-      const source = capabilityDomainSource(
-        model.capabilities,
-        model.capabilitySources,
-        domain as 'language' | 'imageGeneration',
-      )
-      return source ? `${label}: ${capabilitySourceLabel(source)}` : ''
+      const source = capabilityDomainSource(model.capabilities, model.capabilitySources, domain)
+      return source ? `${label}: ${capabilitySourceLabel(source, model.catalogMatch, domain)}` : ''
     })
     .filter(Boolean)
 }
@@ -206,7 +311,15 @@ async function handleImport() {
   try {
     const results = await Promise.allSettled(
       data.map(async (model) => {
-        const newModel = createModelFromDiscovered(providerName.value, model, profileFor(model))
+        const newModel = createModelFromDiscovered(
+          providerName.value,
+          model,
+          {
+            ...profileFor(model),
+            parameterConstraints: manualFeatureConstraints(model),
+          },
+          selectedProviderType.value,
+        )
 
         await aiConsoleApiClient.model.createModel({
           aiModel: newModel,
@@ -237,7 +350,20 @@ async function handleImport() {
 watch(
   [allModels, selectedProviderType],
   ([items, providerType]) => {
-    const nextProfiles = syncDiscoveredModelProfiles(items, providerType, profileOverrides.value)
+    const nextProfiles: DiscoveredModelProfiles = {}
+    for (const model of items) {
+      const previous = editedModelIds.value.has(model.modelId)
+        ? profileOverrides.value[model.modelId]
+        : undefined
+      nextProfiles[model.modelId] = discoveredModelProfileForProviderType(providerType, model, {
+        modelType: previous?.modelType || model.modelType,
+        adapterType: previous?.adapterType || model.adapterType,
+        features: featuresWithChoices(model.modelId, model.features),
+      })
+    }
+    selectedModels.value = new Set(
+      [...selectedModels.value].filter((id) => items.some((item) => item.modelId === id)),
+    )
     const isUnchanged =
       Object.keys(nextProfiles).length === Object.keys(profileOverrides.value).length &&
       Object.entries(nextProfiles).every(([modelId, profile]) => {
@@ -245,6 +371,7 @@ watch(
         return (
           existing &&
           existing.modelType === profile.modelType &&
+          existing.adapterType === profile.adapterType &&
           featuresEqual(existing.features, profile.features)
         )
       })
@@ -303,8 +430,21 @@ onMounted(() => {
           placeholder="搜索模型名称或供应商模型 ID..."
         />
       </div>
+      <ModelCatalogStatus
+        :status="catalogStatus"
+        :refreshing="isRefreshingCatalog"
+        :disabled="isImporting"
+        @refresh="refreshCatalog"
+      />
       <div class=":uno: min-h-0 flex-1 overflow-y-auto">
-        <VLoading v-if="isLoading" />
+        <VLoading v-if="isLoading || isLoadingProviderTypes" />
+        <div
+          v-else-if="isProviderTypesError || !selectedProviderType"
+          class=":uno: flex flex-col items-center gap-3 px-4 py-12 text-sm text-gray-500"
+        >
+          <span>无法加载供应商接口信息</span>
+          <VButton size="sm" @click="refetchProviderTypes()">重试</VButton>
+        </div>
         <VEmpty v-else-if="allModels.length === 0" title="无数据" message="无法获取到模型列表" />
         <VEmpty
           v-else-if="filteredModels.length === 0"
@@ -360,7 +500,7 @@ onMounted(() => {
                     <div class=":uno: flex flex-wrap items-center justify-end gap-2">
                       <select
                         :value="profileFor(model).modelType"
-                        class=":uno: h-8 min-w-30 rounded-md bg-white text-xs text-gray-700 outline-none transition !border !border-gray-200 !border-solid !px-2 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
+                        class=":uno: min-w-30 select-default"
                         @change="setModelType(model, $event)"
                       >
                         <option
@@ -371,10 +511,26 @@ onMounted(() => {
                           {{ item.label }}
                         </option>
                       </select>
+                      <select
+                        v-if="adapterOptionsFor(model).length > 1"
+                        :value="profileFor(model).adapterType || ''"
+                        :aria-label="`${model.displayName || model.modelId} 调用接口`"
+                        class=":uno: min-w-36 select-default"
+                        @change="setAdapterType(model, $event)"
+                      >
+                        <option disabled value="">选择调用接口</option>
+                        <option
+                          v-for="item in adapterOptionsFor(model)"
+                          :key="item.value"
+                          :value="item.value"
+                        >
+                          {{ item.label }}
+                        </option>
+                      </select>
                     </div>
                     <div class=":uno: flex flex-wrap justify-end gap-1.5">
                       <button
-                        v-for="item in featureOptions"
+                        v-for="item in featureOptionsFor(model)"
                         :key="item.value"
                         type="button"
                         class=":uno: h-7 inline-flex items-center gap-1 border rounded-md px-2 text-xs transition"
@@ -414,6 +570,7 @@ onMounted(() => {
                         {{ source }}
                       </span>
                     </div>
+                    <ModelCatalogProvenance v-if="model.catalogMatch" :match="model.catalogMatch" />
                   </div>
                 </template>
               </VEntity>
@@ -424,13 +581,21 @@ onMounted(() => {
     </div>
     <template #footer>
       <div class=":uno: w-full flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class=":uno: text-sm text-gray-500">已选择 {{ selectedModelCount }} 个模型</div>
+        <div class=":uno: text-sm text-gray-500">
+          已选择 {{ selectedModelCount }} 个模型
+          <span v-if="selectedModelsNeedAdapter"> · 请选择调用接口</span>
+        </div>
         <VSpace>
           <VButton
             type="secondary"
             @click="handleImport"
             :loading="isImporting"
-            :disabled="selectedModelCount === 0 || isImporting"
+            :disabled="
+              selectedModelCount === 0 ||
+              selectedModelsNeedAdapter ||
+              isImporting ||
+              isRefreshingCatalog
+            "
           >
             {{ selectedModelCount > 0 ? `导入 ${selectedModelCount} 个模型` : '导入' }}
           </VButton>

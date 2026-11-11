@@ -157,6 +157,7 @@ defineExpose({
       validation="required"
       :options="providerTypeOptions"
       :disabled="isEditing"
+      searchable
       v-model="providerType"
       :value="formState?.providerType"
     >
@@ -272,6 +273,16 @@ defineExpose({
       label="代理端口"
       placeholder="可选"
       :value="formState?.proxyPort"
+    />
+
+    <FormKit
+      type="number"
+      number
+      name="maxInMemorySize"
+      label="图片响应缓冲上限（字节）"
+      placeholder="可选，默认 67108864（64 MB）"
+      help="图片生成响应的内存缓冲上限。默认 64 MB，一般无需修改；返回超大图片的供应商可继续调大"
+      :value="formState?.maxInMemorySize"
     />
 
     <AdvancedSettingsCollapsible

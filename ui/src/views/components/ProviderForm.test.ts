@@ -1,16 +1,16 @@
 import type { ModelParameterMappings, ProviderTypeInfo } from '@/api/generated'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
-import { beforeEach, describe, expect, it, rstest } from '@rstest/core'
 import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import ProviderForm from './ProviderForm.vue'
 
-rstest.mock('@/composables/use-provider-types-fetch', () => ({
-  useProviderTypesFetch: rstest.fn(),
+vi.mock('@/composables/use-provider-types-fetch', () => ({
+  useProviderTypesFetch: vi.fn(),
 }))
 
-rstest.mock('@halo-dev/components', () => ({
-  Toast: { error: rstest.fn() },
+vi.mock('@halo-dev/components', () => ({
+  Toast: { error: vi.fn() },
 }))
 
 const providerTypes = ref<ProviderTypeInfo[]>([])
@@ -65,7 +65,7 @@ const ParameterMappingFieldsStub = defineComponent({
 describe('ProviderForm', () => {
   beforeEach(() => {
     providerTypes.value = [providerType('openai'), providerType('dashscope')]
-    rstest.mocked(useProviderTypesFetch).mockReturnValue({
+    vi.mocked(useProviderTypesFetch).mockReturnValue({
       data: providerTypes,
     } as ReturnType<typeof useProviderTypesFetch>)
   })

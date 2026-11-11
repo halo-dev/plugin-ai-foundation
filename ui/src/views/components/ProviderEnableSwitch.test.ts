@@ -2,27 +2,27 @@ import { aiCoreApiClient } from '@/api'
 import type { AiProvider } from '@/api/generated'
 import { QK_MODEL_OPTIONS } from '@/composables/use-model-options-fetch'
 import { QK_PROVIDER, QK_PROVIDERS } from '@/composables/use-providers-fetch'
-import { describe, expect, it, rstest } from '@rstest/core'
 import { mount } from '@vue/test-utils'
 import type { AxiosResponse } from 'axios'
+import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 import ProviderEnableSwitch from './ProviderEnableSwitch.vue'
 
-const refetchQueries = rstest.fn()
-const invalidateQueries = rstest.fn()
+const refetchQueries = vi.fn()
+const invalidateQueries = vi.fn()
 
-rstest.mock('@/api', () => ({
+vi.mock('@/api', () => ({
   aiCoreApiClient: {
     provider: {
-      patchAiProvider: rstest.fn(),
+      patchAiProvider: vi.fn(),
     },
   },
 }))
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   Toast: {
-    success: rstest.fn(),
-    error: rstest.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
   },
   VSwitch: defineComponent({
     props: {
@@ -43,7 +43,7 @@ rstest.mock('@halo-dev/components', () => ({
   }),
 }))
 
-rstest.mock('@tanstack/vue-query', () => ({
+vi.mock('@tanstack/vue-query', () => ({
   useQueryClient: () => ({
     refetchQueries,
     invalidateQueries,
@@ -69,7 +69,7 @@ rstest.mock('@tanstack/vue-query', () => ({
 
 describe('ProviderEnableSwitch', () => {
   it('patches provider enabled state and refreshes affected queries', async () => {
-    const patchAiProvider = rstest.mocked(aiCoreApiClient.provider.patchAiProvider)
+    const patchAiProvider = vi.mocked(aiCoreApiClient.provider.patchAiProvider)
     patchAiProvider.mockResolvedValue(response(provider(true)))
 
     const wrapper = mount(ProviderEnableSwitch, {

@@ -2,9 +2,11 @@
 import type { ModelOption } from '@/api/generated'
 import { capabilityUnavailableDetailsLabel } from '@/utils/capabilities'
 import { SelectItem, SelectItemIndicator, SelectItemText } from 'reka-ui'
+import { computed } from 'vue'
 import MingcuteCheckLine from '~icons/mingcute/check-line'
 import {
   isModelOptionSelectable,
+  missingRequiredFeatureLabels,
   modelDetailLabels,
   modelOptionDisplayName,
   modelOptionUnavailableReasonLabel,
@@ -15,11 +17,19 @@ import {
 const props = defineProps<{
   model: ModelOption
   selected: boolean
+  requiredFeatures?: string[]
 }>()
 
 const emit = defineEmits<{
   select: [model: ModelOption]
 }>()
+
+const missingFeatureLabels = computed(() => {
+  if (!isModelOptionSelectable(props.model)) {
+    return []
+  }
+  return missingRequiredFeatureLabels(props.model, props.requiredFeatures)
+})
 </script>
 
 <template>
@@ -63,9 +73,15 @@ const emit = defineEmits<{
           <span v-if="!isModelOptionSelectable(props.model)" class=":uno: ml-2 text-red-600">
             {{
               capabilityUnavailableDetailsLabel(props.model) ||
-              modelOptionUnavailableReasonLabel(props.model.unavailableReason)
+              modelOptionUnavailableReasonLabel(props.model.unavailableReason ?? undefined)
             }}
           </span>
+        </span>
+        <span
+          v-if="missingFeatureLabels.length"
+          class=":uno: mt-1 block text-[11px] text-orange-600 leading-4"
+        >
+          当前模型不支持{{ missingFeatureLabels.join('、') }}，可能无法正常使用
         </span>
       </span>
     </SelectItemText>

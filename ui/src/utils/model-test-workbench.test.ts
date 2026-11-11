@@ -1,7 +1,7 @@
 import type { AiModel, OutputSpec } from '@/api/generated'
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import { AIUISchemaValidationError, validateRuntimeSchema } from '@halo-dev/ai-foundation-sdk'
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import {
   applyWorkbenchUIMessageChunk,
   buildOutputSpec,

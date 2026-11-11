@@ -1,7 +1,7 @@
-import { describe, expect, it } from '@rstest/core'
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
 import { applyUIMessageChunk, createUIMessageReducer } from './message-reducer'
 import type { UIMessageChunk } from './types'
 

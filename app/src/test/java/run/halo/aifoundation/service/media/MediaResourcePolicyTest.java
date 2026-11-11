@@ -16,29 +16,24 @@ class MediaResourcePolicyTest {
     @Test
     void validate_usesDecodedDataSizeForPartAndTotalLimits() {
         var policy = new MediaResourcePolicy(4, 8, 2, 100, Set.of("https"));
-        var fiveBytes = Base64.getEncoder()
-            .encodeToString("12345".getBytes(StandardCharsets.UTF_8));
+        var fiveBytes = Base64.getEncoder().encodeToString("12345".getBytes(StandardCharsets.UTF_8));
 
-        assertThatThrownBy(() -> policy.validate(List.of(DataContent.data(fiveBytes,
-            "image/png"))))
-            .isInstanceOf(MediaContentTooLargeException.class)
-            .extracting("scope", "maxBytes", "actualBytes")
-            .containsExactly("part", 4L, 5L);
+        assertThatThrownBy(() -> policy.validate(List.of(DataContent.data(fiveBytes, "image/png"))))
+                .isInstanceOf(MediaContentTooLargeException.class)
+                .extracting("scope", "maxBytes", "actualBytes")
+                .containsExactly("part", 4L, 5L);
     }
 
     @Test
     void validate_checksTotalDecodedDataSize() {
         var policy = new MediaResourcePolicy(10, 8, 2, 100, Set.of("https"));
-        var fiveBytes = Base64.getEncoder()
-            .encodeToString("12345".getBytes(StandardCharsets.UTF_8));
+        var fiveBytes = Base64.getEncoder().encodeToString("12345".getBytes(StandardCharsets.UTF_8));
 
-        assertThatThrownBy(() -> policy.validate(List.of(
-            DataContent.data(fiveBytes, "image/png"),
-            DataContent.data(fiveBytes, "image/png")
-        )))
-            .isInstanceOf(MediaContentTooLargeException.class)
-            .extracting("scope", "maxBytes", "actualBytes")
-            .containsExactly("request", 8L, 10L);
+        assertThatThrownBy(() -> policy.validate(
+                        List.of(DataContent.data(fiveBytes, "image/png"), DataContent.data(fiveBytes, "image/png"))))
+                .isInstanceOf(MediaContentTooLargeException.class)
+                .extracting("scope", "maxBytes", "actualBytes")
+                .containsExactly("request", 8L, 10L);
     }
 
     @Test
@@ -46,12 +41,25 @@ class MediaResourcePolicyTest {
         var policy = new MediaResourcePolicy(10, 20, 2, 20, Set.of("https"));
 
         assertThatThrownBy(() -> policy.validate(List.of(DataContent.url("file:///tmp/a.png"))))
-            .isInstanceOf(InvalidMediaContentException.class)
-            .hasMessage("media URL scheme is not supported");
-        assertThatThrownBy(() -> policy.validate(List.of(DataContent.url(
-            "https://example.com/too-long.png"))))
-            .isInstanceOf(InvalidMediaContentException.class)
-            .hasMessage("media URL exceeds maximum length");
+                .isInstanceOf(InvalidMediaContentException.class)
+                .hasMessage("media URL scheme is not supported");
+        assertThatThrownBy(() -> policy.validate(List.of(DataContent.url("https://example.com/too-long.png"))))
+                .isInstanceOf(InvalidMediaContentException.class)
+                .hasMessage("media URL exceeds maximum length");
+    }
+
+    @Test
+    void additionalSchemesExtendThePolicyWithoutRelaxingItsLimits() {
+        var base = new MediaResourcePolicy(10, 20, 2, 100, Set.of("https"));
+        var extended = base.withAdditionalSchemes(Set.of("MS"));
+
+        extended.validate(List.of(DataContent.url("ms://uploaded-video")));
+        assertThatThrownBy(() -> base.validate(List.of(DataContent.url("ms://uploaded-video"))))
+                .isInstanceOf(InvalidMediaContentException.class)
+                .hasMessage("media URL scheme is not supported");
+        assertThatThrownBy(() -> extended.validate(List.of(DataContent.url("https://example.com/" + "a".repeat(120)))))
+                .isInstanceOf(InvalidMediaContentException.class)
+                .hasMessage("media URL exceeds maximum length");
     }
 
     @Test
@@ -59,10 +67,8 @@ class MediaResourcePolicyTest {
         var policy = new MediaResourcePolicy(10, 20, 1, 100, Set.of("https"));
 
         assertThatThrownBy(() -> policy.validate(List.of(
-            DataContent.url("https://example.com/a.png"),
-            DataContent.url("https://example.com/b.png")
-        )))
-            .isInstanceOf(InvalidMediaContentException.class)
-            .hasMessage("too many media URLs");
+                        DataContent.url("https://example.com/a.png"), DataContent.url("https://example.com/b.png"))))
+                .isInstanceOf(InvalidMediaContentException.class)
+                .hasMessage("too many media URLs");
     }
 }

@@ -13,7 +13,8 @@ public enum ModelType {
     LANGUAGE("language"),
     EMBEDDING("embedding"),
     RERANK("rerank"),
-    IMAGE_GENERATION("image-generation");
+    IMAGE_GENERATION("image-generation"),
+    DECISION("decision");
 
     private final String value;
 
@@ -24,16 +25,13 @@ public enum ModelType {
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static ModelType fromValue(String value) {
-        return find(value)
-            .orElseThrow(() -> new IllegalArgumentException("Unsupported modelType: " + value));
+        return find(value).orElseThrow(() -> new IllegalArgumentException("Unsupported modelType: " + value));
     }
 
     public static Optional<ModelType> find(String value) {
         if (value == null) {
             return Optional.empty();
         }
-        return Arrays.stream(values())
-            .filter(type -> type.value.equals(value))
-            .findFirst();
+        return Arrays.stream(values()).filter(type -> type.value.equals(value)).findFirst();
     }
 }

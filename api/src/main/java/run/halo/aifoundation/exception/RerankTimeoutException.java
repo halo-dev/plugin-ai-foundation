@@ -2,9 +2,7 @@ package run.halo.aifoundation.exception;
 
 import java.time.Duration;
 
-/**
- * Raised when a reranking request exceeds its configured timeout.
- */
+/** Raised when a reranking request exceeds its configured timeout. */
 public class RerankTimeoutException extends AiFoundationException {
 
     private final Duration timeout;

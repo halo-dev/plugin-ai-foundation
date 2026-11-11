@@ -11,11 +11,8 @@ import java.util.List;
  * @param part part currently being converted
  * @param partIndex zero-based part index
  */
-public record UIMessageConversionContext<M>(List<UIMessage<M>> messages,
-                                            UIMessage<M> message,
-                                            int messageIndex,
-                                            UIMessagePart part,
-                                            int partIndex) {
+public record UIMessageConversionContext<M>(
+        List<UIMessage<M>> messages, UIMessage<M> message, int messageIndex, UIMessagePart part, int partIndex) {
     public UIMessageConversionContext {
         messages = List.copyOf(messages);
     }

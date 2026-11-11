@@ -12,41 +12,27 @@ import run.halo.aifoundation.message.ModelMessage;
 /**
  * Provider response metadata returned with a completed language model generation.
  *
- * <p>Callers can use this for logging, diagnostics, or provider-specific inspection. The normalized
- * SDK result remains available on {@link GenerateTextResult}; this metadata preserves extra
- * response details such as provider headers, raw body, and the final message history when present.
+ * <p>Callers can use this for logging, diagnostics, or provider-specific inspection. The normalized SDK result remains
+ * available on {@link GenerateTextResult}; this metadata preserves extra response details such as provider headers, raw
+ * body, and the final message history when present.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class GenerationResponseMetadata {
-    /**
-     * Provider response id when one is available.
-     */
+    /** Provider response id when one is available. */
     private String id;
-    /**
-     * Provider model id reported by the response.
-     */
+    /** Provider model id reported by the response. */
     private String model;
-    /**
-     * Time when AI Foundation created this metadata object.
-     */
+    /** Time when AI Foundation created this metadata object. */
     private Instant timestamp;
-    /**
-     * Final normalized message history when available.
-     */
+    /** Final normalized message history when available. */
     private List<ModelMessage> messages;
-    /**
-     * Provider response headers grouped by header name.
-     */
+    /** Provider response headers grouped by header name. */
     private Map<String, List<String>> headers;
-    /**
-     * Raw provider response body or provider-specific response object, when retained.
-     */
+    /** Raw provider response body or provider-specific response object, when retained. */
     private Object body;
-    /**
-     * Additional provider or adapter metadata.
-     */
+    /** Additional provider or adapter metadata. */
     private Map<String, Object> metadata;
 }

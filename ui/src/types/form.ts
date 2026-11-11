@@ -18,6 +18,7 @@ export interface ProviderFormState {
   apiKeySecretName?: string
   proxyHost?: string
   proxyPort?: number
+  maxInMemorySize?: number
   parameterMappings?: ModelParameterMappings
 }
 
@@ -30,5 +31,9 @@ export interface ModelFormState {
   adapterType?: AiModelSpecAdapterTypeEnum
   capabilities?: AiModel['spec']['capabilities']
   capabilitySources?: AiModel['spec']['capabilitySources']
+  catalogMatch?: AiModel['spec']['catalogMatch']
+  catalogParameters?: AiModel['spec']['catalogParameters']
+  parameterConstraints?: AiModel['spec']['parameterConstraints']
   parameterMappings?: ModelParameterMappings
+  nativeOptions?: Record<string, unknown>
 }
