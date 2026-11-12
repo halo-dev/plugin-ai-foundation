@@ -20,6 +20,7 @@ import ToolInputStreamDiagnostics from './ToolInputStreamDiagnostics.vue'
 const props = defineProps<{
   message: WorkbenchMessage
   index: number
+  submittingEventIds?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -109,6 +110,10 @@ function handleExternalToolError(eventId: string) {
     eventId,
     errorText: externalErrorInput(eventId),
   })
+}
+
+function isEventSubmitting(eventId: string) {
+  return props.submittingEventIds?.includes(`${props.message.id}:${eventId}`) ?? false
 }
 
 function sourceSubtitle(source: WorkbenchSourceReference) {
@@ -306,8 +311,9 @@ function filePreviewUrl(file: WorkbenchFileReference) {
             >
               <textarea
                 :value="externalResultInput(event.id)"
+                :disabled="isEventSubmitting(event.id)"
                 rows="2"
-                class=":uno: w-full resize-y border border-slate-200 rounded-md bg-white text-[11px] text-slate-700 font-mono outline-none focus:border-teal-400 !px-2 !py-1.5 focus:ring-2 focus:ring-teal-500/10"
+                class=":uno: w-full resize-y border border-slate-200 rounded-md bg-white text-[11px] text-slate-700 font-mono outline-none focus:border-teal-400 !px-2 !py-1.5 disabled:opacity-60 focus:ring-2 focus:ring-teal-500/10"
                 @input="
                   handleExternalResultInput(event.id, ($event.target as HTMLTextAreaElement).value)
                 "
@@ -315,21 +321,24 @@ function filePreviewUrl(file: WorkbenchFileReference) {
               <div class=":uno: flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
-                  class=":uno: rounded-md bg-emerald-600 text-[11px] text-white font-medium shadow-sm hover:bg-emerald-700 !px-2 !py-1"
+                  :disabled="isEventSubmitting(event.id)"
+                  class=":uno: rounded-md bg-emerald-600 text-[11px] text-white font-medium shadow-sm disabled:cursor-not-allowed hover:bg-emerald-700 !px-2 !py-1 disabled:opacity-50"
                   @click="handleExternalToolResult(event.id)"
                 >
                   提交结果并继续
                 </button>
                 <input
                   :value="externalErrorInput(event.id)"
-                  class=":uno: h-7 w-44 flex-none text-[11px] text-rose-700 outline-none sm:w-56 !border !border-rose-200 !rounded-md !border-solid !bg-white !px-2 !py-1 focus:!border-rose-300 focus:!ring-2 focus:!ring-rose-500/10"
+                  :disabled="isEventSubmitting(event.id)"
+                  class=":uno: h-7 w-44 flex-none text-[11px] text-rose-700 outline-none sm:w-56 !border !border-rose-200 !rounded-md !border-solid !bg-white !px-2 !py-1 disabled:opacity-60 focus:!border-rose-300 focus:!ring-2 focus:!ring-rose-500/10"
                   @input="
                     handleExternalErrorInput(event.id, ($event.target as HTMLInputElement).value)
                   "
                 />
                 <button
                   type="button"
-                  class=":uno: border border-rose-200 rounded-md bg-white text-[11px] text-rose-600 font-medium shadow-sm hover:bg-rose-50 !px-2 !py-1"
+                  :disabled="isEventSubmitting(event.id)"
+                  class=":uno: border border-rose-200 rounded-md bg-white text-[11px] text-rose-600 font-medium shadow-sm disabled:cursor-not-allowed hover:bg-rose-50 !px-2 !py-1 disabled:opacity-50"
                   @click="handleExternalToolError(event.id)"
                 >
                   提交错误

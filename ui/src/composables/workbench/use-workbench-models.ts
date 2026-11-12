@@ -1,14 +1,34 @@
 import { ModelOptionModelTypeEnum, type ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { useRouteQuery } from '@vueuse/router'
-import { computed, shallowRef, watch, type ComputedRef, type ShallowRef } from 'vue'
+import {
+  computed,
+  shallowRef,
+  watch,
+  type ComputedRef,
+  type ShallowRef,
+  type WritableComputedRef,
+} from 'vue'
 
 export type WorkbenchTestMode = 'chat' | 'embedding' | 'rerank' | 'image' | 'rag' | 'decision'
+
+const workbenchTestModes: WorkbenchTestMode[] = [
+  'chat',
+  'embedding',
+  'rerank',
+  'image',
+  'rag',
+  'decision',
+]
+
+export function isWorkbenchTestMode(value: string | undefined): value is WorkbenchTestMode {
+  return workbenchTestModes.includes(value as WorkbenchTestMode)
+}
 
 export interface WorkbenchModels {
   availableOnly: ShallowRef<boolean | undefined>
   selectedModelName: ReturnType<typeof useRouteQuery<string | undefined>>
-  testMode: ShallowRef<WorkbenchTestMode>
+  testMode: WritableComputedRef<WorkbenchTestMode>
   decisionModels: ComputedRef<ModelOption[]>
   chatModels: ComputedRef<ModelOption[]>
   embeddingModels: ComputedRef<ModelOption[]>
@@ -44,7 +64,14 @@ export function useWorkbenchModels(): WorkbenchModels {
     available: availableOnly,
   })
   const selectedModelName = useRouteQuery<string | undefined>('model')
-  const testMode = shallowRef<WorkbenchTestMode>('chat')
+  const modeQuery = useRouteQuery<string | undefined>('mode')
+  const hasExplicitMode = computed(() => isWorkbenchTestMode(modeQuery.value))
+  const testMode = computed<WorkbenchTestMode>({
+    get: () => (isWorkbenchTestMode(modeQuery.value) ? modeQuery.value : 'chat'),
+    set: (mode) => {
+      modeQuery.value = mode === 'chat' ? undefined : mode
+    },
+  })
 
   const modelsByType = (type: ModelOptionModelTypeEnum) =>
     computed(() =>
@@ -74,45 +101,47 @@ export function useWorkbenchModels(): WorkbenchModels {
     activeModels.value.find((model) => model.name === selectedModelName.value),
   )
 
-  watch(
-    modelOptions,
-    (items) => {
-      if (!items) return
-      const selected = items.find((item) => item.name === selectedModelName.value)
-      switch (selected?.modelType) {
-        case ModelOptionModelTypeEnum.Decision:
-          testMode.value = 'decision'
-          break
-        case ModelOptionModelTypeEnum.Embedding:
-          testMode.value = 'embedding'
-          break
-        case ModelOptionModelTypeEnum.Rerank:
-          testMode.value = 'rerank'
-          break
-        case ModelOptionModelTypeEnum.ImageGeneration:
-          testMode.value = 'image'
-          break
-        case ModelOptionModelTypeEnum.Language:
-          if (testMode.value !== 'rag') {
-            testMode.value = 'chat'
-          }
-      }
-      const candidates = activeModels.value
-      if (!candidates.length) {
-        selectedModelName.value = undefined
-      } else if (!candidates.some((item) => item.name === selectedModelName.value)) {
-        selectedModelName.value = candidates[0].name
-      }
-    },
-    { immediate: true },
-  )
-
-  watch(testMode, () => {
+  function ensureSelectedModel() {
     const candidates = activeModels.value
     if (!candidates.some((model) => model.name === selectedModelName.value)) {
       selectedModelName.value = candidates[0]?.name
     }
-  })
+  }
+
+  function inferModeFromSelectedModel(items: ModelOption[]) {
+    if (hasExplicitMode.value) return
+    const selected = items.find((item) => item.name === selectedModelName.value)
+    switch (selected?.modelType) {
+      case ModelOptionModelTypeEnum.Decision:
+        testMode.value = 'decision'
+        break
+      case ModelOptionModelTypeEnum.Embedding:
+        testMode.value = 'embedding'
+        break
+      case ModelOptionModelTypeEnum.Rerank:
+        testMode.value = 'rerank'
+        break
+      case ModelOptionModelTypeEnum.ImageGeneration:
+        testMode.value = 'image'
+        break
+      case ModelOptionModelTypeEnum.Language:
+        if (testMode.value !== 'rag') {
+          testMode.value = 'chat'
+        }
+    }
+  }
+
+  watch(
+    modelOptions,
+    (items) => {
+      if (!items) return
+      inferModeFromSelectedModel(items)
+      ensureSelectedModel()
+    },
+    { immediate: true },
+  )
+
+  watch(testMode, ensureSelectedModel)
 
   return {
     availableOnly,

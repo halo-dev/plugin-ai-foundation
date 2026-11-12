@@ -10,6 +10,10 @@ import {
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
 import {
+  applyAssistantMessageEvent,
+  beginAssistantMessage,
+} from '@/utils/model-test-workbench-message-state'
+import {
   cloneWorkbenchMessage,
   haloMessageToWorkbench,
   workbenchMessagesToHalo,
@@ -55,6 +59,7 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
   const ragMessages = ref<WorkbenchMessage[]>([])
   const ragError = shallowRef('')
   const isRagTesting = shallowRef(false)
+  let activeRequestId: string | undefined
   let activeModelName: string | undefined
   let activeWorkbenchId: string | undefined
 
@@ -75,10 +80,11 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
     generateId: () => activeWorkbenchId || utils.id.uuid(),
     messageMetadataSchema: workbenchMessageMetadataSchema,
     dataPartSchemas: workbenchDataPartSchemas,
-    onFinish: ({ terminal }) => {
-      if (activeWorkbenchId && terminal.errorText) {
-        appendAssistantError(activeWorkbenchId, terminal.errorText)
-      }
+    onFinish: ({ message, terminal }) => {
+      if (!terminal.errorText) return
+      const target = ragMessages.value.find((item) => item.id === message.id)
+      if (!target || (target.requestId && target.requestId !== activeRequestId)) return
+      appendAssistantError(target.id, terminal.errorText, target.requestId)
     },
   })
 
@@ -147,7 +153,10 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
         rerankFailurePolicy: 'USE_RETRIEVED_ORDER',
       },
     }
+    const requestId = utils.id.uuid()
+    beginAssistantMessage(assistantMessage, requestId)
     isRagTesting.value = true
+    activeRequestId = requestId
     activeModelName = model.name
     activeWorkbenchId = assistantMessageId
     ragUiChat.setMessages(
@@ -156,21 +165,24 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
     try {
       await ragUiChat.sendMessage(undefined, { body: requestBody })
       if (ragUiChat.error.value) {
-        appendAssistantError(assistantMessageId, ragUiChat.error.value.message)
+        appendAssistantError(assistantMessageId, ragUiChat.error.value.message, requestId)
         return
       }
-      finishAssistantMessage(assistantMessageId, 'done')
+      finishAssistantMessage(assistantMessageId, requestId)
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
-        finishAssistantMessage(assistantMessageId, 'stopped')
+        stopAssistantMessage(assistantMessageId, requestId)
         return
       }
       ragError.value = `请求失败: ${(error as Error).message}`
-      appendAssistantError(assistantMessageId, ragError.value)
+      appendAssistantError(assistantMessageId, ragError.value, requestId)
     } finally {
-      isRagTesting.value = false
-      activeModelName = undefined
-      activeWorkbenchId = undefined
+      if (activeRequestId === requestId) {
+        isRagTesting.value = false
+        activeRequestId = undefined
+        activeModelName = undefined
+        activeWorkbenchId = undefined
+      }
     }
   }
 
@@ -188,6 +200,7 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
   function syncActiveSnapshot(uiMessages: readonly unknown[]) {
     if (!activeWorkbenchId) return
     const index = ragMessages.value.findIndex((item) => item.id === activeWorkbenchId)
+    if (index >= 0 && ragMessages.value[index]?.requestId !== activeRequestId) return
     const assistant = [...uiMessages]
       .reverse()
       .find((item): item is HaloUIMessage<Record<string, unknown>> => {
@@ -207,31 +220,39 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
     ragMessages.value.splice(index, 1, message)
   }
 
-  function finishAssistantMessage(messageId: string, state: WorkbenchMessage['state']) {
+  function finishAssistantMessage(messageId: string, requestId: string) {
     updateAssistantMessage(messageId, (message) => {
-      if (message.state !== 'streaming') return
-      message.state = state
-      if (message.reasoningState === 'streaming') message.reasoningState = 'done'
+      if (message.requestId !== requestId) return
+      applyAssistantMessageEvent(message, { type: 'finish' })
     })
   }
 
-  function appendAssistantError(messageId: string, content: string) {
+  function stopAssistantMessage(messageId: string, requestId: string) {
     updateAssistantMessage(messageId, (message) => {
-      const normalizedContent = content.trim()
-      if (message.state === 'error' && message.content.includes(normalizedContent)) return
-      message.content = message.content.trim()
-        ? `${message.content.trim()}\n\n${normalizedContent}`
-        : normalizedContent
-      message.state = 'error'
-      if (message.reasoningState === 'streaming') message.reasoningState = 'done'
+      if (message.requestId !== requestId) return
+      applyAssistantMessageEvent(message, { type: 'stop' })
+    })
+  }
+
+  function appendAssistantError(messageId: string, content: string, requestId?: string) {
+    updateAssistantMessage(messageId, (message) => {
+      if (requestId && message.requestId !== requestId) return
+      applyAssistantMessageEvent(message, { type: 'fail', content })
     })
   }
 
   function stopRagTest() {
+    const requestId = activeRequestId
     ragUiChat.stop()
-    isRagTesting.value = false
-    activeModelName = undefined
-    activeWorkbenchId = undefined
+    if (activeWorkbenchId && requestId) {
+      stopAssistantMessage(activeWorkbenchId, requestId)
+    }
+    if (activeRequestId === requestId) {
+      isRagTesting.value = false
+      activeRequestId = undefined
+      activeModelName = undefined
+      activeWorkbenchId = undefined
+    }
   }
 
   function clearRagMessages() {

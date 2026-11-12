@@ -101,6 +101,7 @@ const {
   input,
   chatFiles,
   isStreaming,
+  externalToolSubmittingKeys,
   sendMessage,
   regenerate: handleRegenerate,
   handleToolApproval,
@@ -285,6 +286,7 @@ function distanceToConversationBottom(element: HTMLElement) {
                 :key="message.id"
                 :message="message"
                 :index="index"
+                :submitting-event-ids="externalToolSubmittingKeys"
                 @regenerate="handleRegenerate"
                 @tool-approval="handleToolApproval"
                 @external-tool-result="handleExternalToolResult"
