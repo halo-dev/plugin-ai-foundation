@@ -18,6 +18,11 @@ import {
   isWorkbenchAgentTool,
 } from '@/utils/model-test-workbench-agent-tools'
 import {
+  applyAssistantMessageEvent,
+  beginAssistantMessage,
+  resumeAssistantMessage,
+} from '@/utils/model-test-workbench-message-state'
+import {
   haloMessageToWorkbench,
   workbenchFilesFromParts,
   workbenchMessagesToHalo,
@@ -49,6 +54,8 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
   const input = shallowRef('')
   const chatFiles = shallowRef<HaloFilePart[]>([])
   const isStreaming = shallowRef(false)
+  const externalToolSubmittingKeys = shallowRef<string[]>([])
+  let activeRequestId: string | undefined
   let activeModelName: string | undefined
   let activeWorkbenchId: string | undefined
   let activeParameters: ReturnType<typeof settings.buildParameters> | undefined
@@ -109,9 +116,11 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
         ])
       }
     },
-    onFinish: ({ terminal }) => {
-      if (activeWorkbenchId && terminal.errorText) {
-        appendAssistantError(activeWorkbenchId, `请求失败: ${terminal.errorText}`)
+    onFinish: ({ message, terminal }) => {
+      if (!terminal.errorText) return
+      const target = messages.value.find((item) => item.id === message.id)
+      if (target) {
+        appendAssistantError(target.id, `请求失败: ${terminal.errorText}`, target.requestId)
       }
     },
   })
@@ -159,33 +168,39 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     const model = activeModels.value.find((item) => item.name === modelName)
     if (!model) return
 
+    const requestId = utils.id.uuid()
     const assistantMessage = targetMessage || createAssistantMessage(model)
     assistantMessage.uiMessage = createAssistantUIMessage(
       assistantMessage.uiMessage?.id || assistantMessage.id,
     )
-    resetAssistantMessage(assistantMessage)
+    beginAssistantMessage(assistantMessage, requestId)
     if (!targetMessage) messages.value.push(assistantMessage)
 
-    activeModelName = modelName
-    activeWorkbenchId = assistantMessage.id
-    activeParameters = parameters
+    setActiveRequest(requestId, modelName, assistantMessage.id, parameters)
     uiChat.setMessages(
       workbenchMessagesToHalo(messages.value.filter((item) => item !== assistantMessage)),
     )
-    isStreaming.value = true
     try {
       await uiChat.sendMessage(undefined, { body: uiMessageRequestBody(parameters) })
       if (uiChat.error.value) {
-        appendAssistantError(assistantMessage.id, `请求失败: ${uiChat.error.value.message}`)
+        appendAssistantError(
+          assistantMessage.id,
+          `请求失败: ${uiChat.error.value.message}`,
+          requestId,
+        )
         return
       }
-      finishAssistantMessage(assistantMessage.id, 'done')
+      finishAssistantMessage(assistantMessage.id, requestId)
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        appendAssistantError(assistantMessage.id, `请求失败: ${(error as Error).message}`)
+        appendAssistantError(
+          assistantMessage.id,
+          `请求失败: ${(error as Error).message}`,
+          requestId,
+        )
       }
     } finally {
-      resetActiveRequest()
+      resetActiveRequest(requestId)
     }
   }
 
@@ -209,36 +224,23 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
 
     uiChat.setMessages(workbenchMessagesToHalo(messages.value))
     targetMessage.uiMessage = createAssistantUIMessage(messageId)
-    resetAssistantMessage(targetMessage)
-    activeModelName = model.name
-    activeWorkbenchId = targetMessage.id
-    activeParameters = parameters
-    isStreaming.value = true
+    const requestId = utils.id.uuid()
+    beginAssistantMessage(targetMessage, requestId)
+    setActiveRequest(requestId, model.name, targetMessage.id, parameters)
     try {
       await uiChat.regenerate({ messageId, body: uiMessageRequestBody(parameters) })
       if (uiChat.error.value) {
-        appendAssistantError(targetMessage.id, `请求失败: ${uiChat.error.value.message}`)
+        appendAssistantError(targetMessage.id, `请求失败: ${uiChat.error.value.message}`, requestId)
         return
       }
-      finishAssistantMessage(targetMessage.id, 'done')
+      finishAssistantMessage(targetMessage.id, requestId)
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        appendAssistantError(targetMessage.id, `请求失败: ${(error as Error).message}`)
+        appendAssistantError(targetMessage.id, `请求失败: ${(error as Error).message}`, requestId)
       }
     } finally {
-      resetActiveRequest()
+      resetActiveRequest(requestId)
     }
-  }
-
-  function resetAssistantMessage(message: WorkbenchMessage) {
-    message.content = ''
-    message.reasoningContent = undefined
-    message.reasoningState = undefined
-    message.toolEvents = undefined
-    message.toolInputStreamDiagnostics = undefined
-    message.transientData = undefined
-    message.warnings = undefined
-    message.state = 'streaming'
   }
 
   function createAssistantMessage(model: ModelOption): WorkbenchMessage {
@@ -274,11 +276,10 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     }
     const parameters = settings.buildValidatedParameters()
     if (!parameters) return
-    activeModelName = model.name
-    activeWorkbenchId = message.id
-    activeParameters = parameters
+    const requestId = utils.id.uuid()
+    resumeAssistantMessage(message, requestId)
+    setActiveRequest(requestId, model.name, message.id, parameters)
     uiChat.setMessages(workbenchMessagesToHalo(messages.value))
-    isStreaming.value = true
     try {
       await uiChat.addToolApprovalResponse(
         {
@@ -291,15 +292,15 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
         { body: uiMessageRequestBody(parameters) },
       )
       if (uiChat.error.value) {
-        appendAssistantError(message.id, `请求失败: ${uiChat.error.value.message}`)
+        appendAssistantError(message.id, `请求失败: ${uiChat.error.value.message}`, requestId)
         return
       }
       syncMessageFromUiChat(message)
-      finishAssistantMessage(message.id, 'done')
+      finishAssistantMessage(message.id, requestId)
     } catch (error) {
-      appendAssistantError(message.id, `请求失败: ${(error as Error).message}`)
+      appendAssistantError(message.id, `请求失败: ${(error as Error).message}`, requestId)
     } finally {
-      resetActiveRequest()
+      resetActiveRequest(requestId)
     }
   }
 
@@ -344,7 +345,8 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     eventId: string,
     payload: { type: 'tool-result'; result: unknown } | { type: 'tool-error'; errorText: string },
   ) {
-    if (isStreaming.value) return
+    const submissionKey = `${messageId}:${eventId}`
+    if (isStreaming.value || externalToolSubmittingKeys.value.includes(submissionKey)) return
     const model = selectedModel.value
     if (!model?.name) return
     const message = messages.value.find((item) => item.id === messageId)
@@ -362,24 +364,34 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     }
     const parameters = settings.buildValidatedParameters()
     if (!parameters) return
-    uiChat.setMessages(workbenchMessagesToHalo(messages.value))
-    await uiChat.addToolOutput(
-      payload.type === 'tool-result'
-        ? { toolCallId: event.toolCallId, output: payload.result }
-        : { toolCallId: event.toolCallId, state: 'output-error', errorText: payload.errorText },
-    )
-    syncMessageFromUiChat(message)
-    const updatedEvent = message.toolEvents?.find((item) => item.id === eventId)
-    if (updatedEvent) {
-      updatedEvent.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
-      message.toolEvents = [...(message.toolEvents || [])]
+    externalToolSubmittingKeys.value = [...externalToolSubmittingKeys.value, submissionKey]
+    try {
+      uiChat.setMessages(workbenchMessagesToHalo(messages.value))
+      await uiChat.addToolOutput(
+        payload.type === 'tool-result'
+          ? { toolCallId: event.toolCallId, output: payload.result }
+          : { toolCallId: event.toolCallId, state: 'output-error', errorText: payload.errorText },
+      )
+      syncMessageFromUiChat(message)
+      const updatedEvent = message.toolEvents?.find((item) => item.id === eventId)
+      if (updatedEvent) {
+        updatedEvent.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
+        message.toolEvents = [...(message.toolEvents || [])]
+      }
+      await streamResponse(model.name, parameters)
+    } catch (error) {
+      appendAssistantError(messageId, `请求失败: ${(error as Error).message}`)
+    } finally {
+      externalToolSubmittingKeys.value = externalToolSubmittingKeys.value.filter(
+        (key) => key !== submissionKey,
+      )
     }
-    await streamResponse(model.name, parameters)
   }
 
   function syncActiveSnapshot(uiMessages: readonly unknown[]) {
     if (!activeWorkbenchId) return
     const target = messages.value.find((item) => item.id === activeWorkbenchId)
+    if (target?.requestId && target.requestId !== activeRequestId) return
     const assistant = [...uiMessages]
       .reverse()
       .find((item): item is HaloUIMessage<Record<string, unknown>> => {
@@ -414,23 +426,17 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     if (message) message.warnings = [...(message.warnings || []), ...warnings]
   }
 
-  function appendAssistantError(messageId: string, content: string) {
+  function appendAssistantError(messageId: string, content: string, requestId?: string) {
+    if (requestId && requestId !== activeRequestId) return
     const message = messages.value.find((item) => item.id === messageId)
     if (!message) return
-    const normalizedContent = content.trim()
-    if (message.state === 'error' && message.content.includes(normalizedContent)) return
-    message.content = message.content.trim()
-      ? `${message.content.trim()}\n\n${normalizedContent}`
-      : normalizedContent
-    message.state = 'error'
-    if (message.reasoningState === 'streaming') message.reasoningState = 'done'
+    applyAssistantMessageEvent(message, { type: 'fail', content })
   }
 
-  function finishAssistantMessage(messageId: string, state: WorkbenchMessage['state']) {
+  function finishAssistantMessage(messageId: string, requestId?: string) {
+    if (requestId && requestId !== activeRequestId) return
     const message = messages.value.find((item) => item.id === messageId)
-    if (message?.state !== 'streaming') return
-    message.state = state
-    if (message.reasoningState === 'streaming') message.reasoningState = 'done'
+    if (message) applyAssistantMessageEvent(message, { type: 'finish' })
   }
 
   function parseExternalToolResult(value: string): { value?: unknown; error?: string } {
@@ -466,23 +472,38 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     }
   }
 
-  function resetActiveRequest() {
+  function setActiveRequest(
+    requestId: string,
+    modelName: string,
+    messageId: string,
+    parameters: ReturnType<typeof settings.buildParameters>,
+  ) {
+    activeRequestId = requestId
+    activeModelName = modelName
+    activeWorkbenchId = messageId
+    activeParameters = parameters
+    isStreaming.value = true
+  }
+
+  function resetActiveRequest(requestId?: string) {
+    if (requestId !== undefined && requestId !== activeRequestId) return
     isStreaming.value = false
+    activeRequestId = undefined
     activeModelName = undefined
     activeWorkbenchId = undefined
     activeParameters = undefined
   }
 
   function stopGeneration() {
+    const requestId = activeRequestId
     uiChat.stop()
-    const streamingMessage = [...messages.value]
-      .reverse()
-      .find((item) => item.state === 'streaming')
+    const streamingMessage = requestId
+      ? messages.value.find((item) => item.requestId === requestId)
+      : [...messages.value].reverse().find((item) => item.state === 'streaming')
     if (streamingMessage) {
-      streamingMessage.state = 'stopped'
-      if (streamingMessage.reasoningState === 'streaming') streamingMessage.reasoningState = 'done'
+      applyAssistantMessageEvent(streamingMessage, { type: 'stop' })
     }
-    resetActiveRequest()
+    resetActiveRequest(requestId)
   }
 
   function clearMessages() {
@@ -520,6 +541,7 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     input,
     chatFiles,
     isStreaming,
+    externalToolSubmittingKeys,
     sendMessage,
     regenerate,
     handleToolApproval,

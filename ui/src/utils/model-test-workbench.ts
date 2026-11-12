@@ -23,6 +23,7 @@ export interface WorkbenchMessage {
   toolInputStreamDiagnostics?: ToolInputStreamDiagnostic[]
   modelName?: string
   modelDisplayName?: string
+  requestId?: string
   state?: 'streaming' | 'done' | 'error' | 'stopped'
   warnings?: WorkbenchWarning[]
   sourceReferences?: WorkbenchSourceReference[]

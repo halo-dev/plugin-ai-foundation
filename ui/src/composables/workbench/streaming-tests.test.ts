@@ -1,6 +1,6 @@
 import { ModelOptionModelTypeEnum, type ModelOption } from '@/api/generated'
 import { useLanguageGenerationSettings } from '@/composables/workbench/use-language-generation-settings'
-import { EXAMPLE_PROMPTS } from '@/utils/model-test-workbench'
+import { EXAMPLE_PROMPTS, type WorkbenchMessage } from '@/utils/model-test-workbench'
 import { useChat } from '@halo-dev/ai-foundation-sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, createApp, ref, shallowRef, type App } from 'vue'
@@ -99,6 +99,114 @@ describe('useChatWorkbench', () => {
     expect(chat.isStreaming.value).toBe(false)
   })
 
+  it('does not let a stopped request clear the state of a newer request', async () => {
+    const first = deferred<void>()
+    const second = deferred<void>()
+    const { result: chat } = withSetup(() => createChatWorkbench())
+    chatInstances[0].sendMessage
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+
+    const sendingFirst = chat.sendMessage('First')
+    chat.stopGeneration()
+    const sendingSecond = chat.sendMessage('Second')
+
+    first.reject(new Error('stale failure'))
+    await sendingFirst
+
+    expect(chat.isStreaming.value).toBe(true)
+    expect(chat.messages.value[1]).toMatchObject({ state: 'stopped' })
+    expect(chat.messages.value[3]).toMatchObject({ state: 'streaming' })
+
+    second.resolve()
+    await sendingSecond
+
+    expect(chat.isStreaming.value).toBe(false)
+    expect(chat.messages.value[3]).toMatchObject({ state: 'done' })
+  })
+
+  it('submits an external tool result only once while the continuation is pending', async () => {
+    const pending = deferred<void>()
+    const { result: chat } = withSetup(() => createChatWorkbench())
+    chatInstances[0].addToolOutput.mockReturnValue(pending.promise)
+    const target: WorkbenchMessage = {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: '',
+      state: 'done',
+      toolEvents: [
+        {
+          id: 'event-1',
+          type: 'tool-call',
+          summary: 'external tool',
+          toolCallId: 'call-1',
+          toolName: 'external_tool',
+          externalStatus: 'pending',
+        },
+      ],
+    }
+    chat.messages.value = [target]
+
+    const first = chat.handleExternalToolResult({
+      messageId: target.id,
+      eventId: 'event-1',
+      resultText: '{"ok":true}',
+    })
+    const second = chat.handleExternalToolResult({
+      messageId: target.id,
+      eventId: 'event-1',
+      resultText: '{"ok":true}',
+    })
+
+    expect(chat.externalToolSubmittingKeys.value).toEqual(['assistant-1:event-1'])
+    expect(chatInstances[0].addToolOutput).toHaveBeenCalledTimes(1)
+
+    pending.resolve()
+    await Promise.all([first, second])
+
+    expect(chat.externalToolSubmittingKeys.value).toEqual([])
+    expect(chatInstances[0].addToolOutput).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes an approved tool message with a new request id and stops it', async () => {
+    const pending = deferred<void>()
+    const { result: chat } = withSetup(() => createChatWorkbench())
+    chatInstances[0].addToolApprovalResponse.mockReturnValue(pending.promise)
+    const target: WorkbenchMessage = {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'approval needed',
+      state: 'done',
+      requestId: 'request-1',
+      toolEvents: [
+        {
+          id: 'event-1',
+          type: 'tool-approval-request',
+          approvalId: 'approval-1',
+          approvalStatus: 'pending',
+          summary: 'approval',
+        },
+      ],
+    }
+    chat.messages.value = [target]
+
+    const approving = chat.handleToolApproval({
+      messageId: target.id,
+      eventId: 'event-1',
+      approved: true,
+    })
+
+    expect(target.state).toBe('streaming')
+    expect(target.requestId).not.toBe('request-1')
+
+    chat.stopGeneration()
+    pending.resolve()
+    await approving
+
+    expect(target.state).toBe('stopped')
+    expect(chat.isStreaming.value).toBe(false)
+  })
+
   it('configures the dedicated tool input stream test from its example prompt', () => {
     const settings = useLanguageGenerationSettings()
     const { result: chat } = withSetup(() =>
@@ -169,6 +277,29 @@ describe('useRagTest', () => {
     expect(rag.ragMessages.value[1]).toMatchObject({ state: 'stopped' })
     expect(rag.ragError.value).toBe('')
     expect(rag.isRagTesting.value).toBe(false)
+  })
+
+  it('marks the RAG message as stopped immediately and keeps it stopped when the stream resolves', async () => {
+    const pending = deferred<void>()
+    const { result: rag } = withSetup(() =>
+      useRagTest({
+        selectedModel: computed(() => languageModel),
+        settings: useLanguageGenerationSettings(),
+      }),
+    )
+    chatInstances[0].sendMessage.mockReturnValue(pending.promise)
+
+    const running = rag.runRagTest()
+    expect(rag.ragMessages.value[1]).toMatchObject({ state: 'streaming' })
+
+    rag.stopRagTest()
+    expect(rag.ragMessages.value[1]).toMatchObject({ state: 'stopped' })
+    expect(rag.isRagTesting.value).toBe(false)
+
+    pending.resolve()
+    await running
+
+    expect(rag.ragMessages.value[1]).toMatchObject({ state: 'stopped' })
   })
 
   it('surfaces RAG streaming failures and clears the loading state', async () => {

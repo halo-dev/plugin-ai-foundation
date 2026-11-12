@@ -24,21 +24,27 @@ describe('useWorkbenchModels', () => {
     scopes.splice(0).forEach((scope) => scope.stop())
   })
 
-  function createWorkbench(selectedName: string, initialModels?: ModelOption[]) {
+  function createWorkbench(
+    selectedName: string,
+    initialModels?: ModelOption[],
+    initialMode?: WorkbenchTestMode,
+  ) {
     const modelOptions = shallowRef(initialModels)
     const selectedModelName = shallowRef<string | undefined>(selectedName)
+    const modeQuery = shallowRef<string | undefined>(initialMode)
     vi.mocked(useModelOptionsFetch).mockReturnValue({
       data: modelOptions,
       isLoading: shallowRef(!initialModels),
       isFetching: shallowRef(!initialModels),
       refetch: vi.fn(),
     } as never)
-    vi.mocked(useRouteQuery).mockReturnValue(selectedModelName as never)
+    vi.mocked(useRouteQuery).mockImplementation(((key: string) =>
+      key === 'mode' ? modeQuery : selectedModelName) as never)
 
     const scope = effectScope()
     scopes.push(scope)
     const models = scope.run(useWorkbenchModels)!
-    return { models, modelOptions }
+    return { models, modelOptions, modeQuery }
   }
 
   it('preserves the route model until model options finish loading', async () => {
@@ -139,6 +145,41 @@ describe('useWorkbenchModels', () => {
     await nextTick()
 
     expect(models.selectedModelName.value).toBeUndefined()
+  })
+
+  it('keeps an explicit rag mode when a language model is linked', async () => {
+    const { models } = createWorkbench('deepseek-chat', [model('deepseek-chat')], 'rag')
+
+    await nextTick()
+
+    expect(models.testMode.value).toBe('rag')
+    expect(models.selectedModelName.value).toBe('deepseek-chat')
+  })
+
+  it('treats an explicit mode as authoritative when the linked model has another type', async () => {
+    const { models } = createWorkbench(
+      'deepseek-chat',
+      [model('deepseek-chat'), model('embedding-first', ModelOptionModelTypeEnum.Embedding)],
+      'embedding',
+    )
+
+    await nextTick()
+
+    expect(models.testMode.value).toBe('embedding')
+    expect(models.selectedModelName.value).toBe('embedding-first')
+  })
+
+  it('mirrors mode changes into the route and clears the chat mode', async () => {
+    const { models, modeQuery } = createWorkbench('language-first', [model('language-first')])
+
+    await nextTick()
+    expect(modeQuery.value).toBeUndefined()
+
+    models.testMode.value = 'embedding'
+    expect(modeQuery.value).toBe('embedding')
+
+    models.testMode.value = 'chat'
+    expect(modeQuery.value).toBeUndefined()
   })
 })
 
