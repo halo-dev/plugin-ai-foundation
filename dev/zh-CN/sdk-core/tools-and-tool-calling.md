@@ -3,7 +3,7 @@
 简体中文 | [English](../../en/sdk-core/tools-and-tool-calling.md)
 
 工具由 `ToolDefinition` 声明，并在每个 `GenerateTextRequest` 中显式提供。模型只会看到本次
-请求的工具，不存在全局自动注册的工具目录。
+请求的工具。共享工具可以从[工具目录](../tool-catalog.md)解析后显式传入，不会自动注入所有工具。
 
 ## 服务端工具
 

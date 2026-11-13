@@ -12,5 +12,11 @@ import reactor.core.publisher.Mono;
 @FunctionalInterface
 public interface ToolCallRepairCallback {
 
+    /**
+     * Proposes corrected arguments for a known tool whose input failed parsing or validation.
+     *
+     * @param context original call, matching definition, and validation details
+     * @return a corrected call or {@link ToolCallRepairResult#unrepaired()}
+     */
     Mono<ToolCallRepairResult> repair(ToolCallRepairContext context);
 }

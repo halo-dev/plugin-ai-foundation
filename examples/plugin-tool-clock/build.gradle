@@ -1,0 +1,23 @@
+plugins {
+    id 'java'
+    id 'run.halo.plugin.devtools' version '0.7.0'
+}
+
+group = 'run.halo.toolclock'
+version = '1.0.0'
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+repositories { mavenCentral() }
+dependencies {
+    compileOnly platform('run.halo.tools.platform:plugin:2.26.0')
+    compileOnly 'run.halo.app:api'
+    compileOnly files('../../api/build/libs/api-1.0.0-SNAPSHOT.jar')
+
+    testImplementation platform('run.halo.tools.platform:plugin:2.26.0')
+    testImplementation 'run.halo.app:api'
+    testImplementation files('../../api/build/libs/api-1.0.0-SNAPSHOT.jar')
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test { useJUnitPlatform() }

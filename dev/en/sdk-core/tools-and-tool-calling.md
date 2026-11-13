@@ -2,6 +2,9 @@
 
 [简体中文](../../zh-CN/sdk-core/tools-and-tool-calling.md) | English
 
+Tools are explicitly passed in each `GenerateTextRequest`. Resolve shared tools from the
+[tool catalog](../tool-catalog.md) before adding them; discovery does not expose all tools to models.
+
 ## Server-side tools
 
 ```java

@@ -10,6 +10,9 @@
 
 ## Chat
 
+工具目录相关导出为 `listTools`、`ListToolsOptions`、`ToolDescriptor`、
+`AI_TOOL_SELECTOR_FORMKIT_TYPE` 与 `AiToolSelectorOptions`，详见[工具选择器](../tool-catalog.md)。
+
 | 导出                                                | 用途                                                         |
 | --------------------------------------------------- | ------------------------------------------------------------ |
 | `useChat`、`UseChatOptions`                         | Vue 聊天 composable 与配置。                                 |

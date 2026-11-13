@@ -19,6 +19,7 @@ Java 后端的 SDK Core 与浏览器 / Vue 的 SDK UI，示例均以仓库公开
 | 保存、恢复和校验聊天消息       | [SDK UI：消息持久化](./sdk-ui/chatbot-message-persistence.md)                    |
 | 在前端执行工具或处理审批       | [SDK UI：工具交互](./sdk-ui/chatbot-tool-usage.md)                               |
 | 在插件设置中选择模型           | [FormKit：模型选择器](./model-selector.md)                                       |
+| 注册、发现或选择共享工具       | [工具目录与选择器](./tool-catalog.md)                                           |
 | 自定义请求、Transport 或读取流 | [SDK UI：Transport 与读取消息流](./sdk-ui/transport-and-reading-streams.md)      |
 | 查询 SSE wire 格式             | [SDK UI：Stream Protocol](./sdk-ui/stream-protocol.md)                           |
 | 按 Java 类型名查询完整 API     | [SDK Core：公开 API 索引](./sdk-core/api-reference.md)                           |

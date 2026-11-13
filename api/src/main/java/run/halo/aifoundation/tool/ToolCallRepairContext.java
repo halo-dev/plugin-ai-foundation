@@ -8,7 +8,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import run.halo.aifoundation.message.ModelMessage;
 
-/** Provider-neutral context passed to a tool call repair callback. */
+/**
+ * Provider-neutral context passed to a tool call repair callback.
+ *
+ * <p>Inspect {@link #validationError} and {@link #validationPath} against the matching tool schema, then return a
+ * repaired call or leave the failure unchanged. Preserve the original tool name and call identity. For example, a
+ * callback can normalize a numeric string to the integer required by the input schema before returning
+ * {@link ToolCallRepairResult#repaired(ToolCall)}.
+ */
 @Data
 @Builder
 @NoArgsConstructor

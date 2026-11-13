@@ -1,0 +1,19 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: ExtensionPointDefinition
+metadata:
+  name: ai-tool-service
+spec:
+  className: run.halo.aifoundation.AiToolService
+  displayName: AI Tool Service
+  type: SINGLETON
+  description: Discovers and resolves explicitly selected tools for Halo plugins.
+---
+apiVersion: plugin.halo.run/v1alpha1
+kind: ExtensionDefinition
+metadata:
+  name: ai-foundation-ai-tool-service
+spec:
+  className: run.halo.aifoundation.service.tool.AiToolServiceImpl
+  extensionPointName: ai-tool-service
+  displayName: AI Foundation Tool Service
+  description: Provides AI Foundation's built-in tool discovery service implementation.

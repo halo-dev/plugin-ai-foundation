@@ -72,7 +72,15 @@ public class ToolDefinition {
     /** Server-side tool implementation. Return values should be JSON serializable. */
     private transient ToolExecutor executor;
 
-    /** Creates a tool definition with typed schema helpers. */
+    /**
+     * Creates a tool definition with typed schema helpers.
+     *
+     * @param name stable model-facing tool name
+     * @param description explanation of when the model should use the tool
+     * @param inputSchema schema describing accepted JSON arguments
+     * @param executor server-side implementation
+     * @return executable tool definition
+     */
     public static ToolDefinition of(String name, String description, JsonSchema inputSchema, ToolExecutor executor) {
         return ToolDefinition.builder()
                 .name(name)
@@ -82,51 +90,117 @@ public class ToolDefinition {
                 .build();
     }
 
+    /**
+     * Builds a provider-neutral definition using map or typed JSON Schema inputs.
+     *
+     * <p>For example, {@code inputSchema(JsonSchema.object().build())} declares a tool without arguments. Approval
+     * conveniences configure the same {@link ToolApprovalPolicy} field.
+     */
     public static class ToolDefinitionBuilder {
+        /**
+         * Sets the argument schema as a JSON object.
+         *
+         * @param schema JSON Schema map
+         * @return this builder
+         */
         public ToolDefinitionBuilder inputSchema(Map<String, Object> schema) {
             this.inputSchema = schema;
             return this;
         }
 
+        /**
+         * Sets the argument schema using the typed schema API.
+         *
+         * @param schema typed schema, or {@code null} to clear it
+         * @return this builder
+         */
         public ToolDefinitionBuilder inputSchema(JsonSchema schema) {
             this.inputSchema = schema != null ? schema.toMap() : null;
             return this;
         }
 
+        /**
+         * Sets the argument schema from an unfinished typed schema builder.
+         *
+         * @param schema schema builder, or {@code null} to clear it
+         * @return this builder
+         */
         public ToolDefinitionBuilder inputSchema(JsonSchema.Builder<?> schema) {
             this.inputSchema = schema != null ? schema.toMap() : null;
             return this;
         }
 
+        /**
+         * Sets the optional result schema as a JSON object.
+         *
+         * @param schema result JSON Schema map, or {@code null} for no validation
+         * @return this builder
+         */
         public ToolDefinitionBuilder outputSchema(Map<String, Object> schema) {
             this.outputSchema = schema;
             return this;
         }
 
+        /**
+         * Sets the optional result schema using the typed schema API.
+         *
+         * @param schema typed result schema, or {@code null} for no validation
+         * @return this builder
+         */
         public ToolDefinitionBuilder outputSchema(JsonSchema schema) {
             this.outputSchema = schema != null ? schema.toMap() : null;
             return this;
         }
 
+        /**
+         * Sets the optional result schema from a typed schema builder.
+         *
+         * @param schema result schema builder, or {@code null} for no validation
+         * @return this builder
+         */
         public ToolDefinitionBuilder outputSchema(JsonSchema.Builder<?> schema) {
             this.outputSchema = schema != null ? schema.toMap() : null;
             return this;
         }
 
+        /**
+         * Configures a constant approval policy.
+         *
+         * @param requiresApproval whether every validated call requires confirmation
+         * @return this builder
+         */
         public ToolDefinitionBuilder requiresApproval(boolean requiresApproval) {
             this.approvalPolicy = requiresApproval ? ToolApprovalPolicy.always() : ToolApprovalPolicy.never();
             return this;
         }
 
+        /**
+         * Alias for {@link #requiresApproval(boolean)}.
+         *
+         * @param requiresApproval whether every validated call requires confirmation
+         * @return this builder
+         */
         public ToolDefinitionBuilder needsApproval(boolean requiresApproval) {
             return requiresApproval(requiresApproval);
         }
 
+        /**
+         * Configures confirmation based on validated execution arguments.
+         *
+         * @param predicate dynamic approval decision, never {@code null}
+         * @return this builder
+         */
         public ToolDefinitionBuilder approvalPredicate(ToolApprovalPredicate predicate) {
             this.approvalPolicy = ToolApprovalPolicy.dynamic(predicate);
             return this;
         }
 
+        /**
+         * Alias for {@link #approvalPredicate(ToolApprovalPredicate)}.
+         *
+         * @param predicate dynamic approval decision, never {@code null}
+         * @return this builder
+         */
         public ToolDefinitionBuilder needsApproval(ToolApprovalPredicate predicate) {
             return approvalPredicate(predicate);
         }

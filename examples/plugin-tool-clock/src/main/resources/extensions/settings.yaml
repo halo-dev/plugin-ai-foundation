@@ -1,0 +1,14 @@
+apiVersion: v1alpha1
+kind: Setting
+metadata:
+  name: tool-clock-example-settings
+spec:
+  forms:
+    - group: selector
+      label: 工具选择
+      formSchema:
+        - $formkit: aiToolSelector
+          name: toolIds
+          label: 允许使用的共享工具
+          help: 选择此插件允许使用的共享工具。未配置或已禁用的工具暂不可选。
+          value: []

@@ -34,22 +34,39 @@ public class ToolChoice {
     /** Required when {@link #type} is {@link Type#TOOL}; ignored for other modes. */
     private String toolName;
 
-    /** Creates an automatic tool choice. */
+    /**
+     * Creates an automatic tool choice.
+     *
+     * @return a choice allowing the model to decide whether a tool is useful
+     */
     public static ToolChoice auto() {
         return ToolChoice.builder().type(Type.AUTO).build();
     }
 
-    /** Creates a choice that disables tool calling for this request. */
+    /**
+     * Creates a choice that disables tool calling for this request.
+     *
+     * @return a choice using {@link Type#NONE}
+     */
     public static ToolChoice none() {
         return ToolChoice.builder().type(Type.NONE).build();
     }
 
-    /** Creates a choice that requires the model to call one of the provided tools. */
+    /**
+     * Creates a choice that requires the model to call one of the provided tools.
+     *
+     * @return a choice using {@link Type#REQUIRED}
+     */
     public static ToolChoice required() {
         return ToolChoice.builder().type(Type.REQUIRED).build();
     }
 
-    /** Creates a choice for a specific tool. */
+    /**
+     * Creates a choice for a specific tool.
+     *
+     * @param toolName model-facing name from the request's tool definitions, not a catalog ID
+     * @return a choice targeting the named request tool
+     */
     public static ToolChoice tool(String toolName) {
         return ToolChoice.builder().type(Type.TOOL).toolName(toolName).build();
     }

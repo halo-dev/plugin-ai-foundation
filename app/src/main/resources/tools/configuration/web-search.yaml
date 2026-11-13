@@ -1,0 +1,16 @@
+schema:
+  - $formkit: secret
+    name: braveApiKeySecretName
+    label: Brave Search API Key
+    descriptionPreset: AI Foundation 联网搜索
+    help: 从 Brave Search API 获取密钥并保存为 Secret；清空配置后，联网搜索不可用。
+    requiredKeys:
+      - key: api-key
+        help: Brave Search API Key
+  - $formkit: switch
+    name: vpnCompatibilityEnabled
+    label: VPN 兼容模式
+    value: false
+    onValue: true
+    offValue: false
+    help: 使用可信 VPN/TUN 的 Fake-IP 时开启，仍仅访问 Brave Search 的 HTTPS 接口。

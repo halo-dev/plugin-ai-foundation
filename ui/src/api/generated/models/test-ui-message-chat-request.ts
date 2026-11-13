@@ -159,6 +159,12 @@ export interface TestUiMessageChatRequest {
      */
     'toolChoice'?: ToolChoice;
     /**
+     * Stable IDs of explicitly selected shared tools.
+     * @type {Array<string>}
+     * @memberof TestUiMessageChatRequest
+     */
+    'toolIds'?: Array<string>;
+    /**
      * 
      * @type {number}
      * @memberof TestUiMessageChatRequest

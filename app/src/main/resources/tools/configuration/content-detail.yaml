@@ -1,0 +1,10 @@
+schema:
+  - $formkit: number
+    name: maxContentCharacters
+    label: 正文长度上限（字符）
+    number: integer
+    min: 1
+    max: 2000000
+    step: 1
+    validation: required|number|between:1,2000000
+    help: 分别限制原始正文和渲染正文的返回长度，超出部分会截断，默认 100000 字符。
