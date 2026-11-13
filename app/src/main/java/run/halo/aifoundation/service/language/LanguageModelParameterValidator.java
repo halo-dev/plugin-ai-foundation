@@ -57,13 +57,12 @@ final class LanguageModelParameterValidator {
         if (choiceType == null) {
             choiceType = ToolChoice.Type.AUTO;
         }
-        var choice =
-                switch (choiceType) {
-                    case AUTO -> "auto";
-                    case NONE -> "none";
-                    case REQUIRED -> "required";
-                    case TOOL -> "tool";
-                };
+        var choice = switch (choiceType) {
+            case AUTO -> "auto";
+            case NONE -> "none";
+            case REQUIRED -> "required";
+            case TOOL -> "tool";
+        };
         var allowed = constraints.getToolChoices();
         var namedToolAllowed = choice.equals("tool") && allowed.contains("function");
         if (!allowed.contains(choice) && !namedToolAllowed) {

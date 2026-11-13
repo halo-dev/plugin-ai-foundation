@@ -347,13 +347,12 @@ public class OllamaProvider extends AbstractAiProviderType {
             log.debug("Ignoring Ollama model {} with unrecognized capabilities {}", modelId, capabilities);
             return null;
         }
-        var adapter =
-                switch (modelType) {
-                    case LANGUAGE -> AdapterType.OLLAMA_CHAT;
-                    case EMBEDDING -> AdapterType.OLLAMA_EMBEDDING;
-                    case IMAGE_GENERATION -> AdapterType.OLLAMA_IMAGE;
-                    default -> null;
-                };
+        var adapter = switch (modelType) {
+            case LANGUAGE -> AdapterType.OLLAMA_CHAT;
+            case EMBEDDING -> AdapterType.OLLAMA_EMBEDDING;
+            case IMAGE_GENERATION -> AdapterType.OLLAMA_IMAGE;
+            default -> null;
+        };
         var features = new LinkedHashSet<ModelFeature>();
         if (modelType == ModelType.LANGUAGE) {
             features.add(ModelFeature.STREAMING);

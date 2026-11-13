@@ -37,11 +37,10 @@ public final class DashScopeRerankingClient extends AbstractHttpRerankingClient 
 
     @Override
     protected URI endpoint(RerankRequest request) {
-        var url =
-                switch (requestFormat) {
-                    case COMPATIBLE -> endpoints.compatibleApiBaseUrl() + "/reranks";
-                    case NATIVE -> endpoints.nativeBaseUrl() + "/services/rerank/text-rerank/text-rerank";
-                };
+        var url = switch (requestFormat) {
+            case COMPATIBLE -> endpoints.compatibleApiBaseUrl() + "/reranks";
+            case NATIVE -> endpoints.nativeBaseUrl() + "/services/rerank/text-rerank/text-rerank";
+        };
         return URI.create(url);
     }
 

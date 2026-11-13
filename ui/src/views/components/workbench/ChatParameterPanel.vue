@@ -306,7 +306,7 @@ function updateNumberField(key: NumberField, value: string) {
             :value="field.value"
             :disabled="!supportsLanguageParameter(parameterProfile, field.key as LanguageParameter)"
             :step="field.step"
-            :min="field.min"
+            :min="'min' in field ? field.min : undefined"
             placeholder="默认"
             class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
             @input="

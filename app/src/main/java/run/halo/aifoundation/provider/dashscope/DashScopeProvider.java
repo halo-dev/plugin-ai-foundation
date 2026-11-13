@@ -199,14 +199,12 @@ public class DashScopeProvider extends AbstractAiProviderType {
     @Override
     public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, ProviderModelRef model) {
         var resolved = resolveModel(model);
-        var requestFormat =
-                switch (resolved.adapterType()) {
-                    case DASHSCOPE_COMPATIBLE_RERANK -> DashScopeRerankingClient.RequestFormat.COMPATIBLE;
-                    case DASHSCOPE_NATIVE_RERANK -> DashScopeRerankingClient.RequestFormat.NATIVE;
-                    default ->
-                        throw new IllegalArgumentException(
-                                "Unsupported DashScope rerank adapter: " + resolved.adapterType());
-                };
+        var requestFormat = switch (resolved.adapterType()) {
+            case DASHSCOPE_COMPATIBLE_RERANK -> DashScopeRerankingClient.RequestFormat.COMPATIBLE;
+            case DASHSCOPE_NATIVE_RERANK -> DashScopeRerankingClient.RequestFormat.NATIVE;
+            default ->
+                throw new IllegalArgumentException("Unsupported DashScope rerank adapter: " + resolved.adapterType());
+        };
         return new DashScopeRerankingClient(
                 resolveBaseUrl(provider), resolved.modelId(), apiKey, webClientBuilder(provider), requestFormat);
     }

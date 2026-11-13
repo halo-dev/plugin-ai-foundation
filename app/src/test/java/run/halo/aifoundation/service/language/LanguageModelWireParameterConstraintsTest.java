@@ -187,12 +187,11 @@ class LanguageModelWireParameterConstraintsTest {
             constraints.setStructuredOutput(false);
             var nativeOptions = structuredOptions(adapter);
             NativeModelOptionsValidator.validate(nativeOptions);
-            var field =
-                    switch (adapter) {
-                        case OPENAI_CHAT -> "response_format";
-                        case OPENAI_RESPONSES -> "text.format";
-                        default -> "output_config.format";
-                    };
+            var field = switch (adapter) {
+                case OPENAI_CHAT -> "response_format";
+                case OPENAI_RESPONSES -> "text.format";
+                default -> "output_config.format";
+            };
             for (var prepared : List.of(false, true)) {
                 var probe = probe(context(adapter, constraints, RuntimeParameterMappings.empty(), nativeOptions));
                 assertRejected(
@@ -285,12 +284,11 @@ class LanguageModelWireParameterConstraintsTest {
             constraints.setPromptCacheKey(false);
             constraints.setServiceTiers(List.of());
             for (var field : List.of("store", "prompt_cache_key", "service_tier")) {
-                Object value =
-                        switch (field) {
-                            case "store" -> true;
-                            case "prompt_cache_key" -> "test-cache";
-                            default -> "priority";
-                        };
+                Object value = switch (field) {
+                    case "store" -> true;
+                    case "prompt_cache_key" -> "test-cache";
+                    default -> "priority";
+                };
                 for (var prepared : List.of(false, true)) {
                     assertRejected(
                             probe(context(
@@ -656,23 +654,22 @@ class LanguageModelWireParameterConstraintsTest {
                 .model("test-model")
                 .maxRetries(0)
                 .build();
-        ChatModel chat =
-                switch (context.adapterType()) {
-                    case OPENAI_CHAT -> new OpenAiChatModel(options, webClient);
-                    case OPENAI_RESPONSES -> new OpenAiResponsesModel(options, webClient);
-                    case KIMI_CHAT -> new KimiChatModel(options, webClient);
-                    case OPENROUTER_CHAT -> new OpenRouterChatModel(options, webClient);
-                    case DASHSCOPE_CHAT -> new DashScopeChatModel(options, webClient);
-                    case DASHSCOPE_MESSAGES -> new DashScopeMessagesModel(options, webClient);
-                    case DEEPSEEK_MESSAGES -> new DeepSeekMessagesModel(options, webClient);
-                    case OLLAMA_CHAT ->
-                        new OllamaChatModel(
-                                "https://wire.invalid",
-                                null,
-                                OllamaChatOptions.builder().model("test-model").build(),
-                                webClient);
-                    default -> throw new IllegalArgumentException("Unexpected test adapter");
-                };
+        ChatModel chat = switch (context.adapterType()) {
+            case OPENAI_CHAT -> new OpenAiChatModel(options, webClient);
+            case OPENAI_RESPONSES -> new OpenAiResponsesModel(options, webClient);
+            case KIMI_CHAT -> new KimiChatModel(options, webClient);
+            case OPENROUTER_CHAT -> new OpenRouterChatModel(options, webClient);
+            case DASHSCOPE_CHAT -> new DashScopeChatModel(options, webClient);
+            case DASHSCOPE_MESSAGES -> new DashScopeMessagesModel(options, webClient);
+            case DEEPSEEK_MESSAGES -> new DeepSeekMessagesModel(options, webClient);
+            case OLLAMA_CHAT ->
+                new OllamaChatModel(
+                        "https://wire.invalid",
+                        null,
+                        OllamaChatOptions.builder().model("test-model").build(),
+                        webClient);
+            default -> throw new IllegalArgumentException("Unexpected test adapter");
+        };
         var config = LanguageModelRuntimeConfiguration.from(context, ModelCapabilities.empty());
         var composition = LanguageModelRuntimeComposition.create(config, new LanguageModelRuntimeSupport(), null, null);
         return new WireProbe(new LanguageModelImpl(chat, composition, context), bodies);
@@ -683,15 +680,14 @@ class LanguageModelWireParameterConstraintsTest {
             ModelParameterConstraints constraints,
             RuntimeParameterMappings mappings,
             Map<String, Object> nativeOptions) {
-        AiProviderType provider =
-                switch (adapter) {
-                    case KIMI_CHAT -> new KimiProvider();
-                    case OPENROUTER_CHAT -> new OpenRouterProvider();
-                    case DASHSCOPE_CHAT, DASHSCOPE_MESSAGES -> new DashScopeProvider();
-                    case DEEPSEEK_MESSAGES -> new DeepSeekProvider();
-                    case OLLAMA_CHAT -> new OllamaProvider();
-                    default -> new OpenAiProvider();
-                };
+        AiProviderType provider = switch (adapter) {
+            case KIMI_CHAT -> new KimiProvider();
+            case OPENROUTER_CHAT -> new OpenRouterProvider();
+            case DASHSCOPE_CHAT, DASHSCOPE_MESSAGES -> new DashScopeProvider();
+            case DEEPSEEK_MESSAGES -> new DeepSeekProvider();
+            case OLLAMA_CHAT -> new OllamaProvider();
+            default -> new OpenAiProvider();
+        };
         return new ModelRuntimeContext(
                 "model",
                 "test-model",

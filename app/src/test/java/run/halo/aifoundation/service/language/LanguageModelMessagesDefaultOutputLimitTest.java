@@ -212,13 +212,12 @@ class LanguageModelMessagesDefaultOutputLimitTest {
                                 .build();
                     }));
         });
-        ChatModel chat =
-                switch (adapter) {
-                    case OPENROUTER_MESSAGES -> new OpenRouterMessagesModel(options, webClient);
-                    case OPENAI_CHAT -> new OpenAiChatModel(options, webClient);
-                    case OPENAI_RESPONSES -> new OpenAiResponsesModel(options, webClient);
-                    default -> throw new IllegalArgumentException("Unexpected test adapter");
-                };
+        ChatModel chat = switch (adapter) {
+            case OPENROUTER_MESSAGES -> new OpenRouterMessagesModel(options, webClient);
+            case OPENAI_CHAT -> new OpenAiChatModel(options, webClient);
+            case OPENAI_RESPONSES -> new OpenAiResponsesModel(options, webClient);
+            default -> throw new IllegalArgumentException("Unexpected test adapter");
+        };
         AiProviderType provider =
                 adapter == AdapterType.OPENROUTER_MESSAGES ? new OpenRouterProvider() : new OpenAiProvider();
         var constraints = new ModelParameterConstraints();

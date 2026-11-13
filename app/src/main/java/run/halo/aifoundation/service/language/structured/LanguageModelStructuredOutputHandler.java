@@ -41,19 +41,17 @@ public final class LanguageModelStructuredOutputHandler {
             return null;
         }
         var base = "Return only the requested structured output. Do not wrap it in Markdown or " + "explanatory prose.";
-        var instruction =
-                switch (output.getType()) {
-                    case OBJECT ->
-                        base + " Return a JSON object that matches this JSON Schema: "
-                                + jsonWriter.write(output.getSchema());
-                    case ARRAY ->
-                        base + " Return a JSON array. Each element must match this JSON Schema: "
-                                + jsonWriter.write(output.getElementSchema());
-                    case CHOICE ->
-                        base + " Return exactly one of these string choices: " + String.join(", ", output.getChoices());
-                    case JSON -> base + " Return valid JSON.";
-                    case TEXT -> null;
-                };
+        var instruction = switch (output.getType()) {
+            case OBJECT ->
+                base + " Return a JSON object that matches this JSON Schema: " + jsonWriter.write(output.getSchema());
+            case ARRAY ->
+                base + " Return a JSON array. Each element must match this JSON Schema: "
+                        + jsonWriter.write(output.getElementSchema());
+            case CHOICE ->
+                base + " Return exactly one of these string choices: " + String.join(", ", output.getChoices());
+            case JSON -> base + " Return valid JSON.";
+            case TEXT -> null;
+        };
         if (!includeExample) {
             return instruction;
         }
@@ -143,40 +141,37 @@ public final class LanguageModelStructuredOutputHandler {
         var outputText = outputText(output, text);
         traceParseInput(output, text, outputText, diagnosticId);
         try {
-            var structuredOutput =
-                    switch (output.getType()) {
-                        case JSON -> new StructuredOutput(JSON_MAPPER.readValue(outputText, OBJECT_TYPE), outputText);
-                        case OBJECT -> {
-                            var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
-                            if (!(value instanceof Map<?, ?> map)) {
-                                throw validationError("Structured output validation failed: expected JSON object", "$");
-                            }
-                            var sanitized = responseMapper.sanitizeValue(map);
-                            validateJsonValue(sanitized, output.getSchema(), "$");
-                            yield new StructuredOutput(sanitized, outputText);
-                        }
-                        case ARRAY -> {
-                            var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
-                            if (!(value instanceof List<?> list)) {
-                                throw validationError("Structured output validation failed: expected JSON array", "$");
-                            }
-                            for (var i = 0; i < list.size(); i++) {
-                                validateJsonValue(list.get(i), output.getElementSchema(), "$[" + i + "]");
-                            }
-                            yield new StructuredOutput(responseMapper.sanitizeValue(list), outputText);
-                        }
-                        case CHOICE -> {
-                            var choice = normalizeChoice(outputText);
-                            if (output.getChoices() == null
-                                    || !output.getChoices().contains(choice)) {
-                                throw validationError(
-                                        "Structured output validation failed: expected one of " + output.getChoices(),
-                                        "$");
-                            }
-                            yield new StructuredOutput(choice, outputText);
-                        }
-                        case TEXT -> new StructuredOutput(text, text);
-                    };
+            var structuredOutput = switch (output.getType()) {
+                case JSON -> new StructuredOutput(JSON_MAPPER.readValue(outputText, OBJECT_TYPE), outputText);
+                case OBJECT -> {
+                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
+                    if (!(value instanceof Map<?, ?> map)) {
+                        throw validationError("Structured output validation failed: expected JSON object", "$");
+                    }
+                    var sanitized = responseMapper.sanitizeValue(map);
+                    validateJsonValue(sanitized, output.getSchema(), "$");
+                    yield new StructuredOutput(sanitized, outputText);
+                }
+                case ARRAY -> {
+                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
+                    if (!(value instanceof List<?> list)) {
+                        throw validationError("Structured output validation failed: expected JSON array", "$");
+                    }
+                    for (var i = 0; i < list.size(); i++) {
+                        validateJsonValue(list.get(i), output.getElementSchema(), "$[" + i + "]");
+                    }
+                    yield new StructuredOutput(responseMapper.sanitizeValue(list), outputText);
+                }
+                case CHOICE -> {
+                    var choice = normalizeChoice(outputText);
+                    if (output.getChoices() == null || !output.getChoices().contains(choice)) {
+                        throw validationError(
+                                "Structured output validation failed: expected one of " + output.getChoices(), "$");
+                    }
+                    yield new StructuredOutput(choice, outputText);
+                }
+                case TEXT -> new StructuredOutput(text, text);
+            };
             traceParseSuccess(output, structuredOutput, diagnosticId);
             return structuredOutput;
         } catch (StructuredOutputValidationException e) {

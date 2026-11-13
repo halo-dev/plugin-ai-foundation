@@ -395,15 +395,14 @@ class SiliconFlowProviderTest {
         server.createContext("/v1/models", exchange -> {
             var query = exchange.getRequestURI().getRawQuery();
             requests.add(query);
-            var body =
-                    switch (query) {
-                        case "sub_type=chat" -> "{\"data\":[{\"id\":\"Qwen/Qwen3-32B\"}]}";
-                        case "sub_type=embedding" -> "{\"data\":[{\"id\":\"Qwen/Qwen3-Embedding-8B\"}]}";
-                        case "sub_type=reranker" -> "{\"data\":[{\"id\":\"Qwen/Qwen3-Reranker-8B\"}]}";
-                        case "sub_type=text-to-image", "sub_type=image-to-image" ->
-                            "{\"data\":[{\"id\":\"Qwen/Qwen-Image-Edit\"}]}";
-                        default -> "{\"data\":[]}";
-                    };
+            var body = switch (query) {
+                case "sub_type=chat" -> "{\"data\":[{\"id\":\"Qwen/Qwen3-32B\"}]}";
+                case "sub_type=embedding" -> "{\"data\":[{\"id\":\"Qwen/Qwen3-Embedding-8B\"}]}";
+                case "sub_type=reranker" -> "{\"data\":[{\"id\":\"Qwen/Qwen3-Reranker-8B\"}]}";
+                case "sub_type=text-to-image", "sub_type=image-to-image" ->
+                    "{\"data\":[{\"id\":\"Qwen/Qwen-Image-Edit\"}]}";
+                default -> "{\"data\":[]}";
+            };
             respond(exchange, body);
         });
         server.start();

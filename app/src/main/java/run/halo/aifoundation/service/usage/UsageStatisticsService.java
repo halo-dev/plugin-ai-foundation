@@ -611,11 +611,10 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
             if (error instanceof SQLException sql) {
                 // SQLite primary result codes: read-only, busy/locked, I/O, full, cannot open,
                 // corrupt/not-a-database. Retrying each event cannot isolate these failures.
-                var storageFailure =
-                        switch (sql.getErrorCode() & 0xff) {
-                            case 5, 6, 8, 10, 11, 13, 14, 26 -> true;
-                            default -> false;
-                        };
+                var storageFailure = switch (sql.getErrorCode() & 0xff) {
+                    case 5, 6, 8, 10, 11, 13, 14, 26 -> true;
+                    default -> false;
+                };
                 if (storageFailure) {
                     return true;
                 }

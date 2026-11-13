@@ -39,13 +39,12 @@ class ModelCatalogCompatibilityTest {
                 .containsExactly("remote", "built-in", "manual", "unknown");
         for (var source : CapabilitySource.values()) {
             // A published caller's exhaustive switch must still compile unchanged.
-            var published =
-                    switch (source) {
-                        case REMOTE -> PublishedSource.REMOTE;
-                        case BUILT_IN -> PublishedSource.BUILT_IN;
-                        case MANUAL -> PublishedSource.MANUAL;
-                        case UNKNOWN -> PublishedSource.UNKNOWN;
-                    };
+            var published = switch (source) {
+                case REMOTE -> PublishedSource.REMOTE;
+                case BUILT_IN -> PublishedSource.BUILT_IN;
+                case MANUAL -> PublishedSource.MANUAL;
+                case UNKNOWN -> PublishedSource.UNKNOWN;
+            };
             assertThat(JsonUtils.jsonToObject(JsonUtils.objectToJson(source), PublishedSource.class))
                     .isEqualTo(published);
         }

@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id "io.freefair.lombok" version "9.2.0"
-    id "run.halo.plugin.devtools" version "0.7.0"
+    id "io.freefair.lombok" version "9.8.3"
+    id "run.halo.plugin.devtools" version "0.9.0"
 }
 
 java {
@@ -47,10 +47,10 @@ configurations {
 
 dependencies {
     implementation platform('run.halo.tools.platform:plugin:2.23.0')
-    implementation platform("org.springframework.ai:spring-ai-bom:2.0.0")
+    implementation platform("org.springframework.ai:spring-ai-bom:2.0.2")
     implementation project(':api')
 
-    implementation 'org.xerial:sqlite-jdbc:3.53.2.0'
+    implementation 'org.xerial:sqlite-jdbc:3.54.1.0'
     implementation 'org.springframework.ai:spring-ai-model'
 
     compileOnly 'run.halo.app:api'

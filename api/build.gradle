@@ -1,7 +1,7 @@
 plugins {
     id 'java-library'
     id 'com.vanniktech.maven.publish'
-    id "io.freefair.lombok" version "9.2.0"
+    id "io.freefair.lombok" version "9.8.3"
 }
 
 java {

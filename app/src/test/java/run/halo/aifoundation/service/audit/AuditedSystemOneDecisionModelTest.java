@@ -71,12 +71,11 @@ class AuditedSystemOneDecisionModelTest {
                         .header("Content-Type", "application/json")
                         .body(body)
                         .build()));
-        ProviderDecisionClient client =
-                switch (provider) {
-                    case "typesafe" -> new TypeSafeDecisionClient("https://example.test", "key", "jev-latest", builder);
-                    case "aihubmix" -> new AiHubMixDecisionClient("https://example.test", "key", "jev-latest", builder);
-                    default -> throw new IllegalArgumentException("Unexpected provider: " + provider);
-                };
+        ProviderDecisionClient client = switch (provider) {
+            case "typesafe" -> new TypeSafeDecisionClient("https://example.test", "key", "jev-latest", builder);
+            case "aihubmix" -> new AiHubMixDecisionClient("https://example.test", "key", "jev-latest", builder);
+            default -> throw new IllegalArgumentException("Unexpected provider: " + provider);
+        };
         var runtime = new DecisionModelImpl(
                 client, new UsageExecutionObserver(), new TypeSafeProvider().decisionCapabilities());
         var model = new AuditedDecisionModel(runtime, context, mock(CallerPluginAuditRecorder.class), statistics);

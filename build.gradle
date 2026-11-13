@@ -1,6 +1,6 @@
 plugins {
-    id "com.vanniktech.maven.publish" version "0.36.0" apply false
-    id "com.diffplug.spotless" version "8.10.2" apply false
+    id "com.vanniktech.maven.publish" version "0.37.0" apply false
+    id "com.diffplug.spotless" version "8.11.0" apply false
 }
 
 apply from: 'gradle/models-dev-snapshot.gradle'
@@ -25,7 +25,7 @@ subprojects {
         apply plugin: 'com.diffplug.spotless'
         spotless {
             java {
-                palantirJavaFormat('2.90.0').formatJavadoc(true)
+                palantirJavaFormat('2.103.0').formatJavadoc(true)
             }
         }
     }

@@ -39,17 +39,13 @@ final class OllamaChatOptionsSupport {
         if (output.getType() == OutputType.JSON) {
             return builder.format("json").build();
         }
-        var schema =
-                switch (output.getType()) {
-                    case OBJECT -> output.getSchema();
-                    case ARRAY ->
-                        output.getElementSchema() == null
-                                ? null
-                                : Map.of("type", "array", "items", output.getElementSchema());
-                    case CHOICE ->
-                        output.getChoices() == null ? null : Map.of("type", "string", "enum", output.getChoices());
-                    default -> null;
-                };
+        var schema = switch (output.getType()) {
+            case OBJECT -> output.getSchema();
+            case ARRAY ->
+                output.getElementSchema() == null ? null : Map.of("type", "array", "items", output.getElementSchema());
+            case CHOICE -> output.getChoices() == null ? null : Map.of("type", "string", "enum", output.getChoices());
+            default -> null;
+        };
         return schema != null ? builder.format(schema).build() : builder.build();
     }
 

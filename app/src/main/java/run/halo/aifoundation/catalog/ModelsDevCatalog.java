@@ -194,14 +194,13 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
             if (type == null) {
                 return false;
             }
-            var catalogType =
-                    switch (type) {
-                        case LANGUAGE -> "chat";
-                        case IMAGE_GENERATION -> "image";
-                        case EMBEDDING -> "embedding";
-                        case RERANK -> "reranking";
-                        case DECISION -> null;
-                    };
+            var catalogType = switch (type) {
+                case LANGUAGE -> "chat";
+                case IMAGE_GENERATION -> "image";
+                case EMBEDDING -> "embedding";
+                case RERANK -> "reranking";
+                case DECISION -> null;
+            };
             return catalogType != null && catalogType.equals(model.path("type").asText());
         }
 
