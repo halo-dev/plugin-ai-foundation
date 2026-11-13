@@ -158,6 +158,52 @@ describe('AiModelSelector', () => {
     )
   })
 
+  it('remounts the list content and returns focus to search after switching providers', async () => {
+    const wrapper = mountSelector({ searchPlaceholder: '搜索模型...' })
+
+    await openSelector(wrapper)
+    const previousInput = getSearchInput()
+    previousInput.focus()
+
+    await clickProviderFilter('DeepSeek (深度求索 DeepSeek)')
+
+    expect(getSearchInput()).not.toBe(previousInput)
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(getSearchInput())
+    })
+  })
+
+  it('filters a provider named all independently from the all button', async () => {
+    modelOptions.value = [
+      modelOption({
+        name: 'all-named-model',
+        displayName: 'All Named Model',
+        modelId: 'all-named-model',
+        providerName: 'all',
+        providerDisplayName: 'All Named',
+        providerTypeDisplayName: 'OpenAI',
+      }),
+      modelOption({
+        name: 'other-model',
+        displayName: 'Other Model',
+        modelId: 'other-model',
+        providerName: 'other',
+        providerDisplayName: 'Other Provider',
+        providerTypeDisplayName: 'OpenAI',
+      }),
+    ]
+    const wrapper = mountSelector({ searchPlaceholder: '搜索模型...' })
+
+    await openSelector(wrapper)
+    await clickProviderFilter('All Named (OpenAI)')
+
+    expect(getOptions().map((option) => option.textContent)).toEqual([
+      expect.stringContaining('All Named Model'),
+    ])
+    expect(getProviderButton('All Named (OpenAI)')?.getAttribute('aria-pressed')).toBe('true')
+    expect(getProviderButton('全部供应商')?.getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('renders unavailable models without allowing selection', async () => {
     const wrapper = mountSelector()
 

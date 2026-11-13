@@ -83,7 +83,7 @@ const searchInputRef = useTemplateRef<HTMLInputElement>('searchInput')
 const providerRailRef = useTemplateRef<HTMLElement>('providerRail')
 const keyword = shallowRef('')
 const isOpen = shallowRef(false)
-const providerFilter = shallowRef('all')
+const providerFilter = shallowRef<string | null>(null)
 const selectedModelSnapshot = shallowRef<ModelOption>()
 
 const modelType = computed(() => props.modelType)
@@ -121,7 +121,7 @@ const providerGroups = computed(() => {
 })
 const groups = computed(() => {
   const keywordGroups = groupModelOptionsByProvider(fuseResults.value.map((result) => result.item))
-  if (providerFilter.value === 'all') {
+  if (providerFilter.value === null) {
     return keywordGroups
   }
   return keywordGroups.filter((group) => group.key === providerFilter.value)
@@ -173,16 +173,16 @@ watch(selectedValue, (value) => {
 watch(isOpen, (open) => {
   if (!open) {
     keyword.value = ''
-    providerFilter.value = 'all'
+    providerFilter.value = null
   }
 })
 
 watch(providerGroups, (groups) => {
   if (
-    providerFilter.value !== 'all' &&
+    providerFilter.value !== null &&
     !groups.some((group) => group.key === providerFilter.value)
   ) {
-    providerFilter.value = 'all'
+    providerFilter.value = null
   }
 })
 
@@ -195,12 +195,7 @@ watch(
   },
 )
 
-function handleOpenChange(open: boolean) {
-  isOpen.value = open
-  if (!open) {
-    return
-  }
-
+function focusSearchInput() {
   nextTick(() => {
     window.requestAnimationFrame(() => {
       if (isOpen.value) {
@@ -208,6 +203,15 @@ function handleOpenChange(open: boolean) {
       }
     })
   })
+}
+
+function handleOpenChange(open: boolean) {
+  isOpen.value = open
+  if (!open) {
+    return
+  }
+
+  focusSearchInput()
 }
 
 function handleValueChange(value: unknown) {
@@ -234,9 +238,9 @@ function clearSelection() {
   emit('update:modelValue', undefined)
 }
 
-function selectProviderFilter(key: string) {
+function selectProviderFilter(key: string | null) {
   providerFilter.value = key
-  searchInputRef.value?.focus({ preventScroll: true })
+  focusSearchInput()
 }
 
 function providerRailButtons() {
@@ -419,7 +423,9 @@ function handleSearchKeydown(event: KeyboardEvent) {
       </div>
 
       <SelectPortal>
+        <!-- Re-key on provider change so Reka re-registers selected items for its scroll buttons. -->
         <SelectContent
+          :key="providerFilter ?? ''"
           position="popper"
           align="start"
           :side-offset="4"
@@ -478,14 +484,14 @@ function handleSearchKeydown(event: KeyboardEvent) {
                 type="button"
                 class=":uno: size-8 flex flex-none cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 :class="
-                  providerFilter === 'all'
+                  providerFilter === null
                     ? ':uno: bg-gray-100 text-gray-900 shadow-[inset_0_0_0_1px_#e5e7eb]'
                     : ''
                 "
-                :aria-pressed="providerFilter === 'all'"
+                :aria-pressed="providerFilter === null"
                 aria-label="全部供应商"
                 v-tooltip="'全部供应商'"
-                @click="selectProviderFilter('all')"
+                @click="selectProviderFilter(null)"
                 @keydown="handleProviderRailKeydown($event, 0)"
               >
                 <MingcuteGrid2Line class=":uno: size-4" aria-hidden="true" />
