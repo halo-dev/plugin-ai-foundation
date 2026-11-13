@@ -293,19 +293,23 @@ function resultSummary(key: number) {
   width: 100%;
   min-width: 0;
   padding: 0.75rem;
-  border-left: 3px solid transparent;
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
   color: #475569;
   background: transparent;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease;
 }
 
 .decision-question-tab:hover {
   background: #f8fafc;
+  color: #1e293b;
 }
 
 .decision-question-tab[data-state='active'] {
-  border-left-color: #0f172a;
   background: #f1f5f9;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
   color: #0f172a;
 }
 
