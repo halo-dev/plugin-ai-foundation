@@ -23,6 +23,7 @@ import { computed, nextTick, shallowRef, useId, useTemplateRef, watch } from 'vu
 import { RouterLink } from 'vue-router'
 import MingcuteCloseLine from '~icons/mingcute/close-line'
 import MingcuteDownLine from '~icons/mingcute/down-line'
+import MingcuteGrid2Line from '~icons/mingcute/grid-2-line'
 import MingcuteSearchLine from '~icons/mingcute/search-line'
 import MingcuteSettings3Line from '~icons/mingcute/settings-3-line'
 import RiBrainLine from '~icons/ri/brain-line'
@@ -79,8 +80,10 @@ const emit = defineEmits<{
 const triggerId = useId()
 const helpId = `${triggerId}-help`
 const searchInputRef = useTemplateRef<HTMLInputElement>('searchInput')
+const providerRailRef = useTemplateRef<HTMLElement>('providerRail')
 const keyword = shallowRef('')
 const isOpen = shallowRef(false)
+const providerFilter = shallowRef<string | null>(null)
 const selectedModelSnapshot = shallowRef<ModelOption>()
 
 const modelType = computed(() => props.modelType)
@@ -113,8 +116,15 @@ const { results: fuseResults } = useFuse(
   },
 )
 
+const providerGroups = computed(() => {
+  return groupModelOptionsByProvider(modelOptions.value)
+})
 const groups = computed(() => {
-  return groupModelOptionsByProvider(fuseResults.value.map((result) => result.item))
+  const keywordGroups = groupModelOptionsByProvider(fuseResults.value.map((result) => result.item))
+  if (providerFilter.value === null) {
+    return keywordGroups
+  }
+  return keywordGroups.filter((group) => group.key === providerFilter.value)
 })
 const selectedValue = computed(() => props.modelValue || undefined)
 const selectedModel = computed(() => {
@@ -163,6 +173,16 @@ watch(selectedValue, (value) => {
 watch(isOpen, (open) => {
   if (!open) {
     keyword.value = ''
+    providerFilter.value = null
+  }
+})
+
+watch(providerGroups, (groups) => {
+  if (
+    providerFilter.value !== null &&
+    !groups.some((group) => group.key === providerFilter.value)
+  ) {
+    providerFilter.value = null
   }
 })
 
@@ -175,12 +195,7 @@ watch(
   },
 )
 
-function handleOpenChange(open: boolean) {
-  isOpen.value = open
-  if (!open) {
-    return
-  }
-
+function focusSearchInput() {
   nextTick(() => {
     window.requestAnimationFrame(() => {
       if (isOpen.value) {
@@ -188,6 +203,15 @@ function handleOpenChange(open: boolean) {
       }
     })
   })
+}
+
+function handleOpenChange(open: boolean) {
+  isOpen.value = open
+  if (!open) {
+    return
+  }
+
+  focusSearchInput()
 }
 
 function handleValueChange(value: unknown) {
@@ -212,6 +236,53 @@ function clearSelection() {
 
   selectedModelSnapshot.value = undefined
   emit('update:modelValue', undefined)
+}
+
+function selectProviderFilter(key: string | null) {
+  providerFilter.value = key
+  focusSearchInput()
+}
+
+function providerRailButtons() {
+  return Array.from(providerRailRef.value?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+}
+
+function focusProviderRailButton(index: number) {
+  const buttons = providerRailButtons()
+  if (!buttons.length) {
+    return
+  }
+  buttons[(index + buttons.length) % buttons.length]?.focus()
+}
+
+function handleProviderRailKeydown(event: KeyboardEvent, index: number) {
+  event.stopPropagation()
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      focusProviderRailButton(index + 1)
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      focusProviderRailButton(index - 1)
+      break
+    case 'Home':
+      event.preventDefault()
+      focusProviderRailButton(0)
+      break
+    case 'End':
+      event.preventDefault()
+      focusProviderRailButton(providerRailButtons().length - 1)
+      break
+    case 'Tab':
+      event.preventDefault()
+      searchInputRef.value?.focus({ preventScroll: true })
+      break
+    case 'Escape':
+      event.preventDefault()
+      isOpen.value = false
+      break
+  }
 }
 
 async function focusModelFromSearch(delta: -1 | 1) {
@@ -271,6 +342,11 @@ function handleSearchKeydown(event: KeyboardEvent) {
       isOpen.value = false
       break
     case 'Tab':
+      if (providerGroups.value.length) {
+        event.preventDefault()
+        event.stopPropagation()
+        focusProviderRailButton(event.shiftKey ? -1 : 0)
+      }
       break
     default:
       event.stopPropagation()
@@ -347,7 +423,9 @@ function handleSearchKeydown(event: KeyboardEvent) {
       </div>
 
       <SelectPortal>
+        <!-- Re-key on provider change so Reka re-registers selected items for its scroll buttons. -->
         <SelectContent
+          :key="providerFilter ?? ''"
           position="popper"
           align="start"
           :side-offset="4"
@@ -356,7 +434,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
           :disable-outside-pointer-events="false"
           class=":uno: ai-model-selector__content"
           :style="{
-            width: 'min(var(--reka-select-trigger-width), 32rem)',
+            width: 'min(max(var(--reka-select-trigger-width), 30rem), 32rem, calc(100vw - 1rem))',
             maxHeight: 'min(26rem, var(--reka-select-content-available-height))',
           }"
         >
@@ -389,57 +467,121 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
           <VLoading v-if="isLoading" />
 
-          <div v-else-if="!hasModels" class=":uno: px-3 py-5 text-center text-[13px] text-gray-500">
+          <div
+            v-else-if="!providerGroups.length"
+            class=":uno: px-3 py-5 text-center text-[13px] text-gray-500"
+          >
             {{ emptyText }}
           </div>
 
-          <template v-else>
-            <SelectScrollUpButton
-              class=":uno: h-5 flex cursor-default items-center justify-center border-b border-gray-100 bg-gray-50/80 text-gray-500"
+          <div v-else class=":uno: min-h-0 flex flex-1">
+            <nav
+              ref="providerRail"
+              class=":uno: ai-model-selector__rail w-11 flex flex-none flex-col items-center gap-1 overflow-y-auto border-r border-gray-100 p-1.5"
+              aria-label="按供应商筛选"
             >
-              <MingcuteDownLine class=":uno: size-4 rotate-180" aria-hidden="true" />
-            </SelectScrollUpButton>
+              <button
+                type="button"
+                class=":uno: size-8 flex flex-none cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                :class="
+                  providerFilter === null
+                    ? ':uno: bg-gray-100 text-gray-900 shadow-[inset_0_0_0_1px_#e5e7eb]'
+                    : ''
+                "
+                :aria-pressed="providerFilter === null"
+                aria-label="全部供应商"
+                v-tooltip="'全部供应商'"
+                @click="selectProviderFilter(null)"
+                @keydown="handleProviderRailKeydown($event, 0)"
+              >
+                <MingcuteGrid2Line class=":uno: size-4" aria-hidden="true" />
+              </button>
 
-            <SelectViewport class=":uno: max-h-80 pb-1">
-              <SelectGroup v-for="group in groups" :key="group.key">
-                <SelectLabel
-                  class=":uno: sticky top-0 z-10 flex select-none items-center gap-2 border-b border-gray-100 bg-gray-50/95 px-3 py-2"
+              <span class=":uno: my-0.5 h-px w-6 flex-none bg-gray-200" aria-hidden="true" />
+
+              <button
+                v-for="(group, index) in providerGroups"
+                :key="group.key"
+                type="button"
+                class=":uno: size-8 flex flex-none cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                :class="
+                  providerFilter === group.key
+                    ? ':uno: bg-gray-100 text-gray-900 shadow-[inset_0_0_0_1px_#e5e7eb]'
+                    : ''
+                "
+                :aria-pressed="providerFilter === group.key"
+                :aria-label="group.label"
+                v-tooltip="group.label"
+                @click="selectProviderFilter(group.key)"
+                @keydown="handleProviderRailKeydown($event, index + 1)"
+              >
+                <img
+                  v-if="group.models[0]?.provider?.iconUrl"
+                  :src="group.models[0].provider.iconUrl"
+                  class=":uno: size-4 object-contain"
+                  alt=""
+                />
+                <RiBrainLine v-else class=":uno: size-4" aria-hidden="true" />
+              </button>
+            </nav>
+
+            <div class=":uno: min-h-0 min-w-0 flex flex-1 flex-col">
+              <SelectScrollUpButton
+                class=":uno: h-5 flex cursor-default items-center justify-center border-b border-gray-100 bg-gray-50/80 text-gray-500"
+              >
+                <MingcuteDownLine class=":uno: size-4 rotate-180" aria-hidden="true" />
+              </SelectScrollUpButton>
+
+              <SelectViewport class=":uno: min-h-0 pb-1">
+                <div
+                  v-if="!hasModels"
+                  class=":uno: px-3 py-5 text-center text-[13px] text-gray-500"
                 >
-                  <img
-                    v-if="group.models[0]?.provider?.iconUrl"
-                    :src="group.models[0].provider.iconUrl"
-                    class=":uno: size-4 flex-none rounded-sm object-contain"
-                    alt=""
-                  />
-                  <RiBrainLine
-                    v-else
-                    class=":uno: size-4 flex-none text-gray-400"
-                    aria-hidden="true"
-                  />
-                  <span class=":uno: text-xs text-gray-700 font-medium">
-                    {{ group.label }}
-                  </span>
-                </SelectLabel>
-
-                <div class=":uno: py-1.5">
-                  <AiModelSelectOption
-                    v-for="model in group.models"
-                    :key="model.name"
-                    :model="model"
-                    :selected="model.name === selectedValue"
-                    :required-features="requiredFeatures"
-                    @select="rememberSelection"
-                  />
+                  {{ emptyText }}
                 </div>
-              </SelectGroup>
-            </SelectViewport>
 
-            <SelectScrollDownButton
-              class=":uno: h-5 flex cursor-default items-center justify-center border-t border-gray-100 bg-gray-50/80 text-gray-500"
-            >
-              <MingcuteDownLine class=":uno: size-4" aria-hidden="true" />
-            </SelectScrollDownButton>
-          </template>
+                <template v-else>
+                  <SelectGroup v-for="group in groups" :key="group.key">
+                    <SelectLabel
+                      class=":uno: sticky top-0 z-10 flex select-none items-center gap-2 border-b border-gray-100 bg-gray-50/95 px-3 py-2"
+                    >
+                      <img
+                        v-if="group.models[0]?.provider?.iconUrl"
+                        :src="group.models[0].provider.iconUrl"
+                        class=":uno: size-4 flex-none rounded-sm object-contain"
+                        alt=""
+                      />
+                      <RiBrainLine
+                        v-else
+                        class=":uno: size-4 flex-none text-gray-400"
+                        aria-hidden="true"
+                      />
+                      <span class=":uno: text-xs text-gray-700 font-medium">
+                        {{ group.label }}
+                      </span>
+                    </SelectLabel>
+
+                    <div class=":uno: py-1.5">
+                      <AiModelSelectOption
+                        v-for="model in group.models"
+                        :key="model.name"
+                        :model="model"
+                        :selected="model.name === selectedValue"
+                        :required-features="requiredFeatures"
+                        @select="rememberSelection"
+                      />
+                    </div>
+                  </SelectGroup>
+                </template>
+              </SelectViewport>
+
+              <SelectScrollDownButton
+                class=":uno: h-5 flex cursor-default items-center justify-center border-t border-gray-100 bg-gray-50/80 text-gray-500"
+              >
+                <MingcuteDownLine class=":uno: size-4" aria-hidden="true" />
+              </SelectScrollDownButton>
+            </div>
+          </div>
 
           <div class=":uno: border-t border-gray-100 p-1">
             <RouterLink
@@ -471,5 +613,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
   box-shadow:
     0 4px 6px -1px rgb(0 0 0 / 10%),
     0 2px 4px -2px rgb(0 0 0 / 10%);
+}
+
+.ai-model-selector__rail {
+  scrollbar-width: none;
+}
+
+.ai-model-selector__rail::-webkit-scrollbar {
+  display: none;
 }
 </style>

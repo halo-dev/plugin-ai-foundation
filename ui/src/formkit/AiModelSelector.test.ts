@@ -105,6 +105,7 @@ describe('AiModelSelector', () => {
     expect(getOptions()).toHaveLength(1)
     expect(getOptions()[0]?.textContent).toContain('DeepSeek Chat')
     expect(document.body.textContent).toContain('DeepSeek (深度求索 DeepSeek)')
+    expect(getProviderButton('OpenAI Production (OpenAI)')).not.toBeNull()
 
     await pressSearchKey('Escape')
     await openSelector(wrapper)
@@ -116,6 +117,91 @@ describe('AiModelSelector', () => {
       expect.stringContaining('GPT-4o'),
       expect.stringContaining('Disabled Model'),
     ])
+  })
+
+  it('filters models by provider from the rail and resets after closing', async () => {
+    const wrapper = mountSelector({ searchPlaceholder: '搜索模型...' })
+    await openSelector(wrapper)
+    await clickProviderFilter('OpenAI Production (OpenAI)')
+
+    expect(getOptions().map((option) => option.textContent)).toEqual([
+      expect.stringContaining('GPT-4o'),
+      expect.stringContaining('Disabled Model'),
+    ])
+    expect(document.body.textContent).toContain('OpenAI Production (OpenAI)')
+    expect(getProviderButton('OpenAI Production (OpenAI)')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+
+    await pressSearchKey('Escape')
+    await openSelector(wrapper)
+
+    expect(getOptions()).toHaveLength(3)
+    expect(getProviderButton('全部供应商')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('keeps the provider rail when a search has no matches', async () => {
+    const wrapper = mountSelector({ searchPlaceholder: '搜索模型...' })
+
+    await openSelector(wrapper)
+    await searchFor('no-such-model')
+
+    expect(getOptions()).toHaveLength(0)
+    expect(document.body.textContent).toContain('未找到匹配模型')
+    expect(getProviderButton('DeepSeek (深度求索 DeepSeek)')).not.toBeNull()
+
+    await clickProviderFilter('DeepSeek (深度求索 DeepSeek)')
+
+    expect(document.body.textContent).toContain('未找到匹配模型')
+    expect(getProviderButton('DeepSeek (深度求索 DeepSeek)')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+  })
+
+  it('remounts the list content and returns focus to search after switching providers', async () => {
+    const wrapper = mountSelector({ searchPlaceholder: '搜索模型...' })
+
+    await openSelector(wrapper)
+    const previousInput = getSearchInput()
+    previousInput.focus()
+
+    await clickProviderFilter('DeepSeek (深度求索 DeepSeek)')
+
+    expect(getSearchInput()).not.toBe(previousInput)
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(getSearchInput())
+    })
+  })
+
+  it('filters a provider named all independently from the all button', async () => {
+    modelOptions.value = [
+      modelOption({
+        name: 'all-named-model',
+        displayName: 'All Named Model',
+        modelId: 'all-named-model',
+        providerName: 'all',
+        providerDisplayName: 'All Named',
+        providerTypeDisplayName: 'OpenAI',
+      }),
+      modelOption({
+        name: 'other-model',
+        displayName: 'Other Model',
+        modelId: 'other-model',
+        providerName: 'other',
+        providerDisplayName: 'Other Provider',
+        providerTypeDisplayName: 'OpenAI',
+      }),
+    ]
+    const wrapper = mountSelector({ searchPlaceholder: '搜索模型...' })
+
+    await openSelector(wrapper)
+    await clickProviderFilter('All Named (OpenAI)')
+
+    expect(getOptions().map((option) => option.textContent)).toEqual([
+      expect.stringContaining('All Named Model'),
+    ])
+    expect(getProviderButton('All Named (OpenAI)')?.getAttribute('aria-pressed')).toBe('true')
+    expect(getProviderButton('全部供应商')?.getAttribute('aria-pressed')).toBe('false')
   })
 
   it('renders unavailable models without allowing selection', async () => {
@@ -193,6 +279,7 @@ function mountSelector(props: Record<string, unknown> = {}) {
     attachTo: document.body,
     global: {
       plugins: [router],
+      directives: { tooltip: {} },
     },
     props: {
       ...props,
@@ -251,6 +338,19 @@ function getOption(label: string) {
 
 function getOptions() {
   return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+}
+
+function getProviderButton(label: string) {
+  return document.querySelector<HTMLElement>(`button[aria-label="${label}"]`)
+}
+
+async function clickProviderFilter(label: string) {
+  const button = getProviderButton(label)
+  if (!button) {
+    throw new Error(`Expected provider filter ${label} to be rendered`)
+  }
+  button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await flushPromises()
 }
 
 async function dispatchPointerEvent(element: HTMLElement, type: string) {
