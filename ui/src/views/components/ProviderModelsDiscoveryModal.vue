@@ -6,7 +6,10 @@ import type {
   AiModelSpecFeaturesEnum,
   AiProvider,
   ModelParameterConstraints,
+  ModelSyncOperation,
+  ModelSyncResult,
 } from '@/api/generated'
+import { ModelSyncOperationActionEnum, ModelSyncResultOutcomeEnum } from '@/api/generated'
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
@@ -24,15 +27,22 @@ import {
   adapterOptionsForProviderType,
   createModelFromDiscovered,
   discoveredModelProfileForProviderType,
-  groupDiscoveredModels,
   modelFeatureOptionsForProviderType,
-  modelImportFailureMessage,
   modelTypeOptionsForProviderType,
-  summarizeModelImportResults,
   type DiscoveredModelProfiles,
 } from '@/utils/model'
 import { parameterFeatures, withFeatureSupport } from '@/utils/model-feature-support'
 import {
+  appliedDifferenceCount,
+  groupDiscoveredModelsBySyncStatus,
+  hasSyncDifferences,
+  isNewDiscoveredModel,
+  syncDifferenceLabel,
+  syncDifferenceValue,
+  syncStatusOf,
+} from '@/utils/model-sync'
+import {
+  Dialog,
   Toast,
   VButton,
   VEmpty,
@@ -41,7 +51,6 @@ import {
   VEntityField,
   VLoading,
   VModal,
-  VSpace,
   VTag,
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -72,7 +81,7 @@ const editedModelIds = ref(new Set<string>())
 const featureChoices = ref<Record<string, Partial<Record<AiModelSpecFeaturesEnum, boolean>>>>({})
 
 async function refreshCatalog() {
-  if (isRefreshingCatalog.value || isImporting.value) return
+  if (isRefreshingCatalog.value || isSyncing.value) return
   isRefreshingCatalog.value = true
   try {
     const { data } = await aiConsoleApiClient.provider.refreshModelCatalog()
@@ -103,6 +112,7 @@ const selectedProviderType = computed(() =>
 const keyword = shallowRef('')
 
 const allModels = computed(() => models.value?.models || [])
+const allMissingModels = computed(() => models.value?.missingModels || [])
 
 const { results } = useFuse(keyword, allModels, {
   fuseOptions: {
@@ -118,11 +128,24 @@ const filteredModels = computed(() => {
   return results.value.map((r) => r.item)
 })
 
-const filteredModelGroups = computed(() => groupDiscoveredModels(filteredModels.value))
+const filteredMissingModels = computed(() => {
+  if (!keyword.value) {
+    return allMissingModels.value
+  }
+  const query = keyword.value.toLowerCase()
+  return allMissingModels.value.filter(
+    (model) =>
+      model.modelId?.toLowerCase().includes(query) ||
+      model.displayName?.toLowerCase().includes(query),
+  )
+})
+
+const filteredModelGroups = computed(() => groupDiscoveredModelsBySyncStatus(filteredModels.value))
 
 const selectedModels = ref<Set<string>>(new Set())
 const profileOverrides = ref<DiscoveredModelProfiles>({})
-const isImporting = shallowRef(false)
+const isSyncing = shallowRef(false)
+const selectionInitialized = ref(false)
 const selectedModelCount = computed(() => selectedModels.value.size)
 watch([() => catalogStatus.value?.fetchedAt, isLoading], ([fetchedAt, loading]) => {
   if (
@@ -130,14 +153,17 @@ watch([() => catalogStatus.value?.fetchedAt, isLoading], ([fetchedAt, loading]) 
     fetchedAt !== models.value?.catalog?.fetchedAt &&
     !loading &&
     !isRefreshingCatalog.value &&
-    !isImporting.value
+    !isSyncing.value
   ) {
     void refetchModels()
   }
 })
 const selectedModelsNeedAdapter = computed(() =>
   allModels.value.some(
-    (model) => selectedModels.value.has(model.modelId) && !profileFor(model).adapterType,
+    (model) =>
+      isNewDiscoveredModel(model) &&
+      selectedModels.value.has(model.modelId) &&
+      !profileFor(model).adapterType,
   ),
 )
 const selectedVisibleModelCount = computed(() => {
@@ -154,6 +180,20 @@ const resultText = computed(() => {
     ? `找到 ${filteredModels.value.length} 个模型`
     : `共 ${allModels.value.length} 个模型`
 })
+
+const selectedList = computed(() =>
+  allModels.value.filter((model) => selectedModels.value.has(model.modelId)),
+)
+const selectedNewModels = computed(() => selectedList.value.filter(isNewDiscoveredModel))
+const selectedUpdateModels = computed(() => selectedList.value.filter(hasSyncDifferences))
+const selectedEnableModels = computed(() =>
+  selectedList.value.filter(
+    (model) => !isNewDiscoveredModel(model) && model.localEnabled === false,
+  ),
+)
+const selectedDisableModels = computed(() =>
+  selectedList.value.filter((model) => !isNewDiscoveredModel(model) && model.localEnabled === true),
+)
 
 const modelTypeOptions = computed(() => modelTypeOptionsForProviderType(selectedProviderType.value))
 
@@ -279,11 +319,13 @@ function capabilitySourceLabels(model: DiscoveredModel) {
 }
 
 function toggleSelection(model: DiscoveredModel) {
-  if (selectedModels.value.has(model.modelId)) {
-    selectedModels.value.delete(model.modelId)
+  const next = new Set(selectedModels.value)
+  if (next.has(model.modelId)) {
+    next.delete(model.modelId)
   } else {
-    selectedModels.value.add(model.modelId)
+    next.add(model.modelId)
   }
+  selectedModels.value = next
 }
 
 function toggleFilteredSelection() {
@@ -300,50 +342,119 @@ function clearSelection() {
   selectedModels.value = new Set()
 }
 
-async function handleImport() {
-  if (isImporting.value) return
+function resetSelectionToNewModels() {
+  selectedModels.value = new Set(
+    allModels.value.filter(isNewDiscoveredModel).map((model) => model.modelId),
+  )
+}
 
-  const data = allModels.value.filter((model) => selectedModels.value.has(model.modelId))
+watch(
+  models,
+  (value) => {
+    if (!selectionInitialized.value && value) {
+      selectionInitialized.value = true
+      resetSelectionToNewModels()
+    }
+  },
+  { immediate: true },
+)
 
-  if (data.length === 0) return
+function createOperationFor(model: DiscoveredModel): ModelSyncOperation {
+  return {
+    action: ModelSyncOperationActionEnum.Create,
+    modelId: model.modelId,
+    model: createModelFromDiscovered(
+      providerName.value,
+      model,
+      {
+        ...profileFor(model),
+        parameterConstraints: manualFeatureConstraints(model),
+      },
+      selectedProviderType.value,
+    ),
+  }
+}
 
-  isImporting.value = true
+function updateOperationFor(model: DiscoveredModel): ModelSyncOperation {
+  return {
+    action: ModelSyncOperationActionEnum.Update,
+    modelId: model.modelId,
+    localModelName: model.localModelName,
+    discoveredModel: model,
+  }
+}
+
+function enabledOperationFor(model: DiscoveredModel, enabled: boolean): ModelSyncOperation {
+  return {
+    action: enabled ? ModelSyncOperationActionEnum.Enable : ModelSyncOperationActionEnum.Disable,
+    modelId: model.modelId,
+    localModelName: model.localModelName,
+  }
+}
+
+function applySync() {
+  if (isSyncing.value) return
+  const creates = selectedNewModels.value
+  const updates = selectedUpdateModels.value
+  if (creates.length === 0 && updates.length === 0) return
+  Dialog.warning({
+    title: '应用模型同步',
+    description: `将创建 ${creates.length} 个模型，并更新 ${updates.length} 个已存在模型。显示名称、启用状态、参数映射、参数约束和原生选项不会被覆盖；手动维护的能力配置也会保留。`,
+    onConfirm: async () => {
+      await runSync([...creates.map(createOperationFor), ...updates.map(updateOperationFor)])
+    },
+  })
+}
+
+function changeEnabled(enabled: boolean) {
+  if (isSyncing.value) return
+  const targets = enabled ? selectedEnableModels.value : selectedDisableModels.value
+  if (targets.length === 0) return
+  Dialog.warning({
+    title: enabled ? '批量启用模型' : '批量禁用模型',
+    description: `将${enabled ? '启用' : '禁用'} ${targets.length} 个模型，仅修改模型的启用状态。`,
+    onConfirm: async () => {
+      await runSync(targets.map((model) => enabledOperationFor(model, enabled)))
+    },
+  })
+}
+
+function formatSyncFailure(result: ModelSyncResult) {
+  return `${result.modelId || result.modelName || '未知模型'}: ${result.message || '未知错误'}`
+}
+
+async function runSync(operations: ModelSyncOperation[]) {
+  if (isSyncing.value || operations.length === 0) return
+  isSyncing.value = true
   try {
-    const results = await Promise.allSettled(
-      data.map(async (model) => {
-        const newModel = createModelFromDiscovered(
-          providerName.value,
-          model,
-          {
-            ...profileFor(model),
-            parameterConstraints: manualFeatureConstraints(model),
-          },
-          selectedProviderType.value,
-        )
-
-        await aiConsoleApiClient.model.createModel({
-          aiModel: newModel,
-        })
-        return model.modelId
-      }),
+    const { data } = await aiConsoleApiClient.provider.syncProviderModels({
+      name: providerName.value,
+      modelSyncRequest: { operations },
+    })
+    const results = data?.results || []
+    const failed = results.filter((result) => result.outcome === ModelSyncResultOutcomeEnum.Failed)
+    const skipped = results.filter(
+      (result) => result.outcome === ModelSyncResultOutcomeEnum.Skipped,
     )
-
-    const { succeeded, failed } = summarizeModelImportResults(data, results)
-
+    const succeeded = results.length - failed.length - skipped.length
     if (failed.length > 0) {
-      const failedIds = failed.map(modelImportFailureMessage).join('\n')
-      Toast.warning(`导入完成：成功 ${succeeded} 个，失败 ${failed.length} 个\n${failedIds}`)
+      Toast.warning(
+        `同步完成：成功 ${succeeded} 个，失败 ${failed.length} 个\n${failed
+          .map(formatSyncFailure)
+          .join('\n')}`,
+      )
+    } else if (skipped.length > 0) {
+      Toast.success(`同步完成：成功 ${succeeded} 个，跳过 ${skipped.length} 个`)
     } else {
-      Toast.success(`成功导入 ${succeeded} 个模型`)
+      Toast.success(`同步完成：成功 ${succeeded} 个`)
     }
-
-    modal.value?.close()
-
-    if (succeeded > 0) {
-      queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
-    }
+    await refetchModels()
+    queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
+    resetSelectionToNewModels()
+  } catch (error) {
+    Toast.error('模型同步失败: ' + (error as Error).message)
   } finally {
-    isImporting.value = false
+    isSyncing.value = false
   }
 }
 
@@ -433,7 +544,7 @@ onMounted(() => {
       <ModelCatalogStatus
         :status="catalogStatus"
         :refreshing="isRefreshingCatalog"
-        :disabled="isImporting"
+        :disabled="isSyncing"
         @refresh="refreshCatalog"
       />
       <div class=":uno: min-h-0 flex-1 overflow-y-auto">
@@ -445,9 +556,13 @@ onMounted(() => {
           <span>无法加载供应商接口信息</span>
           <VButton size="sm" @click="refetchProviderTypes()">重试</VButton>
         </div>
-        <VEmpty v-else-if="allModels.length === 0" title="无数据" message="无法获取到模型列表" />
         <VEmpty
-          v-else-if="filteredModels.length === 0"
+          v-else-if="allModels.length === 0 && allMissingModels.length === 0"
+          title="无数据"
+          message="无法获取到模型列表"
+        />
+        <VEmpty
+          v-else-if="filteredModels.length === 0 && filteredMissingModels.length === 0"
           title="无匹配结果"
           message="未找到匹配的模型"
         />
@@ -494,6 +609,7 @@ onMounted(() => {
                 </template>
                 <template #end>
                   <div
+                    v-if="isNewDiscoveredModel(model)"
                     class=":uno: max-w-[34rem] w-full flex flex-col items-stretch gap-2 sm:items-end"
                     @click.stop
                   >
@@ -572,6 +688,102 @@ onMounted(() => {
                     </div>
                     <ModelCatalogProvenance v-if="model.catalogMatch" :match="model.catalogMatch" />
                   </div>
+                  <div
+                    v-else
+                    class=":uno: max-w-[34rem] w-full flex flex-col items-stretch gap-2 sm:items-end"
+                    @click.stop
+                  >
+                    <div class=":uno: flex flex-wrap items-center justify-end gap-1.5">
+                      <VTag>
+                        {{ syncStatusOf(model) === 'disabled' ? '本地已禁用' : '已存在' }}
+                      </VTag>
+                      <VTag v-if="model.localDisplayName">
+                        本地显示名: {{ model.localDisplayName }}
+                      </VTag>
+                      <VTag v-if="model.syncable === false">手动配置，不参与同步</VTag>
+                      <VTag v-else-if="!model.differences?.length">无差异</VTag>
+                      <VTag v-else-if="!appliedDifferenceCount(model)">
+                        {{ model.differences.length }} 项差异，均保留本地
+                      </VTag>
+                      <VTag v-else>{{ appliedDifferenceCount(model) }} 项差异</VTag>
+                    </div>
+                    <div
+                      v-if="model.differences?.length"
+                      class=":uno: border border-gray-100 rounded bg-gray-50/60 p-2 text-xs"
+                    >
+                      <div
+                        v-for="difference in model.differences"
+                        :key="difference.field"
+                        class=":uno: flex flex-wrap items-center justify-end gap-1.5 py-0.5"
+                      >
+                        <span class=":uno: text-gray-500">
+                          {{ syncDifferenceLabel(difference.field) }}
+                        </span>
+                        <span class=":uno: text-gray-400">
+                          {{
+                            syncDifferenceValue(
+                              difference.field,
+                              difference.localValue,
+                              selectedProviderType,
+                            )
+                          }}
+                        </span>
+                        <span class=":uno: text-gray-300">→</span>
+                        <span
+                          :class="
+                            difference.applied ? ':uno: text-blue-700' : ':uno: text-gray-700'
+                          "
+                        >
+                          {{
+                            syncDifferenceValue(
+                              difference.field,
+                              difference.remoteValue,
+                              selectedProviderType,
+                            )
+                          }}
+                        </span>
+                        <span
+                          v-if="!difference.applied"
+                          class=":uno: border border-amber-200 rounded bg-white px-1.5 py-0.5 text-[11px] text-amber-700"
+                        >
+                          本地保留
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </VEntity>
+            </VEntityContainer>
+          </section>
+
+          <section
+            v-if="filteredMissingModels.length"
+            class=":uno: overflow-hidden border border-amber-200 rounded-lg bg-amber-50/50"
+          >
+            <div
+              class=":uno: flex items-center justify-between border-b border-amber-100 px-4 py-2.5"
+            >
+              <div>
+                <div class=":uno: text-xs text-amber-900 font-medium">远端已消失</div>
+                <div class=":uno: mt-0.5 text-xs text-amber-700">
+                  供应商不再返回这些模型，本地模型不会被自动删除。
+                </div>
+              </div>
+              <VTag>{{ filteredMissingModels.length }} 个</VTag>
+            </div>
+            <VEntityContainer>
+              <VEntity v-for="model in filteredMissingModels" :key="model.modelName">
+                <template #start>
+                  <VEntityField
+                    :title="model.displayName || model.modelId"
+                    :description="`供应商模型 ID: ${model.modelId} · 本地模型 ID: ${model.modelName}`"
+                  />
+                </template>
+                <template #end>
+                  <div class=":uno: flex flex-wrap items-center justify-end gap-1.5">
+                    <VTag>本地保留</VTag>
+                    <VTag>{{ model.enabled ? '已启用' : '已禁用' }}</VTag>
+                  </div>
                 </template>
               </VEntity>
             </VEntityContainer>
@@ -580,27 +792,42 @@ onMounted(() => {
       </div>
     </div>
     <template #footer>
-      <div class=":uno: w-full flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class=":uno: w-full flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class=":uno: text-sm text-gray-500">
-          已选择 {{ selectedModelCount }} 个模型
-          <span v-if="selectedModelsNeedAdapter"> · 请选择调用接口</span>
+          新增 {{ selectedNewModels.length }} · 待更新 {{ selectedUpdateModels.length }} · 可启用
+          {{ selectedEnableModels.length }} · 可禁用 {{ selectedDisableModels.length }}
+          <span v-if="selectedModelsNeedAdapter"> · 请为新增模型选择调用接口</span>
         </div>
-        <VSpace>
+        <div class=":uno: flex flex-wrap items-center gap-2 sm:justify-end">
           <VButton
             type="secondary"
-            @click="handleImport"
-            :loading="isImporting"
+            @click="applySync"
+            :loading="isSyncing"
             :disabled="
-              selectedModelCount === 0 ||
+              selectedNewModels.length + selectedUpdateModels.length === 0 ||
               selectedModelsNeedAdapter ||
-              isImporting ||
+              isSyncing ||
               isRefreshingCatalog
             "
           >
-            {{ selectedModelCount > 0 ? `导入 ${selectedModelCount} 个模型` : '导入' }}
+            应用同步（{{ selectedNewModels.length + selectedUpdateModels.length }}）
+          </VButton>
+          <VButton
+            type="secondary"
+            @click="changeEnabled(true)"
+            :disabled="selectedEnableModels.length === 0 || isSyncing || isRefreshingCatalog"
+          >
+            启用 {{ selectedEnableModels.length }}
+          </VButton>
+          <VButton
+            type="secondary"
+            @click="changeEnabled(false)"
+            :disabled="selectedDisableModels.length === 0 || isSyncing || isRefreshingCatalog"
+          >
+            禁用 {{ selectedDisableModels.length }}
           </VButton>
           <VButton @click="modal?.close()">关闭</VButton>
-        </VSpace>
+        </div>
       </div>
     </template>
   </VModal>

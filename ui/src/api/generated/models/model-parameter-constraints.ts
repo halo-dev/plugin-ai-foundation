@@ -18,7 +18,7 @@
 import type { Reasoning } from './reasoning';
 
 /**
- * 
+ * Administrator overrides of model parameter constraints
  * @export
  * @interface ModelParameterConstraints
  */

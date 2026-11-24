@@ -51,6 +51,8 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     private final ParameterMappingValidator parameterMappingValidator;
     private final ModelCatalogEnricher catalogEnricher;
     private final ModelsDevCatalogService catalogService;
+    private final ProviderModelSyncAnalyzer syncAnalyzer;
+    private final ProviderModelSyncService syncService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -140,6 +142,22 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                                         .implementation(String.class)
                                         .required(true))
                                 .response(responseBuilder().implementation(ProviderModelDiscoveryResponse.class)))
+                .POST(
+                        "providers/{name}/sync-models",
+                        this::syncModels,
+                        builder -> builder.operationId("SyncProviderModels")
+                                .description("Apply batch create, update, enable, disable, and ignore operations to "
+                                        + "saved models of a provider without overwriting administrator-maintained "
+                                        + "fields.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Provider name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder().required(true).implementation(ModelSyncRequest.class))
+                                .response(responseBuilder().implementation(ModelSyncResponse.class)))
                 .POST(
                         "providers/{name}/connectivity",
                         this::testConnectivity,
@@ -293,9 +311,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<Void> deleteProviderModels(String providerName) {
-        var listOptions = SelectorUtil.labelAndFieldSelectorToListOptions(
-                List.of(), List.of("spec.providerName=" + providerName));
-        return client.listAll(AiModel.class, listOptions, null)
+        return client.listAll(AiModel.class, providerModelListOptions(providerName), null)
                 .flatMap(client::delete)
                 .then();
     }
@@ -341,15 +357,46 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                                 dm.capabilities(),
                                 dm.capabilitySources(),
                                 dm.catalogMatch(),
-                                dm.catalogParameters()))
+                                dm.catalogParameters(),
+                                null,
+                                null,
+                                null,
+                                null,
+                                true,
+                                List.of()))
                         .toList())
-                .flatMap(models -> {
-                    log.info("Discovered {} models for provider {}", models.size(), providerName);
-                    return ServerResponse.ok()
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .bodyValue(
-                                    new ProviderModelDiscoveryResponse(providerName, models, catalogService.status()));
-                });
+                .flatMap(models -> client.listAll(AiModel.class, providerModelListOptions(providerName), null)
+                        .collectList()
+                        .map(savedModels -> {
+                            var analysis = syncAnalyzer.analyze(models, savedModels);
+                            log.info(
+                                    "Discovered {} models for provider {} ({} saved)",
+                                    analysis.models().size(),
+                                    providerName,
+                                    savedModels.size());
+                            return new ProviderModelDiscoveryResponse(
+                                    providerName, analysis.models(), analysis.missingModels(), catalogService.status());
+                        }))
+                .flatMap(response -> ServerResponse.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(response));
+    }
+
+    private Mono<ServerResponse> syncModels(ServerRequest request) {
+        var name = request.pathVariable("name");
+        return client.fetch(AiProvider.class, name)
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+                .flatMap(provider -> request.bodyToMono(ModelSyncRequest.class)
+                        .defaultIfEmpty(new ModelSyncRequest(List.of()))
+                        .flatMap(body -> syncService.sync(name, body)))
+                .flatMap(result -> ServerResponse.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(result));
+    }
+
+    private static ListOptions providerModelListOptions(String providerName) {
+        return SelectorUtil.labelAndFieldSelectorToListOptions(List.of(), List.of("spec.providerName=" + providerName));
     }
 
     private Mono<ServerResponse> testConnectivity(ServerRequest request) {

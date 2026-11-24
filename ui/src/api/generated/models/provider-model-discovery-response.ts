@@ -18,10 +18,13 @@
 import type { DiscoveredModelItem } from './discovered-model-item';
 // May contain unused imports in some cases
 // @ts-ignore
+import type { MissingRemoteModelItem } from './missing-remote-model-item';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { ModelCatalogStatus } from './model-catalog-status';
 
 /**
- * 
+ * Remote model discovery result with saved-model sync state.
  * @export
  * @interface ProviderModelDiscoveryResponse
  */
@@ -32,6 +35,12 @@ export interface ProviderModelDiscoveryResponse {
      * @memberof ProviderModelDiscoveryResponse
      */
     'catalog'?: ModelCatalogStatus;
+    /**
+     * 
+     * @type {Array<MissingRemoteModelItem>}
+     * @memberof ProviderModelDiscoveryResponse
+     */
+    'missingModels'?: Array<MissingRemoteModelItem>;
     /**
      * 
      * @type {Array<DiscoveredModelItem>}
