@@ -51,6 +51,7 @@ models/json-patch-inner.ts
 models/language-capability.ts
 models/language-mappings.ts
 models/metadata.ts
+models/missing-remote-model-item.ts
 models/model-capabilities.ts
 models/model-capability-sources.ts
 models/model-catalog-match.ts
@@ -64,6 +65,11 @@ models/model-parameter-constraints.ts
 models/model-parameter-definition-info.ts
 models/model-parameter-mappings.ts
 models/model-parameter-profile.ts
+models/model-sync-difference.ts
+models/model-sync-operation.ts
+models/model-sync-request.ts
+models/model-sync-response.ts
+models/model-sync-result.ts
 models/move-operation.ts
 models/normalized-usage.ts
 models/output-spec.ts

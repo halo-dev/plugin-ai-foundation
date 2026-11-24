@@ -1,5 +1,6 @@
 package run.halo.aifoundation.endpoint;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.springframework.lang.Nullable;
 import run.halo.aifoundation.capability.ModelCapabilities;
@@ -12,6 +13,7 @@ import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 
+@Schema(description = "A discovered remote model together with its relationship to saved model configuration.")
 public record DiscoveredModelItem(
         String modelId,
         String displayName,
@@ -24,4 +26,10 @@ public record DiscoveredModelItem(
         @Nullable ModelCapabilities capabilities,
         @Nullable ModelCapabilitySources capabilitySources,
         @Nullable ModelCatalogMatch catalogMatch,
-        @Nullable ModelParameterProfile catalogParameters) {}
+        @Nullable ModelParameterProfile catalogParameters,
+        @Nullable ModelSyncStatus syncStatus,
+        @Nullable String localModelName,
+        @Nullable Boolean localEnabled,
+        @Nullable String localDisplayName,
+        boolean syncable,
+        List<ModelSyncDifference> differences) {}

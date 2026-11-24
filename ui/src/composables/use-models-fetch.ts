@@ -7,6 +7,8 @@ import type {
   DiscoveredModelItemFeaturesEnum,
   DiscoveredModelItemModelTypeEnum,
   DiscoveredModelItemSourceEnum,
+  DiscoveredModelItemSyncStatusEnum,
+  ModelSyncDifference,
   ProviderModelDiscoveryResponse,
 } from '@/api/generated'
 import { useQuery } from '@tanstack/vue-query'
@@ -21,6 +23,12 @@ export type DiscoveredModel = DiscoveredModelItem & {
   source: DiscoveredModelItemSourceEnum
   confidence: DiscoveredModelItemConfidenceEnum
   adapterType?: DiscoveredModelItemAdapterTypeEnum
+  syncStatus: DiscoveredModelItemSyncStatusEnum
+  localModelName?: string | null
+  localEnabled?: boolean | null
+  localDisplayName?: string | null
+  syncable: boolean
+  differences: ModelSyncDifference[]
 }
 
 type ProviderModelDiscoveryResult = Omit<

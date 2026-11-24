@@ -1359,6 +1359,44 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/sync-models" : {
+      "post" : {
+        "description" : "Apply batch create, update, enable, disable, and ignore operations to saved models of a provider without overwriting administrator-maintained fields.",
+        "operationId" : "SyncProviderModels",
+        "parameters" : [ {
+          "description" : "Provider name",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ModelSyncRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModelSyncResponse"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/breakdown" : {
       "get" : {
         "description" : "Get usage totals grouped by a dimension.",
@@ -2443,6 +2481,12 @@
             "type" : "string",
             "enum" : [ "high", "medium", "low" ]
           },
+          "differences" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelSyncDifference"
+            }
+          },
           "displayName" : {
             "type" : "string"
           },
@@ -2452,6 +2496,18 @@
               "type" : "string",
               "enum" : [ "streaming", "vision", "audio-input", "tool-call", "structured-output", "reasoning" ]
             }
+          },
+          "localDisplayName" : {
+            "type" : "string",
+            "nullable" : true
+          },
+          "localEnabled" : {
+            "type" : "boolean",
+            "nullable" : true
+          },
+          "localModelName" : {
+            "type" : "string",
+            "nullable" : true
           },
           "modelId" : {
             "type" : "string"
@@ -2466,8 +2522,17 @@
           "source" : {
             "type" : "string",
             "enum" : [ "remote", "catalog", "rule", "manual" ]
+          },
+          "syncStatus" : {
+            "type" : "string",
+            "nullable" : true,
+            "enum" : [ "new", "existing", "disabled" ]
+          },
+          "syncable" : {
+            "type" : "boolean"
           }
-        }
+        },
+        "description" : "A discovered remote model together with its relationship to saved model configuration."
       },
       "EmbeddingMappings" : {
         "type" : "object",
@@ -2852,6 +2917,30 @@
         },
         "description" : "Metadata of Extension."
       },
+      "MissingRemoteModelItem" : {
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string",
+            "nullable" : true
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "modelId" : {
+            "type" : "string"
+          },
+          "modelName" : {
+            "type" : "string"
+          },
+          "modelType" : {
+            "type" : "string",
+            "nullable" : true,
+            "enum" : [ "language", "embedding", "rerank", "image-generation", "decision" ]
+          }
+        },
+        "description" : "A saved model that the provider no longer lists during discovery."
+      },
       "ModelCapabilities" : {
         "type" : "object",
         "properties" : {
@@ -3184,7 +3273,8 @@
           "topP" : {
             "type" : "boolean"
           }
-        }
+        },
+        "description" : "Administrator overrides of model parameter constraints"
       },
       "ModelParameterDefinitionInfo" : {
         "type" : "object",
@@ -3264,6 +3354,103 @@
             "type" : "string"
           }
         }
+      },
+      "ModelSyncDifference" : {
+        "type" : "object",
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "localValue" : {
+            "type" : "string",
+            "nullable" : true
+          },
+          "remoteValue" : {
+            "type" : "string",
+            "nullable" : true
+          }
+        },
+        "description" : "A field-level difference between discovered and saved model configuration."
+      },
+      "ModelSyncOperation" : {
+        "type" : "object",
+        "properties" : {
+          "action" : {
+            "type" : "string",
+            "enum" : [ "create", "update", "enable", "disable", "ignore" ]
+          },
+          "discoveredModel" : {
+            "$ref" : "#/components/schemas/DiscoveredModelItem"
+          },
+          "localModelName" : {
+            "type" : "string",
+            "nullable" : true
+          },
+          "model" : {
+            "$ref" : "#/components/schemas/AiModel"
+          },
+          "modelId" : {
+            "type" : "string",
+            "nullable" : true
+          }
+        },
+        "description" : "A single model sync operation."
+      },
+      "ModelSyncRequest" : {
+        "type" : "object",
+        "properties" : {
+          "operations" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelSyncOperation"
+            }
+          }
+        },
+        "description" : "Batch model sync request."
+      },
+      "ModelSyncResponse" : {
+        "type" : "object",
+        "properties" : {
+          "providerName" : {
+            "type" : "string"
+          },
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelSyncResult"
+            }
+          }
+        },
+        "description" : "Batch model sync response with one result per requested operation."
+      },
+      "ModelSyncResult" : {
+        "type" : "object",
+        "properties" : {
+          "action" : {
+            "type" : "string",
+            "enum" : [ "create", "update", "enable", "disable", "ignore" ]
+          },
+          "message" : {
+            "type" : "string",
+            "nullable" : true
+          },
+          "modelId" : {
+            "type" : "string",
+            "nullable" : true
+          },
+          "modelName" : {
+            "type" : "string",
+            "nullable" : true
+          },
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "created", "updated", "enabled", "disabled", "skipped", "failed" ]
+          }
+        },
+        "description" : "Result of one model sync operation."
       },
       "MoveOperation" : {
         "required" : [ "from", "op", "path" ],
@@ -3403,6 +3590,12 @@
           "catalog" : {
             "$ref" : "#/components/schemas/ModelCatalogStatus"
           },
+          "missingModels" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MissingRemoteModelItem"
+            }
+          },
           "models" : {
             "type" : "array",
             "items" : {
@@ -3412,7 +3605,8 @@
           "providerName" : {
             "type" : "string"
           }
-        }
+        },
+        "description" : "Remote model discovery result with saved-model sync state."
       },
       "ProviderTypeInfo" : {
         "type" : "object",

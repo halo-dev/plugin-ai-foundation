@@ -1,8 +1,10 @@
 import { aiConsoleApiClient } from '@/api'
 import type {
   AiProvider,
+  MissingRemoteModelItem,
   ModelCatalogStatus,
   ModelParameterConstraints,
+  ModelSyncRequest,
   ProviderTypeInfo,
 } from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/use-models-fetch'
@@ -12,7 +14,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 import ProviderModelsDiscoveryModal from './ProviderModelsDiscoveryModal.vue'
 
-const models = ref<{ models: DiscoveredModel[] }>({ models: [] })
+const models = ref<{
+  models: DiscoveredModel[]
+  missingModels?: MissingRemoteModelItem[]
+}>({ models: [] })
 const refetchModels = vi.fn()
 const providerTypes = ref<ProviderTypeInfo[]>([])
 const catalogStatus = ref<ModelCatalogStatus>({ available: true })
@@ -20,7 +25,7 @@ const isLoadingModels = ref(false)
 
 vi.mock('@/api', () => ({
   aiConsoleApiClient: {
-    provider: { refreshModelCatalog: vi.fn() },
+    provider: { refreshModelCatalog: vi.fn(), syncProviderModels: vi.fn() },
     model: { createModel: vi.fn(), updateModel: vi.fn() },
   },
 }))
@@ -54,7 +59,12 @@ vi.mock('@halo-dev/components', () => {
     },
   })
   return {
-    Toast: { warning: vi.fn(), success: vi.fn() },
+    Dialog: {
+      warning: vi.fn((options: { onConfirm?: () => void | Promise<void> }) =>
+        options.onConfirm?.(),
+      ),
+    },
+    Toast: { warning: vi.fn(), success: vi.fn(), error: vi.fn() },
     VButton: defineComponent({
       props: ['disabled', 'loading'],
       setup:
@@ -67,7 +77,10 @@ vi.mock('@halo-dev/components', () => {
     VEmpty: container,
     VEntity: container,
     VEntityContainer: container,
-    VEntityField: container,
+    VEntityField: defineComponent({
+      props: ['title', 'description'],
+      setup: (props) => () => h('div', `${props.title || ''} ${props.description || ''}`),
+    }),
     VLoading: container,
     VModal: container,
     VSpace: container,
@@ -82,7 +95,11 @@ const tooltipStub = {
   },
 }
 
-function model(id: string, features: DiscoveredModel['features']): DiscoveredModel {
+function model(
+  id: string,
+  features: DiscoveredModel['features'],
+  overrides: Partial<DiscoveredModel> = {},
+): DiscoveredModel {
   return {
     modelId: id,
     displayName: id,
@@ -92,6 +109,10 @@ function model(id: string, features: DiscoveredModel['features']): DiscoveredMod
     features,
     source: 'rule',
     confidence: 'medium',
+    syncStatus: 'new',
+    syncable: true,
+    differences: [],
+    ...overrides,
   }
 }
 
@@ -106,6 +127,11 @@ function mountDiscovery() {
     props: { provider },
     global: { stubs: { SearchInput: true }, directives: { tooltip: tooltipStub } },
   })
+}
+
+function syncOperations() {
+  const calls = vi.mocked(aiConsoleApiClient.provider.syncProviderModels).mock.calls
+  return calls.length ? (calls[0][0].modelSyncRequest as ModelSyncRequest).operations || [] : []
 }
 
 describe('discovery catalog refresh', () => {
@@ -131,6 +157,19 @@ describe('discovery catalog refresh', () => {
     vi.mocked(aiConsoleApiClient.provider.refreshModelCatalog).mockResolvedValue({
       data: { available: true },
     } as never)
+    vi.mocked(aiConsoleApiClient.provider.syncProviderModels).mockImplementation(
+      async (requestParameters) =>
+        ({
+          data: {
+            providerName: 'openai-prod',
+            results: (requestParameters.modelSyncRequest.operations || []).map((operation) => ({
+              modelId: operation.modelId,
+              action: operation.action,
+              outcome: operation.action === 'create' ? 'created' : 'updated',
+            })),
+          },
+        }) as never,
+    )
     vi.mocked(aiConsoleApiClient.model.createModel).mockResolvedValue({} as never)
     refetchModels.mockImplementation(async () => {
       models.value = {
@@ -139,12 +178,10 @@ describe('discovery catalog refresh', () => {
     })
   })
 
-  it('updates untouched recommendations, preserves manual deselection, and imports only on request', async () => {
+  it('updates untouched recommendations, preserves manual deselection, and syncs only on request', async () => {
     const wrapper = mountDiscovery()
     const buttons = (label: string) =>
       wrapper.findAll('button').filter((button) => button.text() === label)
-    await wrapper.findAll('input[type="checkbox"]')[0].setValue(true)
-    await wrapper.findAll('input[type="checkbox"]')[1].setValue(true)
     await buttons('工具调用')[0].trigger('click')
     await wrapper.get('button[aria-label="刷新能力目录"]').trigger('click')
     await flushPromises()
@@ -152,22 +189,17 @@ describe('discovery catalog refresh', () => {
     expect(buttons('工具调用')[0].attributes('aria-pressed')).toBe('false')
     expect(buttons('推理')[0].attributes('aria-pressed')).toBe('true')
     expect(buttons('推理')[1].attributes('aria-pressed')).toBe('true')
-    expect(aiConsoleApiClient.model.createModel).not.toHaveBeenCalled()
-    expect(aiConsoleApiClient.model.updateModel).not.toHaveBeenCalled()
+    expect(aiConsoleApiClient.provider.syncProviderModels).not.toHaveBeenCalled()
 
-    await buttons('导入 2 个模型')[0].trigger('click')
+    await buttons('应用同步（2）')[0].trigger('click')
     await flushPromises()
-    expect(aiConsoleApiClient.model.createModel).toHaveBeenCalledTimes(2)
-    expect(
-      vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel.spec.features,
-    ).toEqual(['reasoning'])
-    expect(
-      vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel.spec
-        .parameterConstraints,
-    ).toEqual({ toolCalling: false })
-    expect(
-      vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[1][0].aiModel.spec.features,
-    ).toEqual(['reasoning'])
+    expect(aiConsoleApiClient.provider.syncProviderModels).toHaveBeenCalledTimes(1)
+    const operations = syncOperations()
+    expect(operations).toHaveLength(2)
+    expect(operations[0].action).toBe('create')
+    expect(operations[0].model?.spec.features).toEqual(['reasoning'])
+    expect(operations[0].model?.spec.parameterConstraints).toEqual({ toolCalling: false })
+    expect(operations[1].model?.spec.features).toEqual(['reasoning'])
     wrapper.unmount()
   })
 
@@ -181,8 +213,7 @@ describe('discovery catalog refresh', () => {
     isLoadingModels.value = false
     await flushPromises()
     expect(refetchModels).toHaveBeenCalledTimes(1)
-    expect(aiConsoleApiClient.model.createModel).not.toHaveBeenCalled()
-    expect(aiConsoleApiClient.model.updateModel).not.toHaveBeenCalled()
+    expect(aiConsoleApiClient.provider.syncProviderModels).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
@@ -192,7 +223,6 @@ describe('discovery catalog refresh', () => {
       models.value = { models: [model('edited', ['tool-call', 'reasoning'])] }
     })
     const wrapper = mountDiscovery()
-    await wrapper.get('input[type="checkbox"]').setValue(true)
     const toolButton = wrapper.findAll('button').find((button) => button.text() === '工具调用')!
     await toolButton.trigger('click')
     await toolButton.trigger('click')
@@ -200,11 +230,11 @@ describe('discovery catalog refresh', () => {
     await flushPromises()
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '导入 1 个模型')!
+      .find((button) => button.text() === '应用同步（1）')!
       .trigger('click')
     await flushPromises()
 
-    const imported = vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel
+    const imported = syncOperations()[0].model!
     expect(imported.spec.features).toEqual(['tool-call', 'reasoning'])
     expect(imported.spec.parameterConstraints).toEqual({ toolCalling: true })
     wrapper.unmount()
@@ -225,7 +255,6 @@ describe('discovery catalog refresh', () => {
         models.value = { models: [model('edited', [])] }
       })
       const wrapper = mountDiscovery()
-      await wrapper.get('input[type="checkbox"]').setValue(true)
       await wrapper
         .findAll('button')
         .find((button) => button.text() === label)!
@@ -234,11 +263,11 @@ describe('discovery catalog refresh', () => {
       await flushPromises()
       await wrapper
         .findAll('button')
-        .find((button) => button.text() === '导入 1 个模型')!
+        .find((button) => button.text() === '应用同步（1）')!
         .trigger('click')
       await flushPromises()
 
-      const imported = vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel
+      const imported = syncOperations()[0].model!
       expect(imported.spec.parameterConstraints).toEqual(constraints)
       const laterRecommendations: ModelParameterConstraints = {
         toolCalling: true,
@@ -257,4 +286,198 @@ describe('discovery catalog refresh', () => {
       wrapper.unmount()
     },
   )
+})
+
+describe('discovery sync state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    catalogStatus.value = { available: true }
+    isLoadingModels.value = false
+    providerTypes.value = [
+      {
+        providerType: 'openai',
+        supportedModelTypes: ['language'],
+        supportedFeatures: ['tool-call'],
+        adapters: [
+          {
+            adapterType: 'openai-chat',
+            modelType: 'language',
+            supportedFeatures: ['tool-call'],
+          },
+        ],
+      },
+    ]
+    vi.mocked(aiConsoleApiClient.provider.syncProviderModels).mockImplementation(
+      async (requestParameters) =>
+        ({
+          data: {
+            providerName: 'openai-prod',
+            results: (requestParameters.modelSyncRequest.operations || []).map((operation) => ({
+              modelId: operation.modelId,
+              action: operation.action,
+              outcome:
+                operation.action === 'update'
+                  ? 'updated'
+                  : operation.action === 'enable'
+                    ? 'enabled'
+                    : operation.action === 'disable'
+                      ? 'disabled'
+                      : 'created',
+            })),
+          },
+        }) as never,
+    )
+    refetchModels.mockImplementation(async () => undefined)
+  })
+
+  it('selects new models by default and groups existing and missing models', async () => {
+    models.value = {
+      models: [
+        model('new-model', ['tool-call']),
+        model('existing-model', ['tool-call'], {
+          syncStatus: 'existing',
+          localModelName: 'saved-existing-model',
+          localEnabled: true,
+          localDisplayName: 'Existing Model',
+          differences: [
+            {
+              field: 'displayName',
+              localValue: 'Existing Model',
+              remoteValue: 'existing-model',
+              applied: false,
+            },
+          ],
+        }),
+        model('disabled-model', ['tool-call'], {
+          syncStatus: 'disabled',
+          localModelName: 'saved-disabled-model',
+          localEnabled: false,
+        }),
+      ],
+      missingModels: [
+        {
+          modelName: 'saved-missing-model',
+          modelId: 'missing-model',
+          displayName: 'Missing Model',
+          modelType: 'language',
+          enabled: true,
+        },
+      ],
+    } as never
+    const wrapper = mountDiscovery()
+    await flushPromises()
+
+    const groups = wrapper.findAll('section').map((section) => section.text())
+    expect(groups[0]).toContain('新增模型')
+    expect(groups[0]).toContain('new-model')
+    expect(groups[1]).toContain('已存在模型')
+    expect(groups[1]).toContain('Existing Model')
+    expect(groups[2]).toContain('本地已禁用')
+    expect(groups[3]).toContain('远端已消失')
+    expect(groups[3]).toContain('不会被自动删除')
+    expect(wrapper.text()).toContain('应用同步（1）')
+
+    const checkboxes = wrapper.findAll('input[type="checkbox"]')
+    expect((checkboxes[0].element as HTMLInputElement).checked).toBe(true)
+    expect((checkboxes[1].element as HTMLInputElement).checked).toBe(false)
+    expect((checkboxes[2].element as HTMLInputElement).checked).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('sends update and enable operations for selected existing models', async () => {
+    models.value = {
+      models: [
+        model('existing-model', ['tool-call'], {
+          syncStatus: 'disabled',
+          localModelName: 'saved-existing-model',
+          localEnabled: false,
+          differences: [
+            {
+              field: 'features',
+              localValue: 'tool-call',
+              remoteValue: 'tool-call, reasoning',
+              applied: true,
+            },
+          ],
+        }),
+      ],
+    }
+    const wrapper = mountDiscovery()
+    await flushPromises()
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '应用同步（1）')!
+      .trigger('click')
+    await flushPromises()
+
+    const operations = syncOperations()
+    expect(operations).toHaveLength(1)
+    expect(operations[0].action).toBe('update')
+    expect(operations[0].localModelName).toBe('saved-existing-model')
+    expect(operations[0].discoveredModel?.modelId).toBe('existing-model')
+    wrapper.unmount()
+  })
+
+  it('does not offer updates when selected models only have local-only differences', async () => {
+    models.value = {
+      models: [
+        model('existing-model', ['tool-call'], {
+          syncStatus: 'existing',
+          localModelName: 'saved-existing-model',
+          localEnabled: true,
+          localDisplayName: 'Existing Model',
+          differences: [
+            {
+              field: 'displayName',
+              localValue: 'Existing Model',
+              remoteValue: 'existing-model',
+              applied: false,
+            },
+          ],
+        }),
+      ],
+    }
+    const wrapper = mountDiscovery()
+    await flushPromises()
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('1 项差异，均保留本地')
+    const applyButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().startsWith('应用同步'))!
+    expect(applyButton.text()).toBe('应用同步（0）')
+    expect(applyButton.attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('enables locally disabled models without applying profile updates', async () => {
+    models.value = {
+      models: [
+        model('disabled-model', ['tool-call'], {
+          syncStatus: 'disabled',
+          localModelName: 'saved-disabled-model',
+          localEnabled: false,
+        }),
+      ],
+    }
+    const wrapper = mountDiscovery()
+    await flushPromises()
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '启用 1')!
+      .trigger('click')
+    await flushPromises()
+
+    const operations = syncOperations()
+    expect(operations).toHaveLength(1)
+    expect(operations[0]).toEqual({
+      action: 'enable',
+      modelId: 'disabled-model',
+      localModelName: 'saved-disabled-model',
+    })
+    wrapper.unmount()
+  })
 })

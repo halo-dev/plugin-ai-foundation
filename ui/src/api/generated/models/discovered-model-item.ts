@@ -25,9 +25,12 @@ import type { ModelCatalogMatch } from './model-catalog-match';
 // May contain unused imports in some cases
 // @ts-ignore
 import type { ModelParameterProfile } from './model-parameter-profile';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelSyncDifference } from './model-sync-difference';
 
 /**
- * 
+ * A discovered remote model together with its relationship to saved model configuration.
  * @export
  * @interface DiscoveredModelItem
  */
@@ -70,6 +73,12 @@ export interface DiscoveredModelItem {
     'confidence'?: DiscoveredModelItemConfidenceEnum;
     /**
      * 
+     * @type {Array<ModelSyncDifference>}
+     * @memberof DiscoveredModelItem
+     */
+    'differences'?: Array<ModelSyncDifference>;
+    /**
+     * 
      * @type {string}
      * @memberof DiscoveredModelItem
      */
@@ -80,6 +89,24 @@ export interface DiscoveredModelItem {
      * @memberof DiscoveredModelItem
      */
     'features'?: Array<DiscoveredModelItemFeaturesEnum>;
+    /**
+     * 
+     * @type {string}
+     * @memberof DiscoveredModelItem
+     */
+    'localDisplayName'?: string | null;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof DiscoveredModelItem
+     */
+    'localEnabled'?: boolean | null;
+    /**
+     * 
+     * @type {string}
+     * @memberof DiscoveredModelItem
+     */
+    'localModelName'?: string | null;
     /**
      * 
      * @type {string}
@@ -104,6 +131,18 @@ export interface DiscoveredModelItem {
      * @memberof DiscoveredModelItem
      */
     'source'?: DiscoveredModelItemSourceEnum;
+    /**
+     * 
+     * @type {string}
+     * @memberof DiscoveredModelItem
+     */
+    'syncStatus'?: DiscoveredModelItemSyncStatusEnum | null;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof DiscoveredModelItem
+     */
+    'syncable'?: boolean;
 }
 
 export const DiscoveredModelItemAdapterTypeEnum = {
@@ -212,5 +251,12 @@ export const DiscoveredModelItemSourceEnum = {
 } as const;
 
 export type DiscoveredModelItemSourceEnum = typeof DiscoveredModelItemSourceEnum[keyof typeof DiscoveredModelItemSourceEnum];
+export const DiscoveredModelItemSyncStatusEnum = {
+    New: 'new',
+    Existing: 'existing',
+    Disabled: 'disabled'
+} as const;
+
+export type DiscoveredModelItemSyncStatusEnum = typeof DiscoveredModelItemSyncStatusEnum[keyof typeof DiscoveredModelItemSyncStatusEnum];
 
 

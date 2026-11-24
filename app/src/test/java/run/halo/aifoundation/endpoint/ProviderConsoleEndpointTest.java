@@ -64,13 +64,22 @@ class ProviderConsoleEndpointTest {
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", openAiType));
         when(providerClientCache.getProviderType("openai")).thenReturn(openAiType);
 
+        var parameterMappingValidator = new ParameterMappingValidator(new ParameterMappingTemplateRegistry());
         var endpoint = new ProviderConsoleEndpoint(
                 client,
                 providerClientCache,
                 secretResolver,
-                new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+                parameterMappingValidator,
                 new ModelCatalogEnricher(catalogService),
-                catalogService);
+                catalogService,
+                new ProviderModelSyncAnalyzer(),
+                new ProviderModelSyncService(
+                        client,
+                        new ModelConsoleModelValidator(
+                                client,
+                                providerClientCache,
+                                parameterMappingValidator,
+                                mock(run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver.class))));
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
                 .configureClient()
                 .build();
@@ -458,6 +467,7 @@ class ProviderConsoleEndpointTest {
                                 DiscoveryConfidence.LOW))));
         when(openAiType.recommendAdapterType(any(DiscoveredModel.class)))
                 .thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
+        when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
 
         webTestClient
                 .get()
@@ -480,12 +490,104 @@ class ProviderConsoleEndpointTest {
                 .isEqualTo("low")
                 .jsonPath("$.models[0].adapterType")
                 .isEqualTo("openai-chat")
+                .jsonPath("$.models[0].syncStatus")
+                .isEqualTo("new")
+                .jsonPath("$.models[0].syncable")
+                .isEqualTo(true)
+                .jsonPath("$.models[0].localModelName")
+                .doesNotExist()
+                .jsonPath("$.missingModels")
+                .isEmpty()
                 .jsonPath("$.models[1].modelId")
                 .isEqualTo("text-embedding-3-small")
                 .jsonPath("$.models[1].modelType")
                 .isEqualTo("embedding")
                 .jsonPath("$.models[1].adapterType")
                 .isEqualTo("openai-embedding");
+    }
+
+    @Test
+    void discoverModels_reportsSavedStateDifferencesAndMissingModels() {
+        var provider = provider("openai-prod", "openai");
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(isNull())).thenReturn(Mono.just("sk-test"));
+        when(openAiType.discoverModels(provider, "sk-test"))
+                .thenReturn(Mono.just(List.of(new DiscoveredModel(
+                        "gpt-4",
+                        "gpt-4",
+                        ModelType.LANGUAGE,
+                        Set.of(ModelFeature.STREAMING),
+                        AdapterType.OPENAI_CHAT,
+                        DiscoverySource.RULE,
+                        DiscoveryConfidence.LOW))));
+        var saved = model("openai-prod", "gpt-4", false);
+        saved.getSpec().setDisplayName("My GPT");
+        saved.getSpec().setDiscoverySource(DiscoverySource.RULE);
+        saved.getSpec().setModelType(ModelType.EMBEDDING);
+        saved.getSpec().setFeatures(List.of());
+        var missing = model("openai-prod", "retired-model", true);
+        when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.just(saved, missing));
+
+        webTestClient
+                .get()
+                .uri("/providers/openai-prod/discover-models")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.models[0].syncStatus")
+                .isEqualTo("disabled")
+                .jsonPath("$.models[0].localModelName")
+                .isEqualTo("openai-prod-gpt-4")
+                .jsonPath("$.models[0].localDisplayName")
+                .isEqualTo("My GPT")
+                .jsonPath("$.models[0].syncable")
+                .isEqualTo(true)
+                .jsonPath("$.models[0].differences[?(@.field == 'displayName')].applied")
+                .isEqualTo(List.of(false))
+                .jsonPath("$.models[0].differences[?(@.field == 'modelType')].applied")
+                .isEqualTo(List.of(true))
+                .jsonPath("$.missingModels[0].modelId")
+                .isEqualTo("retired-model")
+                .jsonPath("$.missingModels[0].enabled")
+                .isEqualTo(true);
+    }
+
+    @Test
+    void syncModels_returnsPerOperationOutcome() {
+        var provider = provider("openai-prod", "openai");
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+
+        webTestClient
+                .post()
+                .uri("/providers/openai-prod/sync-models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new ModelSyncRequest(
+                        List.of(new ModelSyncOperation(ModelSyncAction.IGNORE, "gpt-4", "saved-gpt-4", null, null))))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.providerName")
+                .isEqualTo("openai-prod")
+                .jsonPath("$.results[0].action")
+                .isEqualTo("ignore")
+                .jsonPath("$.results[0].outcome")
+                .isEqualTo("skipped");
+    }
+
+    @Test
+    void syncModels_providerNotFound_returns404() {
+        when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
+
+        webTestClient
+                .post()
+                .uri("/providers/missing/sync-models")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new ModelSyncRequest(List.of()))
+                .exchange()
+                .expectStatus()
+                .isNotFound();
     }
 
     // ---- helpers ----
@@ -519,6 +621,12 @@ class ProviderConsoleEndpointTest {
         spec.setProviderName(providerName);
         spec.setModelId(modelId);
         m.setSpec(spec);
+        return m;
+    }
+
+    private AiModel model(String providerName, String modelId, boolean enabled) {
+        var m = model(providerName, modelId);
+        m.getSpec().setEnabled(enabled);
         return m;
     }
 }

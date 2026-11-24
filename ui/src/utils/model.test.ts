@@ -11,6 +11,7 @@ import {
   DiscoveredModelItemAdapterTypeEnum,
   DiscoveredModelItemConfidenceEnum,
   DiscoveredModelItemSourceEnum,
+  DiscoveredModelItemSyncStatusEnum,
   LanguageCapabilityInputSourcesEnum,
   ModelCapabilitySourcesLanguageEnum,
   ProviderTypeInfoSupportedFeaturesEnum,
@@ -675,6 +676,9 @@ function discoveredModel(
     confidence: evidence.confidence || DiscoveredModelItemConfidenceEnum.Low,
     capabilities: evidence.capabilities,
     capabilitySources: evidence.capabilitySources,
+    syncStatus: DiscoveredModelItemSyncStatusEnum.New,
+    syncable: true,
+    differences: [],
   }
 }
 
