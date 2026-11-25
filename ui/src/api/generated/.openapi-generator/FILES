@@ -68,6 +68,8 @@ models/move-operation.ts
 models/normalized-usage.ts
 models/output-spec.ts
 models/parameter-mapping-template-info.ts
+models/provider-health-check.ts
+models/provider-health-report.ts
 models/provider-model-discovery-response.ts
 models/provider-type-info.ts
 models/reasoning-mapping.ts

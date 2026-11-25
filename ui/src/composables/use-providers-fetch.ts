@@ -1,17 +1,18 @@
 import { aiConsoleApiClient } from '@/api'
 import { useQuery, type QueryClient } from '@tanstack/vue-query'
-import type { Ref } from 'vue'
+import { toValue, type MaybeRefOrGetter } from 'vue'
 
 export const QK_PROVIDERS = 'plugin:ai-foundation:providers'
 export const QK_PROVIDER = 'plugin:ai-foundation:provider'
 
 export function reloadProviderQueries(
   queryClient: QueryClient,
-  providerName?: Ref<string | undefined> | string,
+  providerName?: MaybeRefOrGetter<string | undefined>,
 ) {
+  const name = toValue(providerName)
   queryClient.refetchQueries({ queryKey: [QK_PROVIDERS] })
   queryClient.refetchQueries({
-    queryKey: providerName ? [QK_PROVIDER, providerName] : [QK_PROVIDER],
+    queryKey: name ? [QK_PROVIDER, name] : [QK_PROVIDER],
   })
 }
 

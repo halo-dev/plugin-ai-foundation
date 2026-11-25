@@ -2,6 +2,7 @@ package run.halo.aifoundation.endpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -9,12 +10,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
@@ -26,6 +33,11 @@ import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.diagnostics.ProviderCheckResult;
+import run.halo.aifoundation.provider.diagnostics.ProviderCheckTarget;
+import run.halo.aifoundation.provider.diagnostics.ProviderHealthCheck;
+import run.halo.aifoundation.provider.diagnostics.ProviderHealthChecker;
+import run.halo.aifoundation.provider.diagnostics.ProviderHealthReport;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -45,6 +57,7 @@ class ProviderConsoleEndpointTest {
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
     private final SecretResolver secretResolver = mock(SecretResolver.class);
     private final ModelsDevCatalogService catalogService = mock(ModelsDevCatalogService.class);
+    private final ProviderHealthChecker healthChecker = mock(ProviderHealthChecker.class);
     private AiProviderType openAiType;
 
     private WebTestClient webTestClient;
@@ -70,7 +83,8 @@ class ProviderConsoleEndpointTest {
                 secretResolver,
                 new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
                 new ModelCatalogEnricher(catalogService),
-                catalogService);
+                catalogService,
+                healthChecker);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
                 .configureClient()
                 .build();
@@ -486,6 +500,275 @@ class ProviderConsoleEndpointTest {
                 .isEqualTo("embedding")
                 .jsonPath("$.models[1].adapterType")
                 .isEqualTo("openai-embedding");
+    }
+
+    // ---- connectivity ----
+
+    @Test
+    void connectivity_returnsStructuredReport() {
+        var provider = provider("openai-prod", "openai");
+        var checkedAt = Instant.parse("2026-11-24T10:00:00Z");
+        var report = ProviderHealthReport.builder()
+                .providerName("openai-prod")
+                .phase(AiProvider.AiProviderStatus.Phase.OK)
+                .message("Connectivity check passed")
+                .checkedAt(checkedAt)
+                .checks(List.of(ProviderHealthCheck.builder()
+                        .target(ProviderCheckTarget.NETWORK)
+                        .result(ProviderCheckResult.PASSED)
+                        .checkedAt(checkedAt)
+                        .build()))
+                .build();
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(healthChecker.checkAndPersist(any(AiProvider.class), eq(false))).thenReturn(Mono.just(report));
+
+        webTestClient
+                .post()
+                .uri("/providers/openai-prod/connectivity")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.providerName")
+                .isEqualTo("openai-prod")
+                .jsonPath("$.phase")
+                .isEqualTo("OK")
+                .jsonPath("$.checks[0].target")
+                .isEqualTo("NETWORK")
+                .jsonPath("$.checks[0].result")
+                .isEqualTo("PASSED");
+    }
+
+    @Test
+    void connectivity_passesDeepOption() {
+        var provider = provider("openai-prod", "openai");
+        var report = ProviderHealthReport.builder()
+                .providerName("openai-prod")
+                .phase(AiProvider.AiProviderStatus.Phase.OK)
+                .message("Connectivity check passed")
+                .checkedAt(Instant.parse("2026-11-24T10:00:00Z"))
+                .checks(List.of())
+                .build();
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(healthChecker.checkAndPersist(any(AiProvider.class), eq(true))).thenReturn(Mono.just(report));
+
+        webTestClient
+                .post()
+                .uri("/providers/openai-prod/connectivity?deep=true")
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        verify(healthChecker).checkAndPersist(provider, true);
+    }
+
+    @Test
+    void connectivity_providerNotFound_returns404() {
+        when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
+
+        webTestClient
+                .post()
+                .uri("/providers/missing/connectivity")
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+    }
+
+    // ---- update ----
+
+    @Test
+    void update_healthAffectingChange_resetsStatus() {
+        var existing = provider("openai-prod", "openai");
+        existing.getSpec().setBaseUrl("https://old.example.com/v1");
+        var status = new AiProvider.AiProviderStatus();
+        status.setPhase(AiProvider.AiProviderStatus.Phase.OK);
+        status.setMessage("Connectivity check passed");
+        status.setLastCheckedAt(Instant.parse("2026-11-24T09:00:00Z"));
+        status.setChecks(List.of(ProviderHealthCheck.builder()
+                .target(ProviderCheckTarget.NETWORK)
+                .result(ProviderCheckResult.PASSED)
+                .build()));
+        existing.setStatus(status);
+
+        var update = provider("openai-prod", "openai");
+        update.getSpec().setBaseUrl("https://new.example.com/v1");
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(existing));
+        when(client.update(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient
+                .put()
+                .uri("/providers/openai-prod")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(update)
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        verify(client)
+                .update(argThat((AiProvider provider) ->
+                        provider.getStatus().getPhase() == AiProvider.AiProviderStatus.Phase.UNKNOWN
+                                && provider.getStatus().getChecks().isEmpty()
+                                && provider.getStatus().getFailureCategory() == null
+                                && provider.getStatus().getLastCheckedAt() != null));
+    }
+
+    @Test
+    void update_displayNameOnly_keepsStatus() {
+        var existing = provider("openai-prod", "openai");
+        existing.getSpec().setBaseUrl("https://api.example.com/v1");
+        var status = new AiProvider.AiProviderStatus();
+        status.setPhase(AiProvider.AiProviderStatus.Phase.OK);
+        status.setMessage("Connectivity check passed");
+        status.setChecks(List.of(ProviderHealthCheck.builder()
+                .target(ProviderCheckTarget.NETWORK)
+                .result(ProviderCheckResult.PASSED)
+                .build()));
+        existing.setStatus(status);
+
+        var update = provider("openai-prod", "openai");
+        update.getSpec().setBaseUrl("https://api.example.com/v1");
+        update.getSpec().setDisplayName("Renamed provider");
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(existing));
+        when(client.update(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient
+                .put()
+                .uri("/providers/openai-prod")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(update)
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        verify(client)
+                .update(argThat(
+                        (AiProvider provider) -> provider.getStatus().getPhase() == AiProvider.AiProviderStatus.Phase.OK
+                                && !provider.getStatus().getChecks().isEmpty()));
+    }
+
+    @ParameterizedTest(name = "{0} reset")
+    @MethodSource("healthAffectingSpecUpdates")
+    void update_eachHealthAffectingField_resetsStatus(String fieldName, Consumer<AiProvider.AiProviderSpec> mutation) {
+        var existing = provider("openai-prod", "openai");
+        existing.getSpec().setBaseUrl("https://api.example.com/v1");
+        var status = new AiProvider.AiProviderStatus();
+        status.setPhase(AiProvider.AiProviderStatus.Phase.OK);
+        status.setMessage("Connectivity check passed");
+        status.setLastCheckedAt(Instant.parse("2026-11-24T09:00:00Z"));
+        status.setChecks(List.of(ProviderHealthCheck.builder()
+                .target(ProviderCheckTarget.NETWORK)
+                .result(ProviderCheckResult.PASSED)
+                .build()));
+        existing.setStatus(status);
+
+        var update = provider("openai-prod", "openai");
+        update.getSpec().setBaseUrl("https://api.example.com/v1");
+        mutation.accept(update.getSpec());
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(existing));
+        when(client.update(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient
+                .put()
+                .uri("/providers/openai-prod")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(update)
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        verify(client)
+                .update(argThat((AiProvider provider) ->
+                        provider.getStatus().getPhase() == AiProvider.AiProviderStatus.Phase.UNKNOWN
+                                && provider.getStatus().getChecks().isEmpty()
+                                && provider.getStatus().getFailureCategory() == null
+                                && provider.getStatus().getLastCheckedAt() != null));
+    }
+
+    static Stream<Arguments> healthAffectingSpecUpdates() {
+        return Stream.of(
+                Arguments.of("chatEndpointPath", (Consumer<AiProvider.AiProviderSpec>)
+                        spec -> spec.setChatEndpointPath("/v1/chat/completions")),
+                Arguments.of("embeddingEndpointPath", (Consumer<AiProvider.AiProviderSpec>)
+                        spec -> spec.setEmbeddingEndpointPath("/v1/embeddings")),
+                Arguments.of("rerankEndpointPath", (Consumer<AiProvider.AiProviderSpec>)
+                        spec -> spec.setRerankEndpointPath("/v1/rerank")),
+                Arguments.of("imageEndpointPath", (Consumer<AiProvider.AiProviderSpec>)
+                        spec -> spec.setImageEndpointPath("/v1/images")),
+                Arguments.of("apiKeySecretName", (Consumer<AiProvider.AiProviderSpec>)
+                        spec -> spec.setApiKeySecretName("other-secret")),
+                Arguments.of("proxySettings", (Consumer<AiProvider.AiProviderSpec>) spec -> {
+                    spec.setProxyHost("proxy.example.com");
+                    spec.setProxyPort(8080);
+                }));
+    }
+
+    @Test
+    void update_providerTypeChange_resetsStatus() {
+        var otherType = mock(AiProviderType.class);
+        when(otherType.getProviderType()).thenReturn("deepseek");
+        when(otherType.requiresBaseUrl()).thenReturn(false);
+        when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", openAiType, "deepseek", otherType));
+        when(providerClientCache.getProviderType("deepseek")).thenReturn(otherType);
+
+        var existing = provider("openai-prod", "openai");
+        var status = new AiProvider.AiProviderStatus();
+        status.setPhase(AiProvider.AiProviderStatus.Phase.OK);
+        status.setChecks(List.of(ProviderHealthCheck.builder()
+                .target(ProviderCheckTarget.NETWORK)
+                .result(ProviderCheckResult.PASSED)
+                .build()));
+        existing.setStatus(status);
+
+        var update = provider("openai-prod", "deepseek");
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(existing));
+        when(client.update(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient
+                .put()
+                .uri("/providers/openai-prod")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(update)
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        verify(client)
+                .update(argThat((AiProvider provider) ->
+                        provider.getStatus().getPhase() == AiProvider.AiProviderStatus.Phase.UNKNOWN
+                                && provider.getStatus().getChecks().isEmpty()));
+    }
+
+    @Test
+    void update_enabledOnly_keepsStatus() {
+        var existing = provider("openai-prod", "openai");
+        existing.getSpec().setBaseUrl("https://api.example.com/v1");
+        var status = new AiProvider.AiProviderStatus();
+        status.setPhase(AiProvider.AiProviderStatus.Phase.OK);
+        status.setChecks(List.of(ProviderHealthCheck.builder()
+                .target(ProviderCheckTarget.NETWORK)
+                .result(ProviderCheckResult.PASSED)
+                .build()));
+        existing.setStatus(status);
+
+        var update = provider("openai-prod", "openai");
+        update.getSpec().setBaseUrl("https://api.example.com/v1");
+        update.getSpec().setEnabled(false);
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(existing));
+        when(client.update(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient
+                .put()
+                .uri("/providers/openai-prod")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(update)
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        verify(client)
+                .update(argThat(
+                        (AiProvider provider) -> provider.getStatus().getPhase() == AiProvider.AiProviderStatus.Phase.OK
+                                && !provider.getStatus().getChecks().isEmpty()));
     }
 
     // ---- helpers ----

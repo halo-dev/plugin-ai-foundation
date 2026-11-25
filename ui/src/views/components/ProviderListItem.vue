@@ -1,6 +1,11 @@
 <script lang="ts" setup>
 import { AiProviderStatusPhaseEnum, type AiProvider } from '@/api/generated'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
+import {
+  providerStatusDotState,
+  providerStatusLabel,
+  truncateProviderText,
+} from '@/utils/provider-health'
 import { VAvatar, VStatusDot, type StatusDotState } from '@halo-dev/components'
 import { computed, toRefs } from 'vue'
 
@@ -17,14 +22,16 @@ const statusState = computed<StatusDotState>(() => {
   if (props.provider.metadata.deletionTimestamp) {
     return 'warning'
   }
-  switch (props.provider.status?.phase) {
-    case AiProviderStatusPhaseEnum.Ok:
-      return 'success'
-    case AiProviderStatusPhaseEnum.Error:
-      return 'error'
-    default:
-      return 'default'
+  return providerStatusDotState(props.provider.status)
+})
+
+const statusLabel = computed(() => providerStatusLabel(props.provider.status))
+
+const abnormalSummary = computed(() => {
+  if (props.provider.status?.phase !== AiProviderStatusPhaseEnum.Error) {
+    return undefined
   }
+  return truncateProviderText(props.provider.status.message, 60)
 })
 </script>
 <template>
@@ -57,9 +64,26 @@ const statusState = computed<StatusDotState>(() => {
         <span class=":uno: text-gray-300">/</span>
         <span class=":uno: truncate">{{ provider.metadata.name }}</span>
       </div>
+      <div
+        v-if="abnormalSummary"
+        class=":uno: mt-1 min-w-0 truncate text-xs text-red-600"
+        :title="provider.status?.message"
+      >
+        {{ abnormalSummary }}
+      </div>
     </div>
-    <div class=":uno: flex-none">
+    <div class=":uno: flex flex-none items-center gap-1.5">
       <VStatusDot :state="statusState" :animate="!!provider.metadata.deletionTimestamp" />
+      <span
+        class=":uno: text-xs"
+        :class="{
+          ':uno: text-green-600': statusState === 'success',
+          ':uno: text-red-600': statusState === 'error',
+          ':uno: text-gray-500': statusState !== 'success' && statusState !== 'error',
+        }"
+      >
+        {{ statusLabel }}
+      </span>
     </div>
   </button>
 </template>
