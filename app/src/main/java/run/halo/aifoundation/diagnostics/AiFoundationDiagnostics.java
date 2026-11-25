@@ -23,6 +23,9 @@ public final class AiFoundationDiagnostics {
     private static final Pattern HEADER_SECRET =
             Pattern.compile("(?im)(authorization|x-api-key|api-key|api[_-]?key|access[_-]?token|bearer[_-]?token)"
                     + "\\s*[:=]\\s*([^\\r\\n,}]+)");
+    private static final Pattern URL_USERINFO = Pattern.compile("(?i)(://[^/@\\s:]+):([^/@\\s]*)@");
+    private static final Pattern BEARER_VALUE = Pattern.compile("(?i)(bearer\\s+)[A-Za-z0-9._~+/=\\-]+");
+    private static final Pattern API_KEY_TOKEN = Pattern.compile("(?i)\\b(?:sk|pk|rk)-[A-Za-z0-9_-]{8,}\\b");
 
     private AiFoundationDiagnostics() {}
 
@@ -118,7 +121,10 @@ public final class AiFoundationDiagnostics {
             return value;
         }
         var jsonRedacted = JSON_SECRET.matcher(value).replaceAll("$1[REDACTED]$2");
-        return HEADER_SECRET.matcher(jsonRedacted).replaceAll("$1=[REDACTED]");
+        var headerRedacted = HEADER_SECRET.matcher(jsonRedacted).replaceAll("$1=[REDACTED]");
+        var urlRedacted = URL_USERINFO.matcher(headerRedacted).replaceAll("$1:[REDACTED]@");
+        var bearerRedacted = BEARER_VALUE.matcher(urlRedacted).replaceAll("$1[REDACTED]");
+        return API_KEY_TOKEN.matcher(bearerRedacted).replaceAll("[REDACTED]");
     }
 
     private static String diagnosticId(GenerationResponseMetadata response) {

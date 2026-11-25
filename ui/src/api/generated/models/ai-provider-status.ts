@@ -13,6 +13,9 @@
  */
 
 
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ProviderHealthCheck } from './provider-health-check';
 
 /**
  * 
@@ -20,6 +23,18 @@
  * @interface AiProviderStatus
  */
 export interface AiProviderStatus {
+    /**
+     * Per-target results of the latest connectivity check
+     * @type {Array<ProviderHealthCheck>}
+     * @memberof AiProviderStatus
+     */
+    'checks'?: Array<ProviderHealthCheck>;
+    /**
+     * Stable classification of a provider health failure
+     * @type {string}
+     * @memberof AiProviderStatus
+     */
+    'failureCategory'?: AiProviderStatusFailureCategoryEnum;
     /**
      * Timestamp of the last connectivity check
      * @type {string}
@@ -40,6 +55,17 @@ export interface AiProviderStatus {
     'phase'?: AiProviderStatusPhaseEnum;
 }
 
+export const AiProviderStatusFailureCategoryEnum = {
+    Configuration: 'CONFIGURATION',
+    Authentication: 'AUTHENTICATION',
+    Network: 'NETWORK',
+    RateLimited: 'RATE_LIMITED',
+    ProviderError: 'PROVIDER_ERROR',
+    CapabilityUnsupported: 'CAPABILITY_UNSUPPORTED',
+    Unknown: 'UNKNOWN'
+} as const;
+
+export type AiProviderStatusFailureCategoryEnum = typeof AiProviderStatusFailureCategoryEnum[keyof typeof AiProviderStatusFailureCategoryEnum];
 export const AiProviderStatusPhaseEnum = {
     Unknown: 'UNKNOWN',
     Ok: 'OK',

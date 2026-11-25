@@ -1305,7 +1305,7 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/connectivity" : {
       "post" : {
-        "description" : "Test provider connectivity.",
+        "description" : "Run a structured provider health check and persist the result.",
         "operationId" : "TestProviderConnectivity",
         "parameters" : [ {
           "description" : "Provider name",
@@ -1315,13 +1315,20 @@
           "schema" : {
             "type" : "string"
           }
+        }, {
+          "description" : "Also probe chat and embedding with a minimal model call; may consume provider quota.",
+          "in" : "query",
+          "name" : "deep",
+          "schema" : {
+            "type" : "boolean"
+          }
         } ],
         "responses" : {
           "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "string"
+                  "$ref" : "#/components/schemas/ProviderHealthReport"
                 }
               }
             },
@@ -2159,6 +2166,18 @@
       "AiProviderStatus" : {
         "type" : "object",
         "properties" : {
+          "checks" : {
+            "type" : "array",
+            "description" : "Per-target results of the latest connectivity check",
+            "items" : {
+              "$ref" : "#/components/schemas/ProviderHealthCheck"
+            }
+          },
+          "failureCategory" : {
+            "type" : "string",
+            "description" : "Stable classification of a provider health failure",
+            "enum" : [ "CONFIGURATION", "AUTHENTICATION", "NETWORK", "RATE_LIMITED", "PROVIDER_ERROR", "CAPABILITY_UNSUPPORTED", "UNKNOWN" ]
+          },
           "lastCheckedAt" : {
             "type" : "string",
             "description" : "Timestamp of the last connectivity check",
@@ -3396,6 +3415,91 @@
             "type" : "string"
           }
         }
+      },
+      "ProviderHealthCheck" : {
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "Stable classification of a provider health failure",
+            "enum" : [ "CONFIGURATION", "AUTHENTICATION", "NETWORK", "RATE_LIMITED", "PROVIDER_ERROR", "CAPABILITY_UNSUPPORTED", "UNKNOWN" ]
+          },
+          "checkedAt" : {
+            "type" : "string",
+            "description" : "Time when this target finished",
+            "format" : "date-time"
+          },
+          "detail" : {
+            "type" : "string",
+            "description" : "Sanitized and bounded raw error summary for developer investigation"
+          },
+          "httpStatus" : {
+            "type" : "integer",
+            "description" : "Provider HTTP status code when one was received",
+            "format" : "int32"
+          },
+          "latencyMs" : {
+            "type" : "integer",
+            "description" : "Elapsed time of the check in milliseconds",
+            "format" : "int64"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "Safe, human-readable summary"
+          },
+          "result" : {
+            "type" : "string",
+            "description" : "Result of an individual provider health check",
+            "enum" : [ "PASSED", "FAILED", "SKIPPED" ]
+          },
+          "skipReason" : {
+            "type" : "string",
+            "description" : "Reason a provider health check target was skipped",
+            "enum" : [ "NOT_REQUESTED", "NO_MODEL", "PROVIDER_DISABLED", "BLOCKED_BY_PREVIOUS_FAILURE", "UNSUPPORTED" ]
+          },
+          "target" : {
+            "type" : "string",
+            "description" : "Category of an individual provider health check",
+            "enum" : [ "CONFIGURATION", "NETWORK", "AUTHENTICATION", "MODEL_DISCOVERY", "CHAT", "EMBEDDING" ]
+          }
+        },
+        "description" : "One target result in a provider health report"
+      },
+      "ProviderHealthReport" : {
+        "type" : "object",
+        "properties" : {
+          "checkedAt" : {
+            "type" : "string",
+            "description" : "Time when the report was produced",
+            "format" : "date-time"
+          },
+          "checks" : {
+            "type" : "array",
+            "description" : "Per-target check results in a stable order",
+            "items" : {
+              "$ref" : "#/components/schemas/ProviderHealthCheck"
+            }
+          },
+          "failureCategory" : {
+            "type" : "string",
+            "description" : "Stable classification of a provider health failure",
+            "enum" : [ "CONFIGURATION", "AUTHENTICATION", "NETWORK", "RATE_LIMITED", "PROVIDER_ERROR", "CAPABILITY_UNSUPPORTED", "UNKNOWN" ]
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "Safe summary of the primary failure or of the successful check"
+          },
+          "phase" : {
+            "type" : "string",
+            "description" : "Overall provider phase",
+            "enum" : [ "UNKNOWN", "OK", "ERROR" ]
+          },
+          "providerName" : {
+            "type" : "string",
+            "description" : "AiProvider.metadata.name"
+          }
+        },
+        "description" : "Latest structured provider health report"
       },
       "ProviderModelDiscoveryResponse" : {
         "type" : "object",

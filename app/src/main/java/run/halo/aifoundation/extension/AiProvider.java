@@ -4,8 +4,11 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import run.halo.aifoundation.provider.diagnostics.ProviderFailureCategory;
+import run.halo.aifoundation.provider.diagnostics.ProviderHealthCheck;
 import run.halo.app.extension.AbstractExtension;
 import run.halo.app.extension.GVK;
 
@@ -81,6 +84,12 @@ public class AiProvider extends AbstractExtension {
 
         @Schema(description = "Timestamp of the last connectivity check")
         private Instant lastCheckedAt;
+
+        @Schema(description = "Failure category of the primary failed check, or null when no check failed")
+        private ProviderFailureCategory failureCategory;
+
+        @Schema(description = "Per-target results of the latest connectivity check")
+        private List<ProviderHealthCheck> checks = List.of();
 
         public enum Phase {
             UNKNOWN,

@@ -6,9 +6,8 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -26,6 +25,8 @@ import run.halo.aifoundation.catalog.ModelsDevCatalogService;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.diagnostics.ProviderHealthChecker;
+import run.halo.aifoundation.provider.diagnostics.ProviderHealthReport;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
@@ -51,6 +52,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     private final ParameterMappingValidator parameterMappingValidator;
     private final ModelCatalogEnricher catalogEnricher;
     private final ModelsDevCatalogService catalogService;
+    private final ProviderHealthChecker healthChecker;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -144,7 +146,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                         "providers/{name}/connectivity",
                         this::testConnectivity,
                         builder -> builder.operationId("TestProviderConnectivity")
-                                .description("Test provider connectivity.")
+                                .description("Run a structured provider health check and persist the result.")
                                 .tag(tag)
                                 .parameter(parameterBuilder()
                                         .name("name")
@@ -152,7 +154,14 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                                         .description("Provider name")
                                         .implementation(String.class)
                                         .required(true))
-                                .response(responseBuilder().implementation(Map.class)))
+                                .parameter(parameterBuilder()
+                                        .name("deep")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Also probe chat and embedding with a minimal model call; "
+                                                + "may consume provider quota.")
+                                        .implementation(Boolean.class)
+                                        .required(false))
+                                .response(responseBuilder().implementation(ProviderHealthReport.class)))
                 .build();
     }
 
@@ -229,7 +238,11 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 .switchIfEmpty(Mono.error(
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + existingName)))
                 .flatMap(existing -> {
+                    var healthChanged = healthAffectingConfigChanged(existing.getSpec(), provider.getSpec());
                     existing.setSpec(provider.getSpec());
+                    if (healthChanged) {
+                        existing.setStatus(ProviderHealthChecker.resetStatus(existing.getStatus()));
+                    }
                     providerClientCache.invalidate(existingName);
                     return client.update(existing);
                 });
@@ -354,67 +367,28 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> testConnectivity(ServerRequest request) {
         var name = request.pathVariable("name");
+        var deep = request.queryParam("deep").map(Boolean::parseBoolean).orElse(false);
         return client.fetch(AiProvider.class, name)
                 .switchIfEmpty(
                         Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
-                .flatMap(provider -> {
-                    var secretName = provider.getSpec().getApiKeySecretName();
-                    return secretResolver
-                            .resolveApiKey(secretName)
-                            .flatMap(apiKey -> performConnectivityCheck(provider, apiKey))
-                            .flatMap(result -> updateConnectivityStatus(provider, result))
-                            .flatMap(updated -> ServerResponse.ok()
-                                    .contentType(MediaType.APPLICATION_JSON)
-                                    .bodyValue(Map.of(
-                                            "phase",
-                                                    updated.getStatus()
-                                                            .getPhase()
-                                                            .name(),
-                                            "message",
-                                                    updated.getStatus().getMessage() != null
-                                                            ? updated.getStatus()
-                                                                    .getMessage()
-                                                            : "",
-                                            "lastCheckedAt",
-                                                    updated.getStatus()
-                                                            .getLastCheckedAt()
-                                                            .toString())));
-                });
+                .flatMap(provider -> healthChecker.checkAndPersist(provider, deep))
+                .flatMap(report -> ServerResponse.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(report));
     }
 
-    private Mono<AiProvider> updateConnectivityStatus(AiProvider provider, ConnectivityResult result) {
-        if (provider.getStatus() == null) {
-            provider.setStatus(new AiProvider.AiProviderStatus());
+    private boolean healthAffectingConfigChanged(AiProvider.AiProviderSpec current, AiProvider.AiProviderSpec updated) {
+        if (current == null || updated == null) {
+            return true;
         }
-        var status = provider.getStatus();
-        status.setLastCheckedAt(Instant.now());
-        status.setPhase(
-                result.isSuccess() ? AiProvider.AiProviderStatus.Phase.OK : AiProvider.AiProviderStatus.Phase.ERROR);
-        status.setMessage(result.isSuccess() ? "Connectivity check passed" : result.getMessage());
-        return client.update(provider);
-    }
-
-    private Mono<ConnectivityResult> performConnectivityCheck(AiProvider provider, String apiKey) {
-        providerClientCache.invalidate(provider.getMetadata().getName());
-        var type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
-        return type.discoverModels(provider, apiKey)
-                .map(models -> new ConnectivityResult(true, "Connectivity check passed"))
-                .onErrorResume(e -> {
-                    log.warn(
-                            "Connectivity check failed for provider: {}",
-                            provider.getMetadata().getName(),
-                            e);
-                    return Mono.just(new ConnectivityResult(false, e.getMessage()));
-                });
-    }
-
-    record ConnectivityResult(boolean success, String message) {
-        boolean isSuccess() {
-            return success;
-        }
-
-        String getMessage() {
-            return message;
-        }
+        return !Objects.equals(current.getProviderType(), updated.getProviderType())
+                || !Objects.equals(current.getBaseUrl(), updated.getBaseUrl())
+                || !Objects.equals(current.getChatEndpointPath(), updated.getChatEndpointPath())
+                || !Objects.equals(current.getEmbeddingEndpointPath(), updated.getEmbeddingEndpointPath())
+                || !Objects.equals(current.getRerankEndpointPath(), updated.getRerankEndpointPath())
+                || !Objects.equals(current.getImageEndpointPath(), updated.getImageEndpointPath())
+                || !Objects.equals(current.getApiKeySecretName(), updated.getApiKeySecretName())
+                || !Objects.equals(current.getProxyHost(), updated.getProxyHost())
+                || !Objects.equals(current.getProxyPort(), updated.getProxyPort());
     }
 }

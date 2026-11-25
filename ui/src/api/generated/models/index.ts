@@ -49,6 +49,8 @@ export * from './move-operation';
 export * from './normalized-usage';
 export * from './output-spec';
 export * from './parameter-mapping-template-info';
+export * from './provider-health-check';
+export * from './provider-health-report';
 export * from './provider-model-discovery-response';
 export * from './provider-type-info';
 export * from './reasoning';
