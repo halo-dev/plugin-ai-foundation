@@ -8,7 +8,15 @@ import {
   usageStatusLabel,
   usageStatusState,
 } from '@/utils/usage'
-import { IconErrorWarning, VButton, VEmpty, VStatusDot } from '@halo-dev/components'
+import {
+  IconErrorWarning,
+  VButton,
+  VEmpty,
+  VStatusDot,
+  VTable,
+  createTableColumnHelper,
+  type ExpandedState,
+} from '@halo-dev/components'
 import { computed, shallowRef } from 'vue'
 import UsageCallDetails from './UsageCallDetails.vue'
 
@@ -24,7 +32,8 @@ const props = defineProps<{
   loadMoreError?: boolean
 }>()
 const emit = defineEmits<{ (event: 'loadMore'): void; (event: 'retry'): void }>()
-const expandedId = shallowRef<string>()
+
+const expanded = shallowRef<ExpandedState>({})
 const modelNames = computed(
   () => new Map(props.models?.map((model) => [model.metadata.name, model.spec.displayName])),
 )
@@ -37,12 +46,28 @@ const providerNames = computed(
 const callerNames = computed(
   () => new Map(props.callers?.map((caller) => [caller.pluginName, caller.displayName])),
 )
-function toggle(call: UsageCallItem) {
-  if (!call.id) return
-  expandedId.value = expandedId.value === call.id ? undefined : call.id
+
+function rowKey(call: UsageCallItem) {
+  return (
+    call.id ||
+    `${call.startedAt ?? ''}:${call.callerPluginName ?? ''}:${call.modelName ?? ''}:${call.operation ?? ''}`
+  )
 }
 function isExpanded(call: UsageCallItem) {
-  return !!call.id && expandedId.value === call.id
+  return expanded.value === true || expanded.value[rowKey(call)] === true
+}
+function toggle(call: UsageCallItem) {
+  expanded.value = isExpanded(call) ? {} : { [rowKey(call)]: true }
+}
+function handleExpandedChange(next: ExpandedState) {
+  if (next === true) {
+    expanded.value = {}
+    return
+  }
+  const previous = expanded.value === true ? {} : expanded.value
+  const added = Object.keys(next).filter((key) => next[key] && !previous[key])
+  const key = added[added.length - 1] ?? Object.keys(next).find((item) => next[item])
+  expanded.value = key ? { [key]: true } : {}
 }
 function callerText(call: UsageCallItem) {
   if (!call.callerPluginName) return '未知插件'
@@ -66,6 +91,67 @@ function durationClass(call: UsageCallItem) {
   if (millis <= 30_000) return 'is-slow'
   return 'is-long'
 }
+
+const column = createTableColumnHelper<UsageCallItem>()
+const columns = column.columns([
+  column.accessor('startedAt', {
+    header: '时间',
+    meta: { tdClass: 'usage-tabular' },
+  }),
+  column.display({
+    id: 'caller',
+    header: '调用插件',
+    meta: { minWidth: 140, tdClass: 'usage-ellipsis' },
+  }),
+  column.display({
+    id: 'model',
+    header: '模型',
+    meta: { minWidth: 160, tdClass: 'usage-ellipsis usage-strong' },
+  }),
+  column.display({
+    id: 'provider',
+    header: '供应商',
+    meta: {
+      minWidth: 120,
+      thClass: 'usage-col-provider',
+      tdClass: 'usage-col-provider usage-ellipsis',
+    },
+  }),
+  column.display({
+    id: 'operation',
+    header: '操作',
+    meta: {
+      minWidth: 90,
+      thClass: 'usage-col-operation',
+      tdClass: 'usage-col-operation',
+    },
+  }),
+  column.display({
+    id: 'input',
+    header: '输入',
+    meta: {
+      width: 80,
+      align: 'right',
+      thClass: 'usage-col-input',
+      tdClass: 'usage-col-input usage-tabular',
+    },
+  }),
+  column.display({
+    id: 'output',
+    header: '输出',
+    meta: { width: 80, align: 'right', tdClass: 'usage-tabular' },
+  }),
+  column.display({
+    id: 'duration',
+    header: '耗时',
+    meta: { width: 80, align: 'right', tdClass: 'usage-tabular' },
+  }),
+  column.display({
+    id: 'status',
+    header: '状态',
+    meta: { minWidth: 96 },
+  }),
+])
 </script>
 
 <template>
@@ -74,92 +160,81 @@ function durationClass(call: UsageCallItem) {
       <span class=":uno: text-sm text-gray-500">调用历史加载失败</span
       ><VButton size="sm" @click="emit('retry')">重试</VButton>
     </div>
-    <VEmpty
-      v-else-if="!loading && !items.length"
-      title="暂无调用记录"
-      message="当前筛选条件下没有调用记录。明细仅保留 90 天。"
-    />
     <template v-else>
-      <div class=":uno: overflow-x-auto">
-        <table class=":uno: usage-table">
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>调用插件</th>
-              <th>模型</th>
-              <th class=":uno: col-provider">供应商</th>
-              <th class=":uno: col-operation">操作</th>
-              <th class=":uno: col-input n">输入</th>
-              <th class=":uno: n">输出</th>
-              <th class=":uno: n">耗时</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody v-if="loading">
-            <tr v-for="i in 5" :key="i" aria-hidden="true">
-              <td colspan="9"><div class=":uno: usage-skel-bar"></div></td>
-            </tr>
-          </tbody>
-          <tbody v-else v-for="call in items" :key="call.id">
-            <tr
-              class=":uno: usage-row"
-              :class="{
-                ':uno: is-open': isExpanded(call),
-                ':uno: is-failed': call.status === 'FAILED',
-              }"
-              role="button"
-              tabindex="0"
-              :aria-expanded="isExpanded(call)"
-              :aria-controls="`usage-detail-${call.id}`"
-              @click="toggle(call)"
-              @keydown.enter.prevent="toggle(call)"
-              @keydown.space.prevent="toggle(call)"
-            >
-              <td class=":uno: tabular-nums">{{ formatDateTime(call.startedAt) }}</td>
-              <td class=":uno: usage-ellipsis" :title="call.callerPluginName">
-                {{ callerText(call) }}<template v-if="call.feature"> · {{ call.feature }}</template>
-              </td>
-              <td class=":uno: usage-ellipsis usage-strong" :title="call.modelName">
-                {{ modelText(call) }}
-              </td>
-              <td class=":uno: col-provider usage-ellipsis" :title="call.providerName">
-                {{ providerText(call) }}
-              </td>
-              <td class=":uno: col-operation">{{ usageOperationLabel(call.operation) }}</td>
-              <td class=":uno: col-input n tabular-nums">
-                {{ formatTokens(call.usage?.inputTokens) }}
-              </td>
-              <td class=":uno: n tabular-nums">{{ formatTokens(call.usage?.outputTokens) }}</td>
-              <td class=":uno: n tabular-nums">
-                <span
-                  :class="durationClass(call) && `:uno: usage-duration-${durationClass(call)}`"
-                  >{{ formatDuration(call.durationMillis) }}</span
-                >
-              </td>
-              <td>
-                <div class=":uno: flex items-center gap-1">
-                  <VStatusDot
-                    :state="usageStatusState(call.status)"
-                    :text="usageStatusLabel(call.status)"
-                  />
-                  <IconErrorWarning
-                    v-if="call.complete === false"
-                    v-tooltip="'调用记录不完整'"
-                    role="img"
-                    aria-label="调用记录不完整"
-                    class=":uno: size-3.5 shrink-0 text-orange-600"
-                  />
-                </div>
-              </td>
-            </tr>
-            <tr v-if="isExpanded(call)" class=":uno: usage-detail-row">
-              <td :id="`usage-detail-${call.id}`" colspan="9">
-                <UsageCallDetails :call="call" :caller-name="callerText(call)" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <VTable
+        :columns="columns"
+        :data="items"
+        :expanded="expanded"
+        :loading="loading"
+        :row-key="rowKey"
+        :ui="{ tr: 'usage-row-clickable' }"
+        expandable
+        @update:expanded="handleExpandedChange"
+        @row-click="toggle"
+      >
+        <template #cell-startedAt="{ original }">
+          {{ formatDateTime(original.startedAt) }}
+        </template>
+        <template #cell-caller="{ original }">
+          <span :title="original.callerPluginName"
+            >{{ callerText(original)
+            }}<template v-if="original.feature"> · {{ original.feature }}</template></span
+          >
+        </template>
+        <template #cell-model="{ original }">
+          <span
+            :class="{ ':uno: usage-failed': original.status === 'FAILED' }"
+            :title="original.modelName"
+            >{{ modelText(original) }}</span
+          >
+        </template>
+        <template #cell-provider="{ original }">
+          <span :title="original.providerName">{{ providerText(original) }}</span>
+        </template>
+        <template #cell-operation="{ original }">
+          {{ usageOperationLabel(original.operation) }}
+        </template>
+        <template #cell-input="{ original }">
+          {{ formatTokens(original.usage?.inputTokens) }}
+        </template>
+        <template #cell-output="{ original }">
+          {{ formatTokens(original.usage?.outputTokens) }}
+        </template>
+        <template #cell-duration="{ original }">
+          <span
+            :class="durationClass(original) && `:uno: usage-duration-${durationClass(original)}`"
+            >{{ formatDuration(original.durationMillis) }}</span
+          >
+        </template>
+        <template #cell-status="{ original }">
+          <div class=":uno: flex items-center gap-1">
+            <VStatusDot
+              :state="usageStatusState(original.status)"
+              :text="usageStatusLabel(original.status)"
+            />
+            <IconErrorWarning
+              v-if="original.complete === false"
+              v-tooltip="'调用记录不完整'"
+              role="img"
+              aria-label="调用记录不完整"
+              class=":uno: size-3.5 shrink-0 text-orange-600"
+            />
+          </div>
+        </template>
+        <template #empty>
+          <VEmpty title="暂无调用记录" message="当前筛选条件下没有调用记录。明细仅保留 90 天。" />
+        </template>
+        <template #loading>
+          <div class=":uno: flex flex-col gap-2">
+            <div v-for="i in 5" :key="i" class=":uno: usage-skel-bar"></div>
+          </div>
+        </template>
+        <template #expanded="{ row }">
+          <div class=":uno: usage-expanded">
+            <UsageCallDetails :call="row.original" :caller-name="callerText(row.original)" />
+          </div>
+        </template>
+      </VTable>
       <div v-if="!loading" class=":uno: flex items-center justify-center gap-3 px-5 py-4">
         <span v-if="hasNextPage" class=":uno: text-xs text-gray-400"
           >已加载 {{ items.length }} 条</span
@@ -174,58 +249,22 @@ function durationClass(call: UsageCallItem) {
 </template>
 
 <style scoped>
-.usage-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-.usage-table th {
-  padding: 7px 9px 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #6b7280;
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-  white-space: nowrap;
-  background: #f9fafb;
-}
-.usage-table td {
-  padding: 6px 9px;
-  border-top: 1px solid #f3f4f6;
-  white-space: nowrap;
-  color: #374151;
-}
-.usage-table tbody:first-of-type td {
-  border-top: 0;
-}
-.usage-table .n {
-  text-align: right;
-}
-.usage-ellipsis {
+:deep(.usage-ellipsis) {
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.usage-strong {
+:deep(.usage-strong) {
   font-weight: 500;
   color: #111827;
 }
-.usage-row {
+:deep(.usage-tabular) {
+  font-variant-numeric: tabular-nums;
+}
+:deep(.usage-row-clickable) {
   cursor: pointer;
 }
-.usage-row:hover {
-  background: #f9fafb;
-}
-.usage-row:focus-visible {
-  outline: 2px solid #9ca3af;
-  outline-offset: -2px;
-}
-.usage-row.is-open {
-  background: #f3f4f6;
-}
-.usage-row.is-failed .usage-strong {
+.usage-failed {
   color: #dc2626;
 }
 .usage-duration-is-fast {
@@ -237,10 +276,8 @@ function durationClass(call: UsageCallItem) {
 .usage-duration-is-long {
   color: #dc2626;
 }
-.usage-detail-row td {
-  padding: 0;
-  background: #f9fafb;
-  white-space: normal;
+.usage-expanded {
+  margin: -16px -16px 0;
 }
 .usage-skel-bar {
   height: 14px;
@@ -253,21 +290,21 @@ function durationClass(call: UsageCallItem) {
     opacity: 0.5;
   }
 }
-@media (max-width: 1279px) {
-  .col-provider {
+@media (max-width: 1449px) {
+  :deep(.usage-col-provider) {
+    display: none;
+  }
+}
+@media (max-width: 1339px) {
+  :deep(.usage-col-operation) {
     display: none;
   }
 }
 @media (max-width: 1023px) {
-  .col-operation {
+  :deep(.usage-col-input) {
     display: none;
   }
-}
-@media (max-width: 767px) {
-  .col-input {
-    display: none;
-  }
-  .usage-ellipsis {
+  :deep(.usage-ellipsis) {
     max-width: 140px;
   }
 }

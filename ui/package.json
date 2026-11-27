@@ -26,7 +26,7 @@
     "@formkit/vue": "2.1.0",
     "@halo-dev/ai-foundation-sdk": "workspace:*",
     "@halo-dev/api-client": "^2.26.0",
-    "@halo-dev/components": "^2.26.0",
+    "@halo-dev/components": "https://pkg.pr.new/@halo-dev/components@ea3de62",
     "@halo-dev/ui-shared": "^2.26.0",
     "@internationalized/date": "3.12.2",
     "@number-flow/vue": "^0.5.2",
