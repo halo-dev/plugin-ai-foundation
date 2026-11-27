@@ -153,7 +153,8 @@ haloPlugin {
 }
 
 halo {
-    version = '2.26.0'
+    imageName = 'halohub/halo-dev'
+    version = 'main'
 }
 
 def generatedOpenApi = layout.projectDirectory.file(

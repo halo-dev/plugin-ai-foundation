@@ -4,28 +4,29 @@ import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref, type DirectiveBinding } from 'vue'
 import UsageCallTable from '../UsageCallTable.vue'
 
-vi.mock('@halo-dev/components', () => ({
-  IconErrorWarning: defineComponent({ template: '<svg data-test="attention-icon" />' }),
-  VStatusDot: defineComponent({ props: ['text'], template: '<span>{{ text }}</span>' }),
-  VLoading: defineComponent({
-    template: '<div data-test="loading">loading</div>',
-  }),
-  VEmpty: defineComponent({
-    props: ['title', 'message'],
-    template: '<div data-test="empty"><div>{{ title }}</div><div>{{ message }}</div></div>',
-  }),
-  VButton: defineComponent({
-    props: ['loading', 'disabled'],
-    emits: ['click'],
-    setup(props, { emit, slots }) {
-      return () =>
-        h('button', { disabled: props.disabled, onClick: () => emit('click') }, slots.default?.())
-    },
-  }),
-  VTag: defineComponent({
-    template: '<span><slot /></span>',
-  }),
-}))
+vi.mock('@halo-dev/components', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@halo-dev/components')>()
+  return {
+    ...actual,
+    IconErrorWarning: defineComponent({ template: '<svg data-test="attention-icon" />' }),
+    VStatusDot: defineComponent({ props: ['text'], template: '<span>{{ text }}</span>' }),
+    VEmpty: defineComponent({
+      props: ['title', 'message'],
+      template: '<div data-test="empty"><div>{{ title }}</div><div>{{ message }}</div></div>',
+    }),
+    VButton: defineComponent({
+      props: ['loading', 'disabled'],
+      emits: ['click'],
+      setup(props, { emit, slots }) {
+        return () =>
+          h('button', { disabled: props.disabled, onClick: () => emit('click') }, slots.default?.())
+      },
+    }),
+    VTag: defineComponent({
+      template: '<span><slot /></span>',
+    }),
+  }
+})
 
 vi.mock('@/composables/use-usage-statistics', () => ({
   useUsageCallDetail: () => ({
@@ -143,7 +144,7 @@ describe('UsageCallTable', () => {
     // Unknown caller/model/token render explicitly as unknown
     expect(text).toContain('未知插件')
     expect(text).toContain('未知模型')
-    await wrapper.findAll('[role="button"]')[4]!.trigger('click')
+    await wrapper.findAll('tbody tr.group')[4]!.trigger('click')
     expect(wrapper.text()).toContain('PROVIDER_ERROR')
     expect((text.match(/未知/g) || []).length).toBeGreaterThanOrEqual(3)
   })
@@ -160,7 +161,7 @@ describe('UsageCallTable', () => {
       ],
     })
     // Row markers are reserved for lost events; quality details live in the expanded detail
-    const rows = wrapper.findAll('[role="button"]')
+    const rows = wrapper.findAll('tbody tr.group')
     expect(rows[0]!.find('[data-test="attention-icon"]').exists()).toBe(false)
     expect(rows[1]!.find('[data-test="attention-icon"]').exists()).toBe(false)
     await rows[0]!.trigger('click')
@@ -195,7 +196,7 @@ describe('UsageCallTable', () => {
     expect(wrapper.get('[data-test="attention-icon"]').attributes('data-tooltip')).toBe(
       '调用记录不完整',
     )
-    await wrapper.find('[role="button"]').trigger('click')
+    await wrapper.find('tbody tr.group').trigger('click')
     expect(wrapper.text()).toContain('流式')
   })
 
@@ -203,7 +204,7 @@ describe('UsageCallTable', () => {
     const wrapper = mountTable({ items: [call()] })
     const text = wrapper.text()
     expect(text).toContain('plugin-search')
-    await wrapper.find('[role="button"]').trigger('click')
+    await wrapper.find('tbody tr.group').trigger('click')
     expect(wrapper.text()).toContain('插件版本')
     expect(wrapper.text()).toContain('1.2.0')
     expect(wrapper.text()).toContain('gpt-4o-prod')
@@ -214,13 +215,13 @@ describe('UsageCallTable', () => {
 
   it('expands execution details on click and collapses again', async () => {
     const wrapper = mountTable({ items: [call()] })
-    const row = wrapper.find('[role="button"]')
+    const row = wrapper.find('tbody tr.group')
     expect(wrapper.find('[data-test="executions"]').exists()).toBe(false)
 
     await row.trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-test="executions"]').exists()).toBe(true)
-    expect(row.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('button[aria-expanded]').attributes('aria-expanded')).toBe('true')
 
     await row.trigger('click')
     await flushPromises()
@@ -241,19 +242,19 @@ describe('UsageCallTable', () => {
     expect(wrapper.text()).toContain('共 1 条，已加载全部')
     expect(wrapper.text()).not.toContain('加载更多')
   })
-  it('keeps a single detail open and supports keyboard expansion', async () => {
+  it('keeps a single detail open when using the expand control', async () => {
     const wrapper = mountTable({ items: [call({ id: 'c1' }), call({ id: 'c2' })] })
-    const rows = wrapper.findAll('[role="button"]')
-    await rows[0]!.trigger('keydown', { key: 'Enter' })
-    expect(rows[0]!.attributes('aria-expanded')).toBe('true')
-    await rows[1]!.trigger('keydown', { key: ' ' })
-    expect(rows[0]!.attributes('aria-expanded')).toBe('false')
-    expect(rows[1]!.attributes('aria-expanded')).toBe('true')
+    const expandButtons = () => wrapper.findAll('button[aria-expanded]')
+    await expandButtons()[0]!.trigger('click')
+    expect(expandButtons()[0]!.attributes('aria-expanded')).toBe('true')
+    await expandButtons()[1]!.trigger('click')
+    expect(expandButtons()[0]!.attributes('aria-expanded')).toBe('false')
+    expect(expandButtons()[1]!.attributes('aria-expanded')).toBe('true')
     expect(wrapper.findAll('[data-test="executions"]')).toHaveLength(1)
   })
   it('prioritizes consumption and keeps technical metadata collapsed', async () => {
     const wrapper = mountTable({ items: [call()] })
-    await wrapper.get('[role="button"]').trigger('click')
+    await wrapper.get('tbody tr.group').trigger('click')
     expect(wrapper.get('[aria-label="本次消耗"]').text()).toContain('150')
     expect(wrapper.get('details').attributes('open')).toBeUndefined()
     expect(wrapper.get('details').text()).toContain('gpt-4o-prod')
